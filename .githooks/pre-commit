@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+# Pre-commit hook to scan for secrets using security_check.sh
+# This prevents accidentally committing sensitive credentials
+#
+
+echo "Running security check on staged files..."
+echo ""
+
+# Get the root of the git repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Path to the security check script
+SECURITY_SCRIPT="$REPO_ROOT/security_check.sh"
+
+# Check if security_check.sh exists
+if [ ! -f "$SECURITY_SCRIPT" ]; then
+    echo "Warning: security_check.sh not found."
+    echo "Expected location: $SECURITY_SCRIPT"
+    echo "Skipping security check..."
+    exit 0
+fi
+
+# Make sure it's executable
+if [ ! -x "$SECURITY_SCRIPT" ]; then
+    chmod +x "$SECURITY_SCRIPT"
+fi
+
+# Run the security check script
+"$SECURITY_SCRIPT"
+
+# Capture the exit code
+SCAN_RESULT=$?
+
+if [ $SCAN_RESULT -ne 0 ]; then
+    echo ""
+    echo "COMMIT BLOCKED: Security issues detected!"
+    echo ""
+    echo "Please fix the security issues above before committing."
+    echo ""
+    echo "To bypass this check (NOT RECOMMENDED):"
+    echo "  git commit --no-verify"
+    echo ""
+    exit 1
+fi
+
+exit 0

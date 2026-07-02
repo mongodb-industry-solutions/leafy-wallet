@@ -1,0 +1,22 @@
+[project]
+name = "your-virtual-env"
+version = "0.1.0"
+description = "Your Description"
+authors = [{name = "Your Name", email = "you@example.com"}]
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pymongo>=4.10.1",
+    "python-dotenv>=1.0.1",
+    "fastapi>=0.115.4",
+    "uvicorn>=0.32.0",
+    "boto3>=1.35.70",
+    "botocore>=1.35.70",
+    "voyageai>=0.3.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
