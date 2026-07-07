@@ -1,62 +1,36 @@
-# Demo Template: Python Backend with Next.js Frontend
+# [Demo Name Here]
 
-This repository provides a template for creating a web application with a Python backend and a Next.js frontend. The backend is managed using uv for dependency management, while the frontend is built with Next.js, offering a modern React-based user interface.
+[Small description of your demo here]
 
-## Table of Contents
+## Where MongoDB Shines?
 
-- [Demo Template: Python Backend with Next.js Frontend](#demo-template-python-backend-with-nextjs-frontend)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-  - [Getting Started](#getting-started)
-    - [Create a New Repository](#create-a-new-repository)
-    - [GitHub Desktop Setup](#github-desktop-setup)
-    - [Backend Setup](#backend-setup)
-  - [DEMO README](#demo-readme)
+[Small explanation of which MongoDB features are present]
 
-## Features
+## High Level Architecture
 
-- Python backend with a RESTful API powered by [FastAPI](https://fastapi.tiangolo.com/)
-- Next.js frontend for a responsive user interface
-- Dependency management with uv ([More info](https://docs.astral.sh/uv/))
-- Easy setup and configuration
+[High level architecture diagram here use [google slides](https://docs.google.com/presentation/d/1vo8Y8mBrocJtzvZc_tkVHZTsVW_jGueyUl-BExmVUtI/edit#slide=id.g30c066974c7_0_3536)]
+
+## Tech Stack
+
+[List your tech stackexample below]
+
+- Next.js [App Router](https://nextjs.org/docs/app) for the framework
+- [MongoDB Atlas](https://www.mongodb.com/atlas/database) for the database
+- [CSS Modules](https://github.com/css-modules/css-modules) for styling
 
 ## Prerequisites
 
 Before you begin, ensure you have met the following requirements:
 
-- Python >=3.13,<3.14 - If you are Mac user, you can install Python 3.13 using this [link](https://www.python.org/downloads/).
+- Python 3.13 (but less than 3.14)
 - Node.js 22 or higher
 - uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
 
-## Getting Started
+[Add more if needed]
 
-Follow these steps to set up the project locally.
+## Run it Locally
 
-### Create a New Repository
-
-1. Navigate to the repository template on GitHub and click on **Use this template**.
-2. Create a new repository.
-3. **Do not** check the "Include all branches" option.
-4. Define a repository name following the naming convention: `<industry>-<project_name>-<highlighted_feature>`. For example, `fsi-leafybank-ai-personal-assistant` (use hyphens to separate words).
-   - The **industry** and **project name** are required; you can be creative with the highlighted feature.
-5. Provide a clear description for the repository, such as: "A repository template to easily create new demos by following the same structure."
-6. Set the visibility to **Internal**.
-7. Click **Create repository**.
-
-### GitHub Desktop Setup
-
-1. Install GitHub Desktop if you haven't already. You can download it from [GitHub Desktop's official website](https://desktop.github.com/).
-2. Open GitHub Desktop and sign in to your GitHub account.
-3. Clone the newly created repository:
-   - Click on **File** > **Clone Repository**.
-   - Select your repository from the list and click **Clone**.
-4. Create your first branch:
-   - In the GitHub Desktop interface, click on the **Current Branch** dropdown.
-   - Select **New Branch** and name it `feature/branch01`.
-   - Click **Create Branch**.
-
-### Backend Setup
+### Backend
 
 1. (Optional) Set your project description and author information in the `pyproject.toml` file:
    ```toml
@@ -94,7 +68,7 @@ After setting up the backend dependencies, you can run the development server:
 
 **Note**: If port 8000 is already in use (e.g., by Docker containers), either stop the containers with `make clean` or use a different port like `--port 8001`.
 
-### Frontend Setup
+### Frontend
 
 1. Navigate to the `frontend` folder.
 2. Install dependencies by running:
@@ -107,47 +81,25 @@ npm run dev
 ````
 4. The frontend will now be accessible at http://localhost:3000 by default, providing a user interface.
 
-### Git Hooks Setup (Recommended)
+## Run with Docker
 
-This repository includes a pre-commit hook that automatically scans for secrets and credentials before each commit, preventing accidental exposure of sensitive data.
+Make sure to run this on the root directory.
 
-**Setup (run once after cloning):**
-
-```bash
-chmod +x setup-hooks.sh
-./setup-hooks.sh
+1. To run with Docker use the following command:
+```
+make build
+```
+2. To delete the container and image run:
+```
+make clean
 ```
 
-This configures Git to use the `.githooks` directory and enables the pre-commit security scanner.
+## Common errors
 
-**What it does:**
+### Backend
 
-- Runs `security_check.sh` before every commit
-- Scans staged files for potential secrets (API keys, passwords, tokens, etc.)
-- Blocks the commit if security issues are detected
+- Check that you've created an `.env` file that contains your valid (and working) API keys, environment and index variables.
 
-**If a commit is blocked:**
+### Frontend
 
-1. Review the security issues listed in the output
-2. Remove or properly secure the flagged credentials
-3. Re-stage your changes and commit again
-
-**Bypass (not recommended):**
-
-```bash
-git commit --no-verify
-```
-
-### Kanopy Deployment
-
-For deploying your demo to Kanopy (MongoDB's internal Kubernetes platform), see the [KANOPY_DEPLOYMENT_README.md](KANOPY_DEPLOYMENT_README.md) for detailed instructions on:
-
-- Setting up Drone CI/CD pipeline
-- Configuring Kubernetes secrets
-- Choosing between separate pods vs multi-container deployments
-- Environment variables and secrets configuration
-- Resource management and troubleshooting
-
-## DEMO README
-
-<h1 style="color:red">REPLACE THE CONTENT OF THIS README WITH `README-demo.md` and DELETE THE `README-demo.md` FILE!!!!!!!!! </h1>
+- Check that you've created an `.env.local` file that contains your valid (and working) API keys, environment and index variables.
