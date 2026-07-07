@@ -62,10 +62,6 @@ if __name__ == "__main__":
 
     # Load configurations
     INDUSTRY = config_loader.get("INDUSTRY")
-    EMBEDDINGS_MODEL_ID = config_loader.get("EMBEDDINGS_MODEL_ID")
-    CHATCOMPLETIONS_MODEL_ID = config_loader.get("CHATCOMPLETIONS_MODEL_ID")
 
     # Print configurations
     logging.info(f"INDUSTRY: {INDUSTRY}")
-    logging.info(f"EMBEDDINGS_MODEL_ID: {EMBEDDINGS_MODEL_ID}")
-    logging.info(f"CHATCOMPLETIONS_MODEL_ID: {CHATCOMPLETIONS_MODEL_ID}")

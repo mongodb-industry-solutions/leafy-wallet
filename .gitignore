@@ -17,6 +17,7 @@ setup-hooks.sh
 
 # claude
 **/.claude
+CLAUDE.md
 
 # task-def.json
 **/task-def.json
@@ -238,3 +239,4 @@ frontend/next-env.d.ts
 
 # Misc
 *.pem
+frontend/package-lock.json
