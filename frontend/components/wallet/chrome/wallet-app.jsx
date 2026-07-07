@@ -19,7 +19,7 @@ export function WalletApp({ onSignOut, onFlowChange, online = true }) {
   const [sendOpen, setSendOpen] = useState(false)
   const [sendMode, setSendMode] = useState('send')
 
-  const isInSend = sendOpen || tab === 'send'
+  const isInSend = sendOpen
   const flow = isInSend
     ? sendMode === 'request' ? 'request' : 'send'
     : detail
