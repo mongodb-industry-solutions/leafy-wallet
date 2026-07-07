@@ -37,7 +37,11 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.3.2",
+    "eslint": "^9",
+    "eslint-config-next": "^16.2.6",
+    "license-checker": "^25.0.1",
     "tailwindcss": "^4.3.2"
   }
 }
