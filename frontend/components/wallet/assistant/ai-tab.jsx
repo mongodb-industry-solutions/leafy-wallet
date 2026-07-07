@@ -46,14 +46,18 @@ export function AiTab() {
   const [transcript, setTranscript] = useState('')
   const [thinking, setThinking] = useState(false)
   const endRef = useRef(null)
+  const timeoutRef = useRef(null)
   // Holds a send/request intent that's waiting on the user's note answer.
   const pendingRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(timeoutRef.current), [])
 
   const processText = useCallback((text) => {
     setMsgs((p) => [...p, { id: nextId(), role: 'user', type: 'text', text }])
     setTranscript('')
     setThinking(true)
-    setTimeout(() => {
+    clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
       setThinking(false)
       // Call resolve ONCE (it mutates pendingRef); never inside a state updater,
       // which React double-invokes in StrictMode.
