@@ -22,6 +22,7 @@ function resolveMax(value) {
 }
 
 function parseQuery(query) {
+  if (query == null) return "(min-width: 0px)";
   if (typeof query !== "string") {
     const parts = [];
     if (query.min != null) parts.push(resolveMin(query.min));
