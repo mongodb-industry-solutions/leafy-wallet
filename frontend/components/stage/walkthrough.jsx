@@ -18,7 +18,7 @@ export function Walkthrough({ flow }) {
     if (count < 2) return
     const id = setInterval(() => setStep((s) => (s + 1) % count), AUTO_ADVANCE_MS)
     return () => clearInterval(id)
-  }, [flow, step, count])
+  }, [count])
 
   const current = steps[Math.min(step, count - 1)]
   const Media = current.icon
