@@ -93,8 +93,10 @@ export function NumpadStep({ display, cents, currency, recipient, setCurrency, s
         {KEYS.map((k) => (
           <button
             key={k}
-            onClick={() => (k === '⌫' ? backspace() : k !== '.' ? digit(k) : undefined)}
-            className="mx-auto grid size-16 place-items-center rounded-full text-foreground transition-colors active:bg-foreground/10"
+            type="button"
+            disabled={k === '.'}
+            onClick={() => (k === '⌫' ? backspace() : digit(k))}
+            className="mx-auto grid size-16 place-items-center rounded-full text-foreground transition-colors active:bg-foreground/10 disabled:pointer-events-none disabled:opacity-0"
           >
             {k === '⌫' ? <Ico.Del /> : k}
           </button>
