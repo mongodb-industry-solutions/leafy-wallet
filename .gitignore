@@ -239,3 +239,4 @@ frontend/next-env.d.ts
 
 # Misc
 *.pem
+frontend/package-lock.json
