@@ -7,7 +7,7 @@ import { TextReveal } from '@/components/ui/TextReveal'
 import { cn } from '@/lib/utils'
 
 const FACE_ID_LOTTIE =
-  'https://lottie.host/9e4ee80f-96cb-4267-82b0-e04a55850201/GyxjE6SLeg.lottie'
+  'face-id.lottie'
 
 const SWEEP_COLORS = ['#00684A', '#00A35C', '#00ED64', '#71F6BA', '#016BF8']
 
