@@ -1,60 +1,44 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'
-import { TextReveal } from '@/components/ui/TextReveal'
 import { cn } from '@/lib/utils'
 
 const FACE_ID_LOTTIE =
   'face-id.lottie'
 
-const SWEEP_COLORS = ['#00684A', '#00A35C', '#00ED64', '#71F6BA', '#016BF8']
+// Fallback in case the Lottie never fires its `complete` event.
+const SCAN_FALLBACK_MS = 6000
 
 /**
  * Face-ID-style unlock screen shown before the wallet app: a scanning
- * animation, then a "Welcome back" greeting, then hands off to `onAuthed`.
- * Tapping anywhere skips ahead a phase. Still WIP — the idea is that this
- * will gate access to the Leafy Pay system.
+ * animation that hands off to `onAuthed` once it finishes. Tapping anywhere
+ * skips ahead. Still WIP — the idea is that this will gate access to the Leafy
+ * Pay system. The "welcome back" greeting now lives on the Home hero instead.
  * @param {object} props
- * @param {{name: string}} props.user - The user to greet by name.
  * @param {() => void} props.onAuthed - Called once the unlock sequence finishes.
  */
-export function FaceIdEntry({ user, onAuthed }) {
-  const [phase, setPhase] = useState('scanning') // 'scanning' | 'welcome'
+export function FaceIdEntry({ onAuthed }) {
   const [isExiting, setIsExiting] = useState(false)
   const [dotLottie, setDotLottie] = useState(null)
 
+  const finish = () => setIsExiting(true)
+
   useEffect(() => {
-    if (phase !== 'scanning') return
-    const fallback = setTimeout(() => setPhase('welcome'), 6000)
+    const fallback = setTimeout(finish, SCAN_FALLBACK_MS)
     if (!dotLottie) return () => clearTimeout(fallback)
-    const handleComplete = () => setPhase('welcome')
-    dotLottie.addEventListener('complete', handleComplete)
+    dotLottie.addEventListener('complete', finish)
     return () => {
       clearTimeout(fallback)
-      dotLottie.removeEventListener('complete', handleComplete)
+      dotLottie.removeEventListener('complete', finish)
     }
-  }, [phase, dotLottie])
+  }, [dotLottie])
 
   useEffect(() => {
-    if (phase !== 'welcome') return
-    const toExit = setTimeout(() => setIsExiting(true), 2200)
-    const toDone = setTimeout(() => onAuthed(), 2700)
-    return () => {
-      clearTimeout(toExit)
-      clearTimeout(toDone)
-    }
-  }, [phase, onAuthed])
-
-  const handleSkip = () => {
-    if (phase === 'scanning') {
-      setPhase('welcome')
-    } else {
-      setIsExiting(true)
-      setTimeout(onAuthed, 400)
-    }
-  }
+    if (!isExiting) return
+    const toDone = setTimeout(onAuthed, 500)
+    return () => clearTimeout(toDone)
+  }, [isExiting, onAuthed])
 
   return (
     <div
@@ -65,7 +49,7 @@ export function FaceIdEntry({ user, onAuthed }) {
     >
       <button
         type="button"
-        onClick={handleSkip}
+        onClick={finish}
         aria-label="Unlock"
         className={cn(
           'relative w-[360px] max-w-full cursor-pointer overflow-hidden rounded-[32px] border border-white/50 bg-white/70 px-8 pt-12 pb-10 text-center shadow-[0_50px_120px_-28px_rgba(0,30,43,0.5)] backdrop-blur-2xl transition-transform duration-500',
@@ -87,32 +71,6 @@ export function FaceIdEntry({ user, onAuthed }) {
               className="size-48"
             />
           </div>
-
-          {/* On welcome, grow the card downward to make room for the greeting
-              instead of snapping the layout. */}
-          <AnimatePresence initial={false}>
-            {phase === 'welcome' && (
-              <motion.div
-                key="welcome"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                transition={{
-                  height: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
-                  opacity: { duration: 0.4, delay: 0.12 },
-                }}
-                className="overflow-hidden"
-              >
-                <div className="pt-7">
-                  <TextReveal
-                    text={`Welcome back, ${user.name}!`}
-                    colors={SWEEP_COLORS}
-                    duration={1.1}
-                    className="text-2xl font-bold tracking-tight"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </button>
     </div>

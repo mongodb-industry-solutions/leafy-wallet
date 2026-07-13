@@ -12,8 +12,6 @@ import { WalletApp } from '@/components/wallet/shell/WalletApp/WalletApp'
 import { Frame, FrameHeader } from '@/components/ui/Frame'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
-const USER = { name: 'Alex' }
-
 /**
  * Top-level presenter stage: the phone frame running the wallet app side by
  * side with the "Under the hood" panel that narrates the MongoDB tech behind
@@ -56,7 +54,7 @@ export function DesktopShell() {
         </Frame>
       </div>
 
-      {!isAuthed && <FaceIdEntry user={USER} onAuthed={handleLogin} />}
+      {!isAuthed && <FaceIdEntry onAuthed={handleLogin} />}
     </main>
   )
 }

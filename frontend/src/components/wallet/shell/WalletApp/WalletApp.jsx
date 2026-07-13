@@ -55,17 +55,21 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
       {!isSendOpen && (
         <>
-          <WalletHeader user={user} onSignOut={onSignOut} />
+          {/* Home renders its own gradient hero (with the profile menu) in place
+              of the thin header; every other tab keeps the standard header. */}
+          {tab !== 'home' && <WalletHeader user={user} onSignOut={onSignOut} />}
 
           {tab === 'ai' ? (
             <AiTab />
           ) : (
-            <div className="no-scrollbar flex-1 overflow-y-auto pb-24">
+            <div className="no-scrollbar flex-1 overflow-y-auto overscroll-none pb-24">
               {tab === 'home' && (
                 <HomeTab
+                  user={user}
+                  onSignOut={onSignOut}
                   onSetTab={setTab}
                   onDetail={setDetail}
                   onSend={() => handleOpenSend('send')}
