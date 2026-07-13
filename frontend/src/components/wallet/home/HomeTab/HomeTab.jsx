@@ -1,17 +1,12 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { BALANCE, TRANSACTIONS } from '@/lib/wallet-data'
 import { MULTI_CURRENCY_ENABLED } from '@/lib/features'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow } from '@/components/wallet/transactions/TxRow/TxRow'
-
-// Green wash behind the hero. Stays in-hue with eased, mostly-opaque tint
-// steps (a linear-gradient version of the reference's color→transparent wash)
-// so it diffuses smoothly instead of greying out, only going transparent once
-// it's already pale enough to blend seamlessly into the page background.
-const HERO_GRADIENT =
-  'linear-gradient(180deg, #012a1f 0%, #023d2c 16%, #0a5942 34%, #3a7d64 50%, #79a693 64%, #b1cfc3 76%, #dcebe4 88%, rgba(241,243,241,0) 100%)'
+import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
 
 const EU_STAR_COUNT = 12
 const EU_BLUE = '#003399'
@@ -24,7 +19,7 @@ const ALL_ACCOUNTS = [
 ]
 const ACCOUNTS = MULTI_CURRENCY_ENABLED ? ALL_ACCOUNTS : ALL_ACCOUNTS.slice(0, 1)
 
-// Send/Chat are short enough to pair with an icon; Request is left text-only
+// Send/Chat are short enough to pair with an icon. Request is left text-only
 // so the longer word keeps even padding inside its pill.
 const CTAS = [
   { id: 'send', label: 'Send', glyph: 'ArrowUp' },
@@ -92,6 +87,10 @@ function EuFlag({ size = 40 }) {
   )
 }
 
+// Session flag: true once Home has mounted, so the open animation plays only on
+// the first app open, not on every return to the Home tab.
+let hasOpenedHome = false
+
 /**
  * The "Home" tab: gradient hero, total balance, the EUR account card,
  * Send/Request/Chat shortcuts, and a date-grouped preview of recent transactions.
@@ -109,14 +108,43 @@ export function HomeTab({ user, onSignOut, onProfile, onSetTab, onDetail, onSend
   const balance = formatBalance(BALANCE)
   const groups = groupByDate(TRANSACTIONS)
 
+  // Animate the aurora open only the first time the app is opened this session,
+  // not on every return to Home (HomeTab remounts on each tab switch).
+  const [animateHero] = useState(() => {
+    if (hasOpenedHome) return false
+    hasOpenedHome = true
+    return true
+  })
+  const [heroExpanded, setHeroExpanded] = useState(!animateHero)
+  useEffect(() => {
+    if (!animateHero) return
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setHeroExpanded(true)))
+    return () => cancelAnimationFrame(id)
+  }, [animateHero])
+
   return (
     <div className="relative flex flex-col">
       {/* Overscans the top edges so the phone's rounded corners stay green. */}
+      {/* FoldGradient behind the hero, flipped to hang from the top. The container
+          keeps the true aspect ratio (1271:599) so it scales down without distorting. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-x-4 -top-4 h-[24.5rem]"
-        style={{ background: HERO_GRADIENT }}
-      />
+        className="pointer-events-none absolute -top-4 left-1/2 aspect-[1271/599] w-[230%] -translate-x-1/2 overflow-hidden"
+      >
+        <div className="h-full w-full rotate-180">
+          {/* On first app open, expand from the top down, otherwise show instantly. */}
+          <div
+            className="h-full w-full"
+            style={{
+              transformOrigin: 'bottom',
+              transform: heroExpanded ? 'scaleY(1)' : 'scaleY(0.01)',
+              transition: animateHero ? 'transform 1100ms cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
+            }}
+          >
+            <FoldGradient riseMs={0} />
+          </div>
+        </div>
+      </div>
 
       <div className="relative flex flex-col">
         <HomeHero user={user} onSignOut={onSignOut} onProfile={onProfile} />

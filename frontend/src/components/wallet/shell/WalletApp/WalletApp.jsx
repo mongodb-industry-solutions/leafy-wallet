@@ -12,9 +12,7 @@ import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 
 /**
- * The wallet app shell: switches between the tab bar screens, the send/request
- * flow, and the transaction detail sheet, and reports the active screen up to
- * the presenter stage via `onFlowChange`.
+ * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
  * @param {object} props
  * @param {() => void} props.onSignOut
  * @param {(flow: string) => void} [props.onFlowChange] - Called whenever the active screen changes.
@@ -59,7 +57,7 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
       {!isSendOpen && (
         <>
-          {/* Home has its own gradient hero (with the profile menu); Activity /
+          {/* Home has its own gradient hero (with the profile menu). Activity /
               People / Chat stand on their own titles, no top bar. */}
           {tab === 'ai' ? (
             <AiTab />

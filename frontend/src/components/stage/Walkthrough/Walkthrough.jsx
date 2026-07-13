@@ -42,7 +42,7 @@ export function Walkthrough({ flow }) {
         </p>
       </div>
 
-      {/* Illustration area — icon placeholder for a future image/animation. */}
+      {/* Illustration area, icon placeholder for a future image/animation. */}
       <div className="grid h-32 place-items-center rounded-xl bg-gradient-to-br from-muted/70 to-muted/30">
         {Media && <Media className="size-9 text-foreground/70" strokeWidth={1.5} />}
       </div>

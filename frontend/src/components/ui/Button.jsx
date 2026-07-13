@@ -47,9 +47,7 @@ export const buttonVariants = cva(
 );
 
 /**
- * Base button primitive (variants + sizes via CVA) that renders as any tag
- * or component through `render`, and shows a spinner in place of its label
- * while `isLoading`.
+ * Base button primitive (variants + sizes via CVA) that renders as any tag via `render` and shows a spinner while `isLoading`.
  * @param {object} props
  * @param {string} [props.className]
  * @param {string} [props.variant] - One of buttonVariants' variant keys.

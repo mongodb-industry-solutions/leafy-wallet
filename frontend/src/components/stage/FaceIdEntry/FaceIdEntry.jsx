@@ -12,9 +12,7 @@ const SCAN_FALLBACK_MS = 6000
 
 /**
  * Face-ID-style unlock screen shown before the wallet app: a scanning
- * animation that hands off to `onAuthed` once it finishes. Tapping anywhere
- * skips ahead. Still WIP — the idea is that this will gate access to the Leafy
- * Pay system. The "welcome back" greeting now lives on the Home hero instead.
+ * animation that hands off to `onAuthed` once it finishes (tap to skip ahead).
  * @param {object} props
  * @param {() => void} props.onAuthed - Called once the unlock sequence finishes.
  */

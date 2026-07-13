@@ -16,7 +16,7 @@ export function TxDetail({ tx, onClose }) {
   const isInbound = tx.amount > 0
   const abs = Math.abs(tx.amount).toFixed(2)
 
-  // Slide in on mount; slide out on close, then unmount.
+  // Slide in on mount, slide out on close, then unmount.
   useEffect(() => {
     const id = requestAnimationFrame(() => setIsVisible(true))
     return () => cancelAnimationFrame(id)

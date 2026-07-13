@@ -1,6 +1,6 @@
 // ─── Seed data ────────────────────────────────────────────────────────────────
 // Contacts/users are identified by a masked email/phone hint (a Leafy Pay
-// beneficiary's `counterpartyLookupHint`), never a public $handle — matching
+// beneficiary's `counterpartyLookupHint`), never a public $handle, matching
 // PLAN.md's anti-enumeration model.
 export const APP_USERS = [
   { id: 'u1', name: 'Alex Chen', email: 'alex.chen@leafymail.com', seed: 'alex-lp', bg: '60a5fa' },
@@ -9,7 +9,7 @@ export const APP_USERS = [
   { id: 'u4', name: 'Sam Rivera', email: 'sam.rivera@leafymail.com', seed: 'sam-lp', bg: '34d399' },
 ]
 
-// Primary account balance (EUR), numeric — the source for "remaining" math.
+// Primary account balance (EUR), numeric, the source for "remaining" math.
 export const BALANCE = 12458.32
 
 // The SSO-linked Leafy Pay account, surfaced (masked) on the Profile screen.

@@ -13,9 +13,7 @@ import { Frame, FrameHeader } from '@/components/ui/Frame'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
 /**
- * Top-level presenter stage: the phone frame running the wallet app side by
- * side with the "Under the hood" panel that narrates the MongoDB tech behind
- * whichever screen is active.
+ * Top-level presenter stage: the phone frame beside the "Under the hood" panel that narrates the MongoDB tech behind the active screen.
  */
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()

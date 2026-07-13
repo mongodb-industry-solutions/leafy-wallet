@@ -24,11 +24,7 @@ function GoogleMark({ size = 18 }) {
 const SSO_PROVIDER = 'Continue with SSO'
 
 /**
- * First-run login screen (before the wallet app): an empty hero area (a
- * background image will be dropped in here) with the sign-in options below.
- * Apple/Google are mock decoration; only "Continue with SSO" is wired (it calls
- * `onLogin`, standing in for the real Leafy Pay authorization_code + PKCE flow
- * in PLAN.md §2.2). Privacy/Terms are decorative.
+ * First-run login screen: a hero area with sign-in options, where only "Continue with SSO" is wired (it calls `onLogin`, standing in for the Leafy Pay PKCE flow).
  * @param {object} props
  * @param {() => void} props.onLogin - Enter the app (mock SSO success).
  */

@@ -6,8 +6,7 @@ import { CONTACTS } from '@/lib/wallet-data'
 import { Peep } from '@/components/common/Peep/Peep'
 
 /**
- * The "People" tab: a searchable contact list; tapping a contact starts a
- * send flow to them.
+ * The "People" tab: a searchable contact list where tapping a contact starts a send flow.
  * @param {object} props
  * @param {(contact: object) => void} props.onSendTo
  */

@@ -57,10 +57,7 @@ function SectionLabel({ icon, children }) {
 }
 
 /**
- * Full-screen Profile view, opened from the avatar dropdown. Surfaces the
- * SSO identity, the (masked) linked Leafy Pay account, the passwordless-login
- * control (PLAN.md §2.3), and decorative security/legal links. Nothing
- * sensitive (tokens, raw sub) is shown.
+ * Full-screen Profile view: SSO identity, masked linked Leafy Pay account, passwordless-login control, and decorative security/legal links.
  * @param {object} props
  * @param {{name: string, email: string, seed: string, bg: string}} props.user
  * @param {() => void} props.onClose
@@ -68,7 +65,7 @@ function SectionLabel({ icon, children }) {
  */
 export function ProfileScreen({ user, onClose, onSignOut }) {
   // Passwordless is local-only in PLAN.md (an enrolled WebCrypto key in
-  // IndexedDB); mocked here as a simple on/off for this browser.
+  // IndexedDB), mocked here as a simple on/off for this browser.
   const [isPasswordlessEnabled, setIsPasswordlessEnabled] = useState(false)
 
   return (
