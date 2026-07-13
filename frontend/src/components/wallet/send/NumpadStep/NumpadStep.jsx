@@ -39,7 +39,7 @@ export function NumpadStep({ display, cents, currency, recipient, setCurrency, s
   }
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center px-4 py-3">
         <button
           onClick={onClose}
@@ -133,7 +133,7 @@ export function NumpadStep({ display, cents, currency, recipient, setCurrency, s
         <button
           onClick={() => onPick('send')}
           disabled={isEmpty}
-          className="h-14 flex-1 rounded-full bg-primary text-base font-semibold text-primary-foreground disabled:opacity-40"
+          className="h-14 flex-1 rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
         >
           Pay
         </button>

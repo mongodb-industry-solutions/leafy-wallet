@@ -33,7 +33,7 @@ export function SuccessStep({ display, symbol, isRequest, recipient, isOnline = 
   }
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
         <div
           className={cn(
@@ -47,11 +47,11 @@ export function SuccessStep({ display, symbol, isRequest, recipient, isOnline = 
         <h2 className="mt-5 text-2xl font-bold">{title}</h2>
         <p className="mt-1.5 max-w-[260px] text-sm text-muted-foreground">{sub}</p>
 
-        <div className="mt-8 flex w-full items-center gap-3 rounded-2xl bg-foreground/[0.06] p-4 text-left">
+        <div className="mt-8 flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm">
           <Peep seed={recipient?.seed} bg={recipient?.bg} size={44} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{recipient?.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{recipient?.handle}</p>
+            <p className="truncate text-xs text-muted-foreground">{recipient?.lookupHint}</p>
           </div>
           <div className="text-right">
             <p className="text-base font-bold tabular-nums">
@@ -74,7 +74,7 @@ export function SuccessStep({ display, symbol, isRequest, recipient, isOnline = 
       <div className="px-6 pb-6">
         <button
           onClick={onClose}
-          className="h-14 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground"
+          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
         >
           Done
         </button>

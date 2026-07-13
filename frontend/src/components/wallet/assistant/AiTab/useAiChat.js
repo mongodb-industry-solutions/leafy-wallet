@@ -8,7 +8,7 @@ const GREETING = {
   id: '0',
   role: 'assistant',
   type: 'text',
-  text: 'Hey — ask me to send money, request from someone, or check your spending. Try "Send €20 to Maria for lunch".',
+  text: 'Hey, ask me to send money, request from someone, or check your spending. Try "Send €20 to Maria for lunch".',
 }
 
 const DECLINE_RE = /^\s*(no|nope|nah|skip|no note|no thanks)\b/i
@@ -23,7 +23,7 @@ function txt(text) {
 function draftMessages(intent, note) {
   const contact = findContact(intent.name)
   return [
-    txt("Here's your draft — review it before it goes."),
+    txt("Here's your draft. Review it before it goes."),
     {
       id: nextId(),
       role: 'assistant',
@@ -82,7 +82,7 @@ export function useAiChat() {
       if (intent.note) return draftMessages(intent, intent.note)
       pendingRef.current = intent
       const verb = intent.type === 'request' ? 'request' : 'payment'
-      return [txt(`Sure — add a note to this ${verb}? Reply with a note, or say "no".`)]
+      return [txt(`Sure, add a note to this ${verb}? Reply with a note, or say "no".`)]
     }
 
     if (intent?.type === 'spending') {

@@ -6,22 +6,23 @@ import { ProfileMenu } from '@/components/wallet/shell/ProfileMenu/ProfileMenu'
 /**
  * The Home screen's gradient hero: an avatar/name pill and the Leafy mark over
  * a MongoDB-green wash that fades into the page, with a "Hi {name} / welcome
- * back" greeting. Replaces the thin WalletHeader on Home only.
+ * back" greeting.
  * @param {object} props
- * @param {{name: string, handle: string, seed: string, bg: string}} props.user
+ * @param {{name: string, email: string, seed: string, bg: string}} props.user
  * @param {() => void} props.onSignOut
+ * @param {() => void} [props.onProfile] - Opens the Profile screen.
  */
-export function HomeHero({ user, onSignOut }) {
+export function HomeHero({ user, onSignOut, onProfile }) {
   const firstName = user.name.split(' ')[0]
 
   return (
-    <div className="relative px-4 pt-5 pb-2 text-white">
+    <div className="relative px-4 pt-10 pb-2 text-white">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 rounded-full bg-white/15 py-1 pr-4 pl-1 backdrop-blur-sm">
-          <ProfileMenu user={user} onLogout={onSignOut} size={30} align="start" />
+          <ProfileMenu user={user} onLogout={onSignOut} onProfile={onProfile} size={30} align="start" />
           <span className="text-sm font-medium tracking-tight">{user.name}</span>
         </div>
-        <LeafLogo size={32} color="white" />
+        <LeafLogo size={38} color="white" />
       </div>
 
       <div className="mt-7">

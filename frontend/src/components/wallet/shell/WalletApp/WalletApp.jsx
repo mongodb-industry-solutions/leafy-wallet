@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { APP_USERS } from '@/lib/wallet-data'
-import { WalletHeader } from '@/components/wallet/shell/WalletHeader/WalletHeader'
 import { BottomNav } from '@/components/wallet/shell/BottomNav/BottomNav'
 import { HomeTab } from '@/components/wallet/home/HomeTab/HomeTab'
 import { ActivityTab } from '@/components/wallet/activity/ActivityTab/ActivityTab'
@@ -10,6 +9,7 @@ import { PeopleTab } from '@/components/wallet/people/PeopleTab/PeopleTab'
 import { AiTab } from '@/components/wallet/assistant/AiTab/AiTab'
 import { TxDetail } from '@/components/wallet/transactions/TxDetail/TxDetail'
 import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
+import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 
 /**
  * The wallet app shell: switches between the tab bar screens, the send/request
@@ -27,6 +27,7 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
   const [sendContact, setSendContact] = useState(null)
   const [isSendOpen, setIsSendOpen] = useState(false)
   const [sendMode, setSendMode] = useState('send')
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
 
   let flow
   if (isSendOpen) {
@@ -58,18 +59,17 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
       {!isSendOpen && (
         <>
-          {/* Home renders its own gradient hero (with the profile menu) in place
-              of the thin header; every other tab keeps the standard header. */}
-          {tab !== 'home' && <WalletHeader user={user} onSignOut={onSignOut} />}
-
+          {/* Home has its own gradient hero (with the profile menu); Activity /
+              People / Chat stand on their own titles, no top bar. */}
           {tab === 'ai' ? (
             <AiTab />
           ) : (
-            <div className="no-scrollbar flex-1 overflow-y-auto overscroll-none pb-24">
+            <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24">
               {tab === 'home' && (
                 <HomeTab
                   user={user}
                   onSignOut={onSignOut}
+                  onProfile={() => setIsProfileOpen(true)}
                   onSetTab={setTab}
                   onDetail={setDetail}
                   onSend={() => handleOpenSend('send')}
@@ -94,6 +94,11 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
         />
       )}
       {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
+      {isProfileOpen && (
+        <div className="absolute inset-0 z-40">
+          <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />
+        </div>
+      )}
     </div>
   )
 }

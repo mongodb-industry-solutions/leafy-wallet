@@ -77,7 +77,7 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
             </button>
             <button
               onClick={() => onConfirm(msg.id)}
-              className="h-11 flex-[1.6] rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+              className="h-11 flex-[1.6] rounded-full bg-secondary text-sm font-semibold text-secondary-foreground"
             >
               {isReq ? 'Request' : 'Send'} €{fmt(d.amount)}
             </button>

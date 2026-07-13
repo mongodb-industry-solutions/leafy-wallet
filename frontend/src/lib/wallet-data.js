@@ -1,13 +1,23 @@
 // ─── Seed data ────────────────────────────────────────────────────────────────
+// Contacts/users are identified by a masked email/phone hint (a Leafy Pay
+// beneficiary's `counterpartyLookupHint`), never a public $handle — matching
+// PLAN.md's anti-enumeration model.
 export const APP_USERS = [
-  { id: 'u1', name: 'Alex Chen', handle: '$alexchen', seed: 'alex-lp', bg: '60a5fa' },
-  { id: 'u2', name: 'Maria Garcia', handle: '$mariagarcia', seed: 'maria-lp', bg: 'a78bfa' },
-  { id: 'u3', name: 'Jordan Lee', handle: '$jordanlee', seed: 'jordan-lp', bg: 'fb7185' },
-  { id: 'u4', name: 'Sam Rivera', handle: '$samrivera', seed: 'sam-lp', bg: '34d399' },
+  { id: 'u1', name: 'Alex Chen', email: 'alex.chen@leafymail.com', seed: 'alex-lp', bg: '60a5fa' },
+  { id: 'u2', name: 'Maria Garcia', email: 'maria.garcia@leafymail.com', seed: 'maria-lp', bg: 'a78bfa' },
+  { id: 'u3', name: 'Jordan Lee', email: 'jordan.lee@leafymail.com', seed: 'jordan-lp', bg: 'fb7185' },
+  { id: 'u4', name: 'Sam Rivera', email: 'sam.rivera@leafymail.com', seed: 'sam-lp', bg: '34d399' },
 ]
 
 // Primary account balance (EUR), numeric — the source for "remaining" math.
 export const BALANCE = 12458.32
+
+// The SSO-linked Leafy Pay account, surfaced (masked) on the Profile screen.
+export const LINKED_ACCOUNT = {
+  provider: 'Leafy Pay',
+  maskedIban: 'IE•• •••• •••• •• 7523',
+  currency: 'EUR',
+}
 
 export const CURRENCIES = [
   { code: 'EUR', symbol: '€', balance: '12,458.32' },
@@ -16,21 +26,21 @@ export const CURRENCIES = [
 ]
 
 export const CONTACTS = [
-  { id: 'c1', name: 'Maria Garcia', handle: '$mariagarcia', seed: 'maria-lp', bg: 'ede9fe' },
-  { id: 'c2', name: 'Jordan Lee', handle: '$jordanlee', seed: 'jordan-lp', bg: 'fce7f3' },
-  { id: 'c3', name: 'Sam Rivera', handle: '$samrivera', seed: 'sam-lp', bg: 'dcfce7' },
-  { id: 'c4', name: 'Taylor Kim', handle: '$taylorkim', seed: 'taylor-lp', bg: 'ffedd5' },
-  { id: 'c5', name: 'Casey Brooks', handle: '$caseybrooks', seed: 'casey-lp', bg: 'cffafe' },
+  { id: 'c1', name: 'Maria Garcia', lookupType: 'email', lookupHint: 'm•••@gmail.com', seed: 'maria-lp', bg: 'ede9fe' },
+  { id: 'c2', name: 'Jordan Lee', lookupType: 'phone', lookupHint: '+1 ••• 4821', seed: 'jordan-lp', bg: 'fce7f3' },
+  { id: 'c3', name: 'Sam Rivera', lookupType: 'email', lookupHint: 's•••@icloud.com', seed: 'sam-lp', bg: 'dcfce7' },
+  { id: 'c4', name: 'Taylor Kim', lookupType: 'phone', lookupHint: '+1 ••• 7702', seed: 'taylor-lp', bg: 'ffedd5' },
+  { id: 'c5', name: 'Casey Brooks', lookupType: 'email', lookupHint: 'c•••@gmail.com', seed: 'casey-lp', bg: 'cffafe' },
 ]
 
 export const TRANSACTIONS = [
-  { id: 't1', name: 'Maria Garcia', handle: '$mariagarcia', amount: 50, note: 'Dinner split', date: 'Today', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
-  { id: 't2', name: 'Jordan Lee', handle: '$jordanlee', amount: -20, note: 'Coffee', date: 'Today', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
-  { id: 't3', name: 'Sam Rivera', handle: '$samrivera', amount: 120, note: 'Concert tickets', date: 'Yesterday', isPending: false, seed: 'sam-lp', bg: 'dcfce7' },
-  { id: 't4', name: 'Casey Brooks', handle: '$caseybrooks', amount: -15, note: 'Parking', date: 'Jun 20', isPending: true, seed: 'casey-lp', bg: 'cffafe' },
-  { id: 't5', name: 'Taylor Kim', handle: '$taylorkim', amount: -82.15, note: 'Groceries', date: 'Jun 19', isPending: true, seed: 'taylor-lp', bg: 'ffedd5' },
-  { id: 't6', name: 'Maria Garcia', handle: '$mariagarcia', amount: 35, note: 'Movie night', date: 'Jun 18', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
-  { id: 't7', name: 'Jordan Lee', handle: '$jordanlee', amount: -12, note: 'Lunch', date: 'Jun 17', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
+  { id: 't1', name: 'Maria Garcia', lookupHint: 'm•••@gmail.com', amount: 50, note: 'Dinner split', date: 'Today', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
+  { id: 't2', name: 'Jordan Lee', lookupHint: '+1 ••• 4821', amount: -20, note: 'Coffee', date: 'Today', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
+  { id: 't3', name: 'Sam Rivera', lookupHint: 's•••@icloud.com', amount: 120, note: 'Concert tickets', date: 'Yesterday', isPending: false, seed: 'sam-lp', bg: 'dcfce7' },
+  { id: 't4', name: 'Casey Brooks', lookupHint: 'c•••@gmail.com', amount: -15, note: 'Parking', date: 'Jun 20', isPending: true, seed: 'casey-lp', bg: 'cffafe' },
+  { id: 't5', name: 'Taylor Kim', lookupHint: '+1 ••• 7702', amount: -82.15, note: 'Groceries', date: 'Jun 19', isPending: true, seed: 'taylor-lp', bg: 'ffedd5' },
+  { id: 't6', name: 'Maria Garcia', lookupHint: 'm•••@gmail.com', amount: 35, note: 'Movie night', date: 'Jun 18', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
+  { id: 't7', name: 'Jordan Lee', lookupHint: '+1 ••• 4821', amount: -12, note: 'Lunch', date: 'Jun 17', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
 ]
 
 export const SPENDING_DATA = [

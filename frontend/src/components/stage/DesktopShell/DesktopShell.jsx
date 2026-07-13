@@ -6,7 +6,7 @@ import { useConnection } from '@/components/stage/DesktopShell/useConnection'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow/ConnectionGlow'
 import { PhoneFrame } from '@/components/stage/PhoneFrame/PhoneFrame'
 import { ConnectionControl } from '@/components/stage/ConnectionControl/ConnectionControl'
-import { FaceIdEntry } from '@/components/stage/FaceIdEntry/FaceIdEntry'
+import { LoginScreen } from '@/components/stage/LoginScreen/LoginScreen'
 import { Walkthrough } from '@/components/stage/Walkthrough/Walkthrough'
 import { WalletApp } from '@/components/wallet/shell/WalletApp/WalletApp'
 import { Frame, FrameHeader } from '@/components/ui/Frame'
@@ -32,7 +32,11 @@ export function DesktopShell() {
 
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-[clamp(48px,8vw,120px)] gap-y-16">
         <PhoneFrame>
-          <WalletApp onSignOut={handleSignOut} onFlowChange={setFlow} isOnline={isOnline} />
+          {isAuthed ? (
+            <WalletApp onSignOut={handleSignOut} onFlowChange={setFlow} isOnline={isOnline} />
+          ) : (
+            <LoginScreen onLogin={handleLogin} />
+          )}
         </PhoneFrame>
 
         <Frame className="w-[400px] max-w-[90vw] shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)]">
@@ -53,8 +57,6 @@ export function DesktopShell() {
           </div>
         </Frame>
       </div>
-
-      {!isAuthed && <FaceIdEntry onAuthed={handleLogin} />}
     </main>
   )
 }

@@ -16,15 +16,15 @@ export function PeopleTab({ onSendTo }) {
   const query = q.trim().toLowerCase()
   const filtered = query
     ? CONTACTS.filter(
-        (c) => c.name.toLowerCase().includes(query) || c.handle.toLowerCase().includes(query),
+        (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
       )
     : CONTACTS
 
   return (
-    <div className="flex flex-col gap-6 px-4 pt-2 pb-6">
+    <div className="flex flex-col gap-6 px-4 pt-8 pb-6">
       <h1 className="text-xl font-bold text-foreground">People</h1>
 
-      <label className="flex h-11 items-center gap-2.5 rounded-xl bg-foreground/[0.08] px-3.5 text-foreground">
+      <label className="flex h-11 items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 text-foreground shadow-sm">
         <span className="text-muted-foreground">
           <Icon glyph="MagnifyingGlass" size={16} />
         </span>
@@ -58,11 +58,11 @@ export function PeopleTab({ onSendTo }) {
         </section>
       )}
 
-      <section>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <section className="flex flex-col gap-2">
+        <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {query ? 'Results' : 'All people'}
         </p>
-        <div className="flex flex-col divide-y divide-border">
+        <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
           {filtered.map((c) => (
             <button
               key={c.id}
@@ -72,7 +72,7 @@ export function PeopleTab({ onSendTo }) {
               <Peep seed={c.seed} bg={c.bg} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{c.handle}</p>
+                <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
               </div>
               <span className="text-muted-foreground">
                 <Icon glyph="ChevronRight" size={18} />

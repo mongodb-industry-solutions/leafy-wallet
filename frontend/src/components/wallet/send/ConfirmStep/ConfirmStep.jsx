@@ -27,7 +27,7 @@ function Row({ label, value }) {
  */
 export function ConfirmStep({ display, symbol, isRequest, recipient, note, remaining, onBack, onSubmit }) {
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           onClick={onBack}
@@ -50,16 +50,16 @@ export function ConfirmStep({ display, symbol, isRequest, recipient, note, remai
           </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl bg-foreground/[0.06] p-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
           <Peep seed={recipient.seed} bg={recipient.bg} size={48} />
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{isRequest ? 'From' : 'To'}</p>
             <p className="truncate text-base font-bold">{recipient.name}</p>
-            <p className="truncate text-sm text-muted-foreground">{recipient.handle}</p>
+            <p className="truncate text-sm text-muted-foreground">{recipient.lookupHint}</p>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-foreground/[0.06] p-4">
+        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
           {note && <Row label="For" value={note} />}
           {isRequest ? (
             <Row label="You'll receive" value={`${symbol}${display}`} />
@@ -75,7 +75,7 @@ export function ConfirmStep({ display, symbol, isRequest, recipient, note, remai
       <div className="px-4 pt-2 pb-6">
         <button
           onClick={onSubmit}
-          className="h-14 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground"
+          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
         >
           {isRequest ? `Request ${symbol}${display}` : `Send ${symbol}${display}`}
         </button>

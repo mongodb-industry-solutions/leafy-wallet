@@ -36,7 +36,7 @@ export function AiTab() {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted text-foreground">
       {/* Aurora stays low & faint while idle, then rises up and brightens while
           the assistant is "thinking". Outer div drives the rise; inner div runs
           a constant gentle breathe (most visible once risen). */}
@@ -58,14 +58,12 @@ export function AiTab() {
         </div>
       </div>
 
-      <div className="relative z-10 px-5 pt-4 pb-2">
-        <h2 className="w-fit bg-gradient-to-tr from-[#00A35C] from-20% to-[#006EFF] bg-clip-text text-lg font-bold text-transparent">
-          Leafy AI
-        </h2>
+      <div className="relative z-10 px-4 pt-8 pb-2">
+        <h1 className="text-xl font-bold text-foreground">Leafy AI</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Ask me anything about your money.</p>
       </div>
 
-      <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-5 py-3">
+      <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {msgs.map((m) => {
           if (m.type === 'action') {
             return (

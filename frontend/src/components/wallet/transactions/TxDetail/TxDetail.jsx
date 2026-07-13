@@ -55,7 +55,7 @@ export function TxDetail({ tx, onClose }) {
         <div className="flex flex-col items-center text-center">
           <Peep seed={tx.seed} bg={tx.bg} size={64} />
           <p className="mt-3 text-base font-bold">{tx.name}</p>
-          <p className="text-sm text-muted-foreground">{tx.handle}</p>
+          <p className="text-sm text-muted-foreground">{tx.lookupHint}</p>
           <p
             className={cn(
               'mt-4 text-3xl font-bold tabular-nums',

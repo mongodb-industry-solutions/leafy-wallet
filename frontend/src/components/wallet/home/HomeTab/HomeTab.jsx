@@ -24,11 +24,12 @@ const ALL_ACCOUNTS = [
 ]
 const ACCOUNTS = MULTI_CURRENCY_ENABLED ? ALL_ACCOUNTS : ALL_ACCOUNTS.slice(0, 1)
 
+// Send/Chat are short enough to pair with an icon; Request is left text-only
+// so the longer word keeps even padding inside its pill.
 const CTAS = [
-  { id: 'send', label: 'Send', glyph: 'ArrowUp', color: 'text-secondary' },
-  { id: 'request', label: 'Request', glyph: 'ArrowDown', color: 'text-foreground' },
-  // Teal reads as the MongoDB AI green→blue blend, the one non-green accent.
-  { id: 'chat', label: 'Chat', glyph: 'Sparkle', color: 'text-[#0499C7]' },
+  { id: 'send', label: 'Send', glyph: 'ArrowUp' },
+  { id: 'request', label: 'Request' },
+  { id: 'chat', label: 'Chat', glyph: 'Sparkle' },
 ]
 
 /**
@@ -62,15 +63,26 @@ function groupByDate(txs) {
 }
 
 /**
- * A circular EU flag badge (blue field, ring of gold stars) for the account
- * card. Coordinates are rounded so the SSR and client markup match exactly.
+ * Builds the points string for an upright 5-pointed star centered at (cx, cy).
+ * Coordinates are rounded so the SSR and client markup match exactly.
  */
+function starPoints(cx, cy, outer, inner) {
+  const pts = []
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner
+    const a = (Math.PI / 5) * i - Math.PI / 2
+    pts.push(`${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`)
+  }
+  return pts.join(' ')
+}
+
+/** A circular EU flag badge: blue field with a ring of 12 gold stars. */
 function EuFlag({ size = 40 }) {
   const stars = Array.from({ length: EU_STAR_COUNT }, (_, i) => {
     const angle = (i / EU_STAR_COUNT) * 2 * Math.PI - Math.PI / 2
-    const cx = (50 + 34 * Math.cos(angle)).toFixed(2)
-    const cy = (50 + 34 * Math.sin(angle)).toFixed(2)
-    return <circle key={i} cx={cx} cy={cy} r="4.5" fill={EU_GOLD} />
+    const cx = 50 + 33 * Math.cos(angle)
+    const cy = 50 + 33 * Math.sin(angle)
+    return <polygon key={i} points={starPoints(cx, cy, 6.2, 2.5)} fill={EU_GOLD} />
   })
   return (
     <svg viewBox="0 0 100 100" width={size} height={size} className="flex-none" aria-hidden="true">
@@ -84,14 +96,15 @@ function EuFlag({ size = 40 }) {
  * The "Home" tab: gradient hero, total balance, the EUR account card,
  * Send/Request/Chat shortcuts, and a date-grouped preview of recent transactions.
  * @param {object} props
- * @param {{name: string, handle: string, seed: string, bg: string}} props.user
+ * @param {{name: string, email: string, seed: string, bg: string}} props.user
  * @param {() => void} props.onSignOut
+ * @param {() => void} [props.onProfile] - Opens the Profile screen.
  * @param {(tab: string) => void} props.onSetTab
  * @param {(tx: object) => void} props.onDetail - Opens the detail sheet for a transaction.
  * @param {() => void} props.onSend
  * @param {() => void} props.onRequest
  */
-export function HomeTab({ user, onSignOut, onSetTab, onDetail, onSend, onRequest }) {
+export function HomeTab({ user, onSignOut, onProfile, onSetTab, onDetail, onSend, onRequest }) {
   const onCta = { send: onSend, request: onRequest, chat: () => onSetTab('ai') }
   const balance = formatBalance(BALANCE)
   const groups = groupByDate(TRANSACTIONS)
@@ -101,12 +114,12 @@ export function HomeTab({ user, onSignOut, onSetTab, onDetail, onSend, onRequest
       {/* Overscans the top edges so the phone's rounded corners stay green. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-x-4 -top-4 h-[20.5rem]"
+        className="pointer-events-none absolute -inset-x-4 -top-4 h-[24.5rem]"
         style={{ background: HERO_GRADIENT }}
       />
 
       <div className="relative flex flex-col">
-        <HomeHero user={user} onSignOut={onSignOut} />
+        <HomeHero user={user} onSignOut={onSignOut} onProfile={onProfile} />
 
         {/* pt pushes the balance down into the white area near the gradient tail. */}
         <div className="flex flex-col gap-6 px-4 pt-32 pb-6">
@@ -142,17 +155,15 @@ export function HomeTab({ user, onSignOut, onSetTab, onDetail, onSend, onRequest
               </div>
             ))}
 
-            <div className="flex gap-3">
-              {CTAS.map(({ id, label, glyph, color }) => (
+            <div className="flex gap-2.5">
+              {CTAS.map(({ id, label, glyph }) => (
                 <button
                   key={id}
                   onClick={onCta[id]}
-                  className="flex min-h-24 flex-1 flex-col items-start justify-between rounded-xl border border-border bg-card p-4 text-foreground shadow-sm transition-colors hover:bg-muted"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-foreground py-3 text-sm font-semibold text-background shadow-sm transition-opacity hover:opacity-90"
                 >
-                  <span className={color}>
-                    <Icon glyph={glyph} size={24} />
-                  </span>
-                  <span className="text-sm font-semibold">{label}</span>
+                  {glyph && <Icon glyph={glyph} size={16} />}
+                  {label}
                 </button>
               ))}
             </div>
