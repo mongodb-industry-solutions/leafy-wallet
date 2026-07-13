@@ -20,7 +20,9 @@ class MongoDBConnector:
         self.uri = uri or os.getenv("MONGODB_URI")
         self.database_name = database_name or os.getenv("DATABASE_NAME")
         self.appname = appname or os.getenv("APP_NAME")
-        self.client = MongoClient(self.uri, appname=self.appname)
+        # tz_aware=True: without it, pymongo decodes BSON dates as naive
+        # datetimes, silently dropping the UTC tzinfo we write them with.
+        self.client = MongoClient(self.uri, appname=self.appname, tz_aware=True)
         self.db = self.client[self.database_name]
 
     def get_collection(self, collection_name):

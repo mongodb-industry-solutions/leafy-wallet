@@ -1,0 +1,39 @@
+name: Backend Tests
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ensure Atlas credentials are configured
+        run: |
+          if [ -z "${{ secrets.MONGODB_URI }}" ]; then
+            echo "::error::MONGODB_URI secret is not set. Tests would silently skip instead of running — add the repo secret first."
+            exit 1
+          fi
+
+      - name: Run tests
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+          APP_NAME: leafy-wallet-ci
+        run: uv run pytest -v
