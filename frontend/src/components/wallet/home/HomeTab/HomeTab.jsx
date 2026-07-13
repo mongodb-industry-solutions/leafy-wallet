@@ -87,10 +87,6 @@ function EuFlag({ size = 40 }) {
   )
 }
 
-// Session flag: true once Home has mounted, so the open animation plays only on
-// the first app open, not on every return to the Home tab.
-let hasOpenedHome = false
-
 /**
  * The "Home" tab: gradient hero, total balance, the EUR account card,
  * Send/Request/Chat shortcuts, and a date-grouped preview of recent transactions.
@@ -102,25 +98,33 @@ let hasOpenedHome = false
  * @param {(tx: object) => void} props.onDetail - Opens the detail sheet for a transaction.
  * @param {() => void} props.onSend
  * @param {() => void} props.onRequest
+ * @param {boolean} [props.playHeroIntro] - Animate the aurora open (set once per login).
+ * @param {() => void} [props.onHeroIntroPlayed] - Marks the intro as played so remounts skip it.
  */
-export function HomeTab({ user, onSignOut, onProfile, onSetTab, onDetail, onSend, onRequest }) {
+export function HomeTab({
+  user,
+  onSignOut,
+  onProfile,
+  onSetTab,
+  onDetail,
+  onSend,
+  onRequest,
+  playHeroIntro = false,
+  onHeroIntroPlayed,
+}) {
   const onCta = { send: onSend, request: onRequest, chat: () => onSetTab('ai') }
   const balance = formatBalance(BALANCE)
   const groups = groupByDate(TRANSACTIONS)
 
-  // Animate the aurora open only the first time the app is opened this session,
-  // not on every return to Home (HomeTab remounts on each tab switch).
-  const [animateHero] = useState(() => {
-    if (hasOpenedHome) return false
-    hasOpenedHome = true
-    return true
-  })
+  // Capture the intro decision once on mount so it can't flip mid-animation.
+  const [animateHero] = useState(playHeroIntro)
   const [heroExpanded, setHeroExpanded] = useState(!animateHero)
   useEffect(() => {
     if (!animateHero) return
+    onHeroIntroPlayed?.()
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setHeroExpanded(true)))
     return () => cancelAnimationFrame(id)
-  }, [animateHero])
+  }, [animateHero, onHeroIntroPlayed])
 
   return (
     <div className="relative flex flex-col">

@@ -117,14 +117,6 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
                 label="Enable passwordless login"
               />
             </div>
-            {isPasswordlessEnabled && (
-              <button
-                onClick={() => setIsPasswordlessEnabled(false)}
-                className="mt-3 w-full rounded-xl bg-foreground/[0.06] py-2.5 text-sm font-medium text-destructive"
-              >
-                Remove from this browser
-              </button>
-            )}
           </div>
         </div>
 
@@ -132,7 +124,6 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
           <SectionLabel>Security &amp; legal</SectionLabel>
           <div className="rounded-2xl border border-border bg-card px-4 shadow-sm">
             <div className="divide-y divide-border">
-              <LinkRow label="Manage credentials at Leafy Pay" sub="Opens Leafy Pay in a new tab" />
               <LinkRow label="Privacy Policy" />
               <LinkRow label="Terms of Service" />
             </div>

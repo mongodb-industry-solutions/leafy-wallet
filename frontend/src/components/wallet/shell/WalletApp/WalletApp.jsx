@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { APP_USERS } from '@/lib/wallet-data'
 import { BottomNav } from '@/components/wallet/shell/BottomNav/BottomNav'
 import { HomeTab } from '@/components/wallet/home/HomeTab/HomeTab'
@@ -26,6 +26,9 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
   const [isSendOpen, setIsSendOpen] = useState(false)
   const [sendMode, setSendMode] = useState('send')
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  // Reset each time WalletApp mounts (i.e. each authentication), so the Home
+  // aurora intro plays once per login, not on every return to the Home tab.
+  const heroIntroPlayedRef = useRef(false)
 
   let flow
   if (isSendOpen) {
@@ -53,6 +56,10 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
     setTab('home')
   }
 
+  const handleHeroIntroPlayed = useCallback(() => {
+    heroIntroPlayedRef.current = true
+  }, [])
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
       {!isSendOpen && (
@@ -72,6 +79,8 @@ export function WalletApp({ onSignOut, onFlowChange, isOnline = true }) {
                   onDetail={setDetail}
                   onSend={() => handleOpenSend('send')}
                   onRequest={() => handleOpenSend('request')}
+                  playHeroIntro={!heroIntroPlayedRef.current}
+                  onHeroIntroPlayed={handleHeroIntroPlayed}
                 />
               )}
               {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
