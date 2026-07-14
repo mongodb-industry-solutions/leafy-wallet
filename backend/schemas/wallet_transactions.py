@@ -4,15 +4,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class Money(BaseModel):
-    """Embedded `amount` shape shared by the inbound and outbound transaction schemas."""
-
-    value: float
-    currency: str
-
-
 class WalletTransactionCreate(BaseModel):
     """Inbound payload for POST /wallet-transactions.
+
+    `amount`/`currency` are flat (not a nested `amount: {value, currency}`
+    sub-document) to match the shape ObjectBox's MongoDB Sync Server bridge
+    writes when a transaction originates offline via leafy-local-store —
+    that connector has no way to produce nested fields, so the canonical
+    Atlas schema was flattened to match it rather than special-casing one
+    write path.
 
     `noteEmbedding` is absent on purpose: it's generated server-side by
     Ollama from `note` (see services/ollama.py), never supplied by the
@@ -23,7 +23,8 @@ class WalletTransactionCreate(BaseModel):
     leafyPayTransferReference: str
     ownerPartyRef: str
     counterpartyArrangementReference: str
-    amount: Money
+    amount: float
+    currency: str
     note: str | None = Field(default=None, max_length=140)
     direction: Literal["sent", "received"]
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] = "pending"
@@ -56,7 +57,8 @@ class WalletTransactionOut(BaseModel):
     leafyPayTransferReference: str
     ownerPartyRef: str
     counterpartyArrangementReference: str
-    amount: Money
+    amount: float
+    currency: str
     note: str | None = None
     noteEmbedding: list[float] | None = None
     direction: Literal["sent", "received"]
@@ -80,7 +82,8 @@ class WalletTransactionSearchResult(BaseModel):
     leafyPayTransferReference: str
     ownerPartyRef: str
     counterpartyArrangementReference: str
-    amount: Money
+    amount: float
+    currency: str
     note: str | None = None
     direction: Literal["sent", "received"]
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"]

@@ -11,8 +11,10 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
   - [Environment Variables](#environment-variables)
 - [Running the Application](#running-the-application)
 - [API Documentation](#api-documentation)
+- [Data Model Notes](#data-model-notes)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
+- [ObjectBox Offline Sync (PoC)](#objectbox-offline-sync-poc)
 
 ## Features
 
@@ -29,7 +31,7 @@ Before you begin, ensure you have:
 - Python 3.13 (but less than 3.14)
 - uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
 - A MongoDB Atlas cluster with a database user (Database Access) and your IP allow-listed (Network Access). For `/wallet-transactions/search`, the cluster tier must support [Atlas Vector Search](https://www.mongodb.com/docs/atlas/atlas-search/) (M10+ dedicated, or Search Nodes/Serverless).
-- [Ollama](https://ollama.com/) running locally with the `nomic-embed-text` model pulled — optional, only needed for `noteEmbedding` generation on transactions. Two ways to get this:
+- [Ollama](https://ollama.com/) running locally with the `nomic-embed-text` model pulled; optional, only needed for `noteEmbedding` generation on transactions. Two ways to get this:
   - Native install: `ollama pull nomic-embed-text`, then leave `ollama serve` running.
   - Docker (matches the deployed setup): from the repo root, run `docker compose up -d ollama ollama-pull`. This starts Ollama on `localhost:11434` (published from the container) and pulls the model automatically. Either way, the backend's default `OLLAMA_BASE_URL=http://localhost:11434` works unchanged for local `uvicorn` runs.
 
@@ -49,7 +51,7 @@ Before you begin, ensure you have:
    cd backend
    uv run python scripts/create_vector_index.py
    ```
-   This is idempotent — safe to re-run if the index definition changes.
+   This is idempotent,  safe to re-run if the index definition changes.
 
 ### Environment Variables
 
@@ -73,7 +75,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000
 
 The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g. by Docker), stop the containers with `make clean` or use a different `--port`.
 
-**Note:** open Swagger/ReDoc using `localhost`, not `0.0.0.0` — browsers will reject the "Try it out" requests against `0.0.0.0` even though the page itself loads fine.
+**Note:** open Swagger/ReDoc using `localhost`, not `0.0.0.0`, browsers will reject the "Try it out" requests against `0.0.0.0` even though the page itself loads fine.
 
 ## API Documentation
 
@@ -94,6 +96,16 @@ The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g
 | `GET` | `/api/v1/wallet-transactions/{id}` | Get a transaction by id |
 | `PATCH` | `/api/v1/wallet-transactions/{id}` | Partially update a transaction (status, settlement, embedding) |
 | `DELETE` | `/api/v1/wallet-transactions/{id}` | Delete a transaction |
+
+## Data Model Notes
+
+`walletTransactions.amount` and `walletTransactions.currency` are **flat top-level fields**
+(`{"amount": 20.0, "currency": "EUR", ...}`), not a nested `amount: {value, currency}`
+sub-document. This is deliberate: transactions can also originate offline via
+`leafy-local-store` (see [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and
+that write path goes through a generic, no-code MongoDB bridge that can only produce flat
+fields. Rather than have two different document shapes in the same collection depending on
+which path wrote a given transaction, the canonical schema was flattened to match.
 
 ## Project Structure
 
@@ -129,3 +141,125 @@ uv run pytest -v
 Tests run as integration tests directly against MongoDB Atlas using the credentials in `.env`. If Atlas isn't reachable (e.g. no database user configured yet), the whole suite skips cleanly instead of failing. Each test cleans up the documents it creates.
 
 Tests in `test_wallet_transactions_search.py` additionally skip if the vector search index hasn't been provisioned (see `scripts/create_vector_index.py` above), and poll for up to ~60s per assertion since Atlas Search indexes newly written documents asynchronously.
+
+## ObjectBox Offline Sync (PoC)
+
+This is a proof of concept toward the project's broader *offline-ready mobile wallet*
+architecture. The idea: a mobile app should keep working with no network by writing to an
+on-device store, then sync those writes to Atlas once connectivity returns. Since this
+demo's client is a Next.js web app (no browser SDK exists for ObjectBox's native on-device
+store), the on-device piece is simulated by a small standalone service instead of running
+inside a real mobile app.
+
+**This lives outside `backend/`**, as two sibling directories at the repo root, because it's
+a different stack (C++) with its own build/runtime:
+
+| Directory | Stack | Role |
+|---|---|---|
+| `leafy-local-store/` | C++ (`objectbox-c` + Sync) | HTTP service simulating the on-device store: accepts writes, embeds `note` via Ollama, persists locally, syncs when connected |
+| `objectbox-sync-server/` | `objectboxio/sync-server-trial` (official image) | Bridges ObjectBox ↔ Atlas via its built-in MongoDB connector, no custom reconciliation code |
+
+### How it fits with this backend
+
+Both `leafy-local-store` and this FastAPI backend write into the **same** `walletTransactions`
+Atlas collection, one online write path (this API), one offline-capable write path
+(`leafy-local-store`). That's the reasoning behind the flat `amount`/`currency` fields
+described in [Data Model Notes](#data-model-notes): the ObjectBox↔Mongo bridge is generic and
+can't produce nested documents, so the schema was flattened to match rather than have two
+shapes coexist in one collection.
+
+### Running it locally
+
+```bash
+export UID=$(id -u)
+export GID=$(id -g)
+docker compose up -d objectbox-sync-server leafy-local-store
+```
+
+The `user: "${UID:-1000}:${GID:-1000}"` line in the root `docker-compose.yml`'s
+`objectbox-sync-server` service matches the container to your host user,  **required**,
+because that service bind-mounts `./objectbox-sync-server:/data` and needs to create an
+internal subdirectory there for its Mongo sync state. Without a matching UID/GID, that fails
+with `Failed to create directory`. The `export`s above must run in the same shell that runs
+`docker compose up`. Compose reads `${UID}`/`${GID}` from environment variables at parse
+time (most shells don't export these by default), so skipping the `export` silently falls
+back to `1000:1000`.
+
+**One-time setup per environment** (each fresh Atlas cluster / each time the sync server's
+local state is cleared):
+1. Open the Admin UI at `http://localhost:9980` and activate the trial license when prompted.
+2. Go to **MongoDB Connector → Full Sync** and click **"Full Import from MongoDB"**. This is
+   required before the bridge starts listening for ongoing changes, skipping it means writes
+   never leave the sync server (it logs a warning saying exactly this until you do it).
+
+### `leafy-local-store` API (port 8090)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/local/v1/health` | Store status + local transaction count |
+| `GET` | `/local/v1/transactions` | List locally-stored transactions |
+| `POST` | `/local/v1/transactions/send` | Create a transaction locally (embeds `note` via Ollama, syncs to Atlas once connected) |
+
+**`GET /local/v1/health`**
+```json
+// 200
+{"status": "healthy", "transaction_count": 3}
+// 500
+{"status": "error", "error": "..."}
+```
+
+**`GET /local/v1/transactions`**: no request body; returns an array of the same object shape
+as the `send` response below (`200`), or `{"error": "..."}` (`500`).
+
+**`POST /local/v1/transactions/send`**: required: `leafyPayTransferReference`,
+`ownerPartyRef`, `counterpartyArrangementReference`, `amount`, `currency`, `direction`.
+Optional: `note` (embedded via Ollama if present and non-empty).
+```json
+// Request
+{
+  "leafyPayTransferReference": "string",
+  "ownerPartyRef": "string",
+  "counterpartyArrangementReference": "string",
+  "amount": 42.0,
+  "currency": "USD",
+  "direction": "sent",
+  "note": "optional string"
+}
+// 201 — server-assigned: id, leafyPayStatus="pending", localSyncStatus="local_pending",
+// createdAt, settledAt=null, hasEmbedding
+{
+  "id": 1,
+  "leafyPayTransferReference": "string",
+  "ownerPartyRef": "string",
+  "counterpartyArrangementReference": "string",
+  "amount": 42.0,
+  "currency": "USD",
+  "note": "optional string",
+  "hasEmbedding": true,
+  "direction": "sent",
+  "leafyPayStatus": "pending",
+  "localSyncStatus": "local_pending",
+  "createdAt": 1784038802411,
+  "settledAt": null
+}
+// 400 — invalid JSON or missing required field: {"error": "..."}
+// 500 — genuine server-side failure (e.g. store write): {"error": "..."}
+```
+
+
+### Non-obvious things learned building this (empirically, not from docs)
+
+- **The ObjectBox entity's registered name is the target MongoDB collection name. Not the
+  C++ struct name**: the string passed to `obx_model_entity(model, "walletTransactions", ...)`
+  and the `"name"` field in `objectbox-sync-server/objectbox-model.json` must match each other
+  and must equal the desired collection name.
+- **That name can't contain hyphens**: ObjectBox entity identifier rules reject them (we hit
+  this trying `sync-test`; `syncTest` worked fine).
+- **Entity/property UIDs must match exactly** between `objectbox-sync-server/objectbox-model.json`
+  and `leafy-local-store/local_store_service.cpp`'s `create_obx_model()`. A mismatch doesn't
+  error loudly, writes just silently stay local-only and never reach Atlas.
+- **Mongo's `_id` is untouched by ObjectBox's own `int64` id**: the bridge lets MongoDB
+  generate a fresh `ObjectId` as usual; there's no collision or id-scheme conflict to worry
+  about.
+- **After clearing/recreating the sync server's local state, "Full Import" must be re-run.**
+  It's tracked per local state, not per Atlas collection.
