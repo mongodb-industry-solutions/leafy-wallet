@@ -15,8 +15,7 @@ import {
 } from 'lucide-react'
 
 // Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet
-// screen. Each flow narrates the MongoDB tech powering that screen; every step
-// carries an icon for the illustration area.
+// screen, narrating the MongoDB tech behind it (each step carries an icon).
 export const WALKTHROUGH = {
   home: {
     label: 'Home',

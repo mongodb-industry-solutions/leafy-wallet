@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Weekly spending breakdown the assistant renders inline — animated bars
- * that grow on mount, ranked by amount.
+ * Weekly spending breakdown the assistant renders inline, with animated bars ranked by amount.
  * @param {object} props
  * @param {{label: string, value: number, color: string}[]} props.data
  */

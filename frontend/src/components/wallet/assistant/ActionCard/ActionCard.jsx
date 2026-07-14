@@ -17,8 +17,7 @@ function Row({ label, value }) {
 }
 
 /**
- * A send/request the assistant drafts inline — reviewed and confirmed
- * (Review → Cancel / Send) before any money moves.
+ * A send/request the assistant drafts inline, reviewed and confirmed before any money moves.
  * @param {object} props
  * @param {object} props.msg - Chat message with an `actionData` payload.
  * @param {(id: string) => void} props.onConfirm - Called when the user confirms the action.
@@ -35,7 +34,7 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
   }, [isReviewing, onExpand])
 
   return (
-    <div className="w-72 overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="w-72 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
       <div className="p-4">
         <div className="flex items-center gap-3">
           {d.contact && <Peep seed={d.contact.seed} bg={d.contact.bg} size={40} />}
@@ -77,7 +76,7 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
             </button>
             <button
               onClick={() => onConfirm(msg.id)}
-              className="h-11 flex-[1.6] rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+              className="h-11 flex-[1.6] rounded-full bg-secondary text-sm font-semibold text-secondary-foreground"
             >
               {isReq ? 'Request' : 'Send'} €{fmt(d.amount)}
             </button>

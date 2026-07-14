@@ -18,15 +18,15 @@ function groupByDate(transactions) {
  */
 export function ActivityTab({ onDetail }) {
   return (
-    <div className="flex flex-col gap-6 px-4 pt-2 pb-6">
+    <div className="flex flex-col gap-5 px-4 pt-8 pb-6">
       <h1 className="text-xl font-bold text-foreground">Activity</h1>
 
       {groupByDate(TRANSACTIONS).map(([date, txs]) => (
-        <section key={date}>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <section key={date} className="flex flex-col gap-2">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {date}
           </p>
-          <div className="flex flex-col divide-y divide-border">
+          <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
             {txs.map((tx) => (
               <TxRow key={tx.id} tx={tx} onClick={() => onDetail(tx)} />
             ))}

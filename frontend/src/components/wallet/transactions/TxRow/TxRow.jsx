@@ -4,7 +4,7 @@ import Icon from '@leafygreen-ui/icon'
 import { cn } from '@/lib/utils'
 
 /** Picks an icon glyph for a transaction based on its amount and note. */
-export function glyphFor(tx) {
+function glyphFor(tx) {
   const note = tx.note.toLowerCase()
   if (tx.amount > 0) return 'Coin'
   if (note.includes('concert') || note.includes('movie')) return 'Calendar'
@@ -27,9 +27,9 @@ export function TxRow({ tx, onClick }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{tx.name}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs font-medium text-muted-foreground">
           {tx.note} ·{' '}
-          <span className={cn(tx.isPending && 'font-medium text-warning')}>
+          <span className={cn(tx.isPending && 'text-warning')}>
             {tx.isPending ? 'Pending' : 'Completed'}
           </span>
         </p>

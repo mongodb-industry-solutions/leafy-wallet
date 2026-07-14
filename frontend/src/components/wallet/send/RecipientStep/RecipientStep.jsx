@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { CONTACTS } from '@/lib/wallet-data'
 import { Peep } from '@/components/common/Peep/Peep'
+import { IconButton } from '@/components/ui/IconButton'
 
 /**
  * Second step of the send/request flow: pick or search for a recipient and
@@ -34,7 +35,7 @@ export function RecipientStep({
   const query = search.trim().toLowerCase()
   const filtered = query
     ? CONTACTS.filter(
-        (c) => c.name.toLowerCase().includes(query) || c.handle.toLowerCase().includes(query),
+        (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
       )
     : CONTACTS
 
@@ -44,15 +45,11 @@ export function RecipientStep({
   }
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onBack} aria-label="Back">
           <Icon glyph="ArrowLeft" size={18} />
-        </button>
+        </IconButton>
         <span className="flex-1 text-center text-lg font-bold tabular-nums">
           {symbol}
           {display}
@@ -60,7 +57,7 @@ export function RecipientStep({
         <span className="size-9 flex-none" />
       </div>
 
-      <div className="px-4">
+      <div className="mx-4 rounded-2xl border border-border bg-card px-4 shadow-sm">
         <div className="flex items-center gap-3 py-3">
           <span className="w-10 text-sm font-medium text-muted-foreground">
             {isRequest ? 'From' : 'To'}
@@ -81,7 +78,7 @@ export function RecipientStep({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name or $handle"
+              placeholder="Name, email or phone"
               autoFocus
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
@@ -99,11 +96,11 @@ export function RecipientStep({
         </div>
       </div>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pt-3">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pt-4">
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Suggested
         </p>
-        <div className="flex flex-col divide-y divide-border">
+        <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
           {filtered.map((c) => (
             <button
               key={c.id}
@@ -113,7 +110,7 @@ export function RecipientStep({
               <Peep seed={c.seed} bg={c.bg} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{c.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{c.handle}</p>
+                <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
               </div>
               {recipient?.id === c.id && (
                 <span className="text-secondary">
@@ -129,7 +126,7 @@ export function RecipientStep({
         <button
           onClick={onNext}
           disabled={!recipient}
-          className="h-14 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground disabled:opacity-40"
+          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
         >
           Next
         </button>
