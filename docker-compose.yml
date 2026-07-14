@@ -1,4 +1,21 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: leafy-wallet-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: always
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: leafy-wallet-ollama-pull
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["ollama", "pull", "nomic-embed-text"]
+    restart: "no"
   demoname-backend:
     build:
       context: .
@@ -11,6 +28,10 @@ services:
       - ~/.aws/sso/cache:/root/.aws/sso/cache:rw  # Only make cache writable
     ports:
       - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
     restart: always
     container_name: demoname-backend
   demoname-frontend:
@@ -23,3 +44,6 @@ services:
       - "3000:3000"
     restart: always
     container_name: demoname-frontend
+
+volumes:
+  ollama_data:

@@ -28,7 +28,9 @@ Before you begin, ensure you have:
 - Python 3.13 (but less than 3.14)
 - uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
 - A MongoDB Atlas cluster with a database user (Database Access) and your IP allow-listed (Network Access)
-- [Ollama](https://ollama.com/) running locally with the `nomic-embed-text` model pulled (`ollama pull nomic-embed-text`) — optional, only needed for `noteEmbedding` generation on transactions
+- [Ollama](https://ollama.com/) running locally with the `nomic-embed-text` model pulled — optional, only needed for `noteEmbedding` generation on transactions. Two ways to get this:
+  - Native install: `ollama pull nomic-embed-text`, then leave `ollama serve` running.
+  - Docker (matches the deployed setup): from the repo root, run `docker compose up -d ollama ollama-pull`. This starts Ollama on `localhost:11434` (published from the container) and pulls the model automatically. Either way, the backend's default `OLLAMA_BASE_URL=http://localhost:11434` works unchanged for local `uvicorn` runs.
 
 ## Getting Started
 
