@@ -3,7 +3,7 @@
   "entities": [
     {
       "id": "1:7001000000000000",
-      "name": "syncTest",
+      "name": "walletTransactions",
       "flags": 2,
       "lastPropertyId": "14:7001000000000014",
       "properties": [

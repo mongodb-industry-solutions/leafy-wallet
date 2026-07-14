@@ -165,9 +165,9 @@ OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
     // Entity name doubles as the target MongoDB collection name in the Sync
-    // Server's bridge (confirmed empirically) — "syncTest" here is a
-    // deliberately separate collection for this PoC, not walletTransactions.
-    obx_model_entity(model, "syncTest", 1, 7001000000000000ULL);
+    // Server's bridge (confirmed empirically) — this is now pointed at the
+    // real walletTransactions collection the FastAPI backend also uses.
+    obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
     obx_model_property(model, "id", OBXPropertyType_Long, 1, 7001000000000001ULL);
