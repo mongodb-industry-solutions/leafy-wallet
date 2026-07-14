@@ -26,6 +26,7 @@ services:
   objectbox-sync-server:
     image: objectboxio/sync-server-trial
     container_name: leafy-wallet-objectbox-sync
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - backend/.env
     ports:
