@@ -6,12 +6,19 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: always
   ollama-pull:
     image: ollama/ollama:latest
     container_name: leafy-wallet-ollama-pull
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
     entrypoint: ["ollama", "pull", "nomic-embed-text"]
