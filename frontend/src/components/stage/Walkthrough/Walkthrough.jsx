@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { FramePanel } from '@/components/ui/Frame'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
 const AUTO_ADVANCE_MS = 6000
@@ -32,7 +31,7 @@ export function Walkthrough({ flow }) {
   const go = (delta) => setStep((s) => (s + delta + count) % count)
 
   return (
-    <FramePanel className="p-6">
+    <>
       <div className="h-[176px] overflow-hidden">
         <h3 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
           {current.title}
@@ -42,9 +41,9 @@ export function Walkthrough({ flow }) {
         </p>
       </div>
 
-      {/* Illustration area — icon placeholder for a future image/animation. */}
-      <div className="grid h-32 place-items-center rounded-xl bg-gradient-to-br from-muted/70 to-muted/30">
-        {Media && <Media className="size-9 text-foreground/70" strokeWidth={1.5} />}
+      {/* Illustration area, icon placeholder for a future image/animation. */}
+      <div className="grid h-32 place-items-center rounded-2xl bg-secondary/[0.06]">
+        {Media && <Media className="size-9 text-secondary" strokeWidth={1.5} />}
       </div>
 
       <div className="mt-6 flex items-center justify-center gap-2.5">
@@ -52,18 +51,18 @@ export function Walkthrough({ flow }) {
           aria-label="Previous step"
           onClick={() => go(-1)}
           disabled={count < 2}
-          className="grid size-8 place-items-center rounded-full bg-muted-foreground text-background transition disabled:opacity-40"
+          className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10 disabled:opacity-40"
         >
           <ChevronLeft className="size-4" />
         </button>
 
-        <div className="flex h-8 items-center gap-2 rounded-full bg-muted-foreground px-3">
+        <div className="flex h-8 items-center gap-2 rounded-full bg-foreground/[0.06] px-3">
           {steps.map((_, i) =>
             i === step ? (
-              <span key={i} className="h-1.5 w-6 overflow-hidden rounded-full bg-background/30">
+              <span key={i} className="h-1.5 w-6 overflow-hidden rounded-full bg-secondary/25">
                 <span
                   key={step}
-                  className="block h-full rounded-full bg-background"
+                  className="block h-full rounded-full bg-secondary"
                   style={
                     count > 1
                       ? { animation: `dot-fill ${AUTO_ADVANCE_MS}ms linear forwards` }
@@ -72,7 +71,7 @@ export function Walkthrough({ flow }) {
                 />
               </span>
             ) : (
-              <span key={i} className="size-1.5 rounded-full bg-background/60" />
+              <span key={i} className="size-1.5 rounded-full bg-muted-foreground/40" />
             ),
           )}
         </div>
@@ -81,11 +80,11 @@ export function Walkthrough({ flow }) {
           aria-label="Next step"
           onClick={() => go(1)}
           disabled={count < 2}
-          className="grid size-8 place-items-center rounded-full bg-muted-foreground text-background transition disabled:opacity-40"
+          className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10 disabled:opacity-40"
         >
           <ChevronRight className="size-4" />
         </button>
       </div>
-    </FramePanel>
+    </>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CURRENCIES } from '@/lib/wallet-data'
+import { ACCOUNT_CURRENCY } from '@/lib/wallet-data'
 import { NumpadStep } from '@/components/wallet/send/NumpadStep/NumpadStep'
 import { RecipientStep } from '@/components/wallet/send/RecipientStep/RecipientStep'
 import { ConfirmStep } from '@/components/wallet/send/ConfirmStep/ConfirmStep'
@@ -20,7 +20,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
   const [mode, setMode] = useState(initialMode)
   const [step, setStep] = useState('numpad')
   const [cents, setCents] = useState(0)
-  const [currency, setCurrency] = useState(CURRENCIES[0])
+  const currency = ACCOUNT_CURRENCY
   const [recipient, setRecipient] = useState(initialContact || null)
   const [note, setNote] = useState('')
 
@@ -43,7 +43,6 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
         cents={cents}
         currency={currency}
         recipient={recipient}
-        setCurrency={setCurrency}
         setCents={setCents}
         onClose={onClose}
         onPick={handlePickMode}

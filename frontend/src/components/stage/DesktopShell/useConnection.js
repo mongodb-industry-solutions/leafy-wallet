@@ -3,16 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 /**
- * Manages the simulated "internet" connection state for the demo.
- *
- * Presenter control:
- *   ⌘K / Ctrl+K → toggle simulated connection (online ↔ offline)
- *   (clicking the on-screen key-cap does the same)
- * Boot flag:
- *   ?offline=1 → open the demo already offline (for a known opening scene)
- *
- * The state is intentionally *not* shown as a pill inside the phone — it's
- * surfaced ambiently by the edge glow around the whole stage.
+ * Manages the simulated "internet" connection state for the demo (⌘K/Ctrl+K
+ * toggles it, ?offline=1 boots offline), surfaced ambiently by the edge glow.
  */
 export function useConnection() {
   const [isOnline, setIsOnline] = useState(true)

@@ -32,7 +32,7 @@ export function BottomNav({ tab, setTab }) {
               )}
             >
               <Icon glyph={glyph} size={20} />
-              <span className="text-[10px] font-medium">{label}</span>
+              <span className="text-[10px] font-semibold">{label}</span>
             </button>
           )
         })}
