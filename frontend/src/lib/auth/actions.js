@@ -124,10 +124,10 @@ export async function cibaPoll({ auth_req_id: authReqId } = {}) {
   } catch {
     return { status: 'error', error: 'id_token verification failed' }
   }
-
-  const info = sub ? await fetchUserinfo(tokens.access_token) : null
-  const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email) ?? undefined
   if (!sub) return { status: 'error', error: 'missing subject' }
+
+  const info = await fetchUserinfo(tokens.access_token)
+  const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email) ?? undefined
 
   await setSession({
     accessToken: tokens.access_token,

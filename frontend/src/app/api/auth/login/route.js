@@ -9,7 +9,7 @@ export async function GET() {
   const state = randomToken()
   const nonce = randomToken()
 
-  const url = await buildAuthorizeUrl({ state, nonce, codeChallenge: challenge, scopes: REQUESTED_SCOPES })
+  const url = buildAuthorizeUrl({ state, nonce, codeChallenge: challenge, scopes: REQUESTED_SCOPES })
 
   // Set the short-lived encrypted PKCE/CSRF cookie directly on the redirect response.
   const res = NextResponse.redirect(url)

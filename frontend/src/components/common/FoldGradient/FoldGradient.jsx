@@ -5,8 +5,8 @@ import { useEffect, useId, useState } from 'react'
 const VBW = 1271
 const VBH = 599
 
-// Aurora palette, captured verbatim from the source playground: near-black →
-// deep green → mint → teal → transparent.
+// Aurora palette, captured verbatim from the source playground: near-black,
+// deep green, mint, teal, then transparent.
 const AURORA_STOPS = [
   { offset: 0, color: '#176645' },
   { offset: 0.0833, color: '#1C7550' },
@@ -41,10 +41,10 @@ function bellHeights(n, peak, valley) {
  * @param {number} [props.blur] - Gaussian blur stdDeviation.
  * @param {number} [props.peak] - Tallest column as a fraction of the viewbox.
  * @param {number} [props.valley] - Shortest column relative to the peak.
- * @param {{offset: number, color: string}[]} [props.stops] - Bottom→top color stops.
+ * @param {{offset: number, color: string}[]} [props.stops] - Bottom-to-top color stops.
  * @param {number} [props.riseMs] - Mount rise duration in ms.
  */
-export function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = AURORA_STOPS, riseMs = 1100 }) {
+function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = AURORA_STOPS, riseMs = 1100 }) {
   const uid = useId().replace(/:/g, '')
   const [shown, setShown] = useState(false)
   useEffect(() => {

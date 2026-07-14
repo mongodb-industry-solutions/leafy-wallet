@@ -125,7 +125,7 @@ export function useAiChat() {
     const intent = parseIntent(text)
     const isPayment = intent?.type === 'send' || intent?.type === 'request'
 
-    // Awaiting a note, and the reply isn't itself a new command → it's the note.
+    // Awaiting a note, and the reply isn't itself a new command, so it's the note.
     if (pendingRef.current && !isPayment) {
       const drafted = pendingRef.current
       pendingRef.current = null

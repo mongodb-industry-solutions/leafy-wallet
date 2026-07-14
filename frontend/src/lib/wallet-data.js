@@ -1,4 +1,4 @@
-// ─── Seed data ────────────────────────────────────────────────────────────────
+// Seed data
 // Contacts/users are identified by a masked email/phone hint (a Leafy Pay
 // beneficiary's `counterpartyLookupHint`), never a public $handle, matching
 // PLAN.md's anti-enumeration model.
@@ -53,7 +53,7 @@ export const SAMPLE_QUERIES = [
   'How much did I spend this week?',
 ]
 
-// ─── Intent parsing ───────────────────────────────────────────────────────────
+// Intent parsing
 const CUR = '(?:dollars?|euros?|pounds?|bucks?|usd|eur|gbp)?'
 const NOTE = '(?:\\s+(?:for|,)\\s+(.+?))?'
 const PAYMENT_RE = new RegExp(

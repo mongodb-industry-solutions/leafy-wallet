@@ -3,17 +3,23 @@ import { createHash, randomBytes } from 'crypto'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { ENV } from './env'
 
-// Cache the discovery doc + JWKS for the process lifetime (they rarely change).
-let discoveryCache = null
+// JWKS is fetched lazily and cached for the process lifetime.
 let jwksCache = null
 
-/** Fetch (and cache) Leafy Pay's OIDC discovery document. */
-export async function discover() {
-  if (discoveryCache) return discoveryCache
-  const res = await fetch(`${ENV.pspBaseUrl()}/.well-known/openid-configuration`, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`OIDC discovery failed: ${res.status}`)
-  discoveryCache = await res.json()
-  return discoveryCache
+// The staging PSP exposes its API under /api/v1/auth on the public host and serves the hosted login at
+// /auth/authorize. Its OIDC discovery doc is only published on an internal port, so the endpoints are
+// configured here rather than fetched.
+function oidcConfig() {
+  const base = ENV.pspBaseUrl()
+  return {
+    issuer: ENV.issuer(),
+    authorization_endpoint: ENV.authorizeUrl(),
+    token_endpoint: `${base}/api/v1/auth/token`,
+    userinfo_endpoint: `${base}/api/v1/auth/userinfo`,
+    revocation_endpoint: `${base}/api/v1/auth/revoke`,
+    jwks_uri: `${base}/api/v1/auth/jwks`,
+    backchannel_authentication_endpoint: `${base}/api/v1/auth/bc-authorize`,
+  }
 }
 
 function jwks(jwksUri) {
@@ -39,9 +45,9 @@ function basicAuthHeader() {
   return `Basic ${creds}`
 }
 
-/** Build the browser-facing authorize URL from the discovered authorization endpoint. */
-export async function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes }) {
-  const cfg = await discover()
+/** Build the browser-facing authorize URL for the hosted login page. */
+export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes }) {
+  const cfg = oidcConfig()
   const u = new URL(cfg.authorization_endpoint)
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', ENV.clientId())
@@ -56,7 +62,7 @@ export async function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes })
 
 /** Exchange an authorization code for tokens (authorization_code + PKCE). */
 export async function exchangeCode(code, codeVerifier) {
-  const cfg = await discover()
+  const cfg = oidcConfig()
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
@@ -71,27 +77,9 @@ export async function exchangeCode(code, codeVerifier) {
     cache: 'no-store',
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`token exchange failed: ${res.status} ${JSON.stringify(err)}`)
+    const detail = await res.text().catch(() => '')
+    throw new Error(`token exchange failed: ${res.status} ${detail}`)
   }
-  return res.json()
-}
-
-/** Refresh tokens via grant_type=refresh_token. */
-export async function refreshTokens(refreshToken) {
-  const cfg = await discover()
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: ENV.clientId(),
-  })
-  const res = await fetch(cfg.token_endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
-    body,
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error(`token refresh failed: ${res.status}`)
   return res.json()
 }
 
@@ -108,16 +96,12 @@ export class OAuthUpstreamError extends Error {
   }
 }
 
-function backchannelEndpoint(cfg) {
-  return cfg.backchannel_authentication_endpoint ?? cfg.token_endpoint.replace(/\/token$/, '/bc-authorize')
-}
-
 /** Initiate the CIBA backchannel request and return { auth_req_id, expires_in, interval }. */
 export async function backchannelAuthorize({ loginHintToken, scope, bindingMessage }) {
-  const cfg = await discover()
+  const cfg = oidcConfig()
   const body = new URLSearchParams({ login_hint_token: loginHintToken, scope, client_id: ENV.clientId() })
   if (bindingMessage) body.set('binding_message', bindingMessage)
-  const res = await fetch(backchannelEndpoint(cfg), {
+  const res = await fetch(cfg.backchannel_authentication_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -135,7 +119,7 @@ export async function backchannelAuthorize({ loginHintToken, scope, bindingMessa
  * @returns {Promise<{status: 'done'|'pending'|'slow_down'|'denied'|'expired'|'error', tokens?: object, error?: string}>}
  */
 export async function cibaTokenPoll(authReqId) {
-  const cfg = await discover()
+  const cfg = oidcConfig()
   const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
@@ -164,7 +148,7 @@ export async function cibaTokenPoll(authReqId) {
 
 /** Best-effort token revocation (RFC 7009). */
 export async function revoke(token) {
-  const cfg = await discover()
+  const cfg = oidcConfig()
   await fetch(cfg.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
@@ -179,7 +163,7 @@ export async function revoke(token) {
  */
 export async function fetchUserinfo(accessToken) {
   try {
-    const cfg = await discover()
+    const cfg = oidcConfig()
     const res = await fetch(cfg.userinfo_endpoint, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
@@ -193,11 +177,11 @@ export async function fetchUserinfo(accessToken) {
 
 /** Verify id_token (signature via JWKS, issuer/audience, and nonce if one was issued). */
 export async function verifyIdToken(idToken, expectedNonce) {
-  const cfg = await discover()
-  const { payload } = await jwtVerify(idToken, jwks(cfg.jwks_uri), {
-    issuer: cfg.issuer,
-    audience: ENV.clientId(),
-  })
+  const cfg = oidcConfig()
+  // Signature (JWKS) + audience + nonce are always checked. Issuer only when PSP_ISSUER is configured.
+  const opts = { audience: ENV.clientId() }
+  if (cfg.issuer) opts.issuer = cfg.issuer
+  const { payload } = await jwtVerify(idToken, jwks(cfg.jwks_uri), opts)
   // A missing nonce when one was expected is a mismatch, not a pass (OIDC Core 3.1.3.7).
   if (expectedNonce && payload.nonce !== expectedNonce) {
     throw new Error('id_token nonce mismatch')

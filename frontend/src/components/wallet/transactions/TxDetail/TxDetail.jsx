@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 import { Peep } from '@/components/common/Peep/Peep'
 import { cn } from '@/lib/utils'
 
+/** Text color for a detail row value: pending/settled tint on the status row, default otherwise. */
+function valueColor(isStatusRow, isPending) {
+  if (!isStatusRow) return 'text-foreground'
+  return isPending ? 'text-warning' : 'text-secondary'
+}
+
 /**
  * Bottom-sheet detail view for a single transaction, sliding in on mount and
  * out before calling `onClose`.
@@ -72,10 +78,7 @@ export function TxDetail({ tx, onClose }) {
             <div key={label} className="flex items-center justify-between py-3 text-sm">
               <span className="text-muted-foreground">{label}</span>
               <span
-                className={cn(
-                  'font-medium',
-                  isStatusRow ? (tx.isPending ? 'text-warning' : 'text-secondary') : 'text-foreground',
-                )}
+                className={cn('font-medium', valueColor(isStatusRow, tx.isPending))}
               >
                 {value}
               </span>

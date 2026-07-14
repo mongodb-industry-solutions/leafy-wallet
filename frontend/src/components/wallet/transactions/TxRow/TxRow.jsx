@@ -4,7 +4,7 @@ import Icon from '@leafygreen-ui/icon'
 import { cn } from '@/lib/utils'
 
 /** Picks an icon glyph for a transaction based on its amount and note. */
-export function glyphFor(tx) {
+function glyphFor(tx) {
   const note = tx.note.toLowerCase()
   if (tx.amount > 0) return 'Coin'
   if (note.includes('concert') || note.includes('movie')) return 'Calendar'

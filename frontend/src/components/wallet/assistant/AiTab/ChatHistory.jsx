@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 function snippetOf(chat) {
   const last = chat.messages[chat.messages.length - 1]
   if (!last) return 'No messages yet'
-  return last.type === 'text' ? last.text : last.type === 'chart' ? 'Spending breakdown' : 'Draft payment'
+  if (last.type === 'text') return last.text
+  if (last.type === 'chart') return 'Spending breakdown'
+  return 'Draft payment'
 }
 
 /**

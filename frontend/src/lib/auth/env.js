@@ -27,4 +27,9 @@ export const ENV = {
   redirectUri: () =>
     envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:3000'}/api/auth/callback`,
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
+  // Browser-facing hosted login page. The API /authorize returns JSON, so the browser is sent to the
+  // PSP frontend page instead. Defaults to the base host's /auth/authorize.
+  authorizeUrl: () => envVar('PSP_AUTHORIZE_URL') ?? `${envVar('PSP_BASE_URL') ?? ''}/auth/authorize`,
+  // Expected id_token issuer. Optional: only enforced when set (the PSP stamps iss from its own base URL).
+  issuer: () => envVar('PSP_ISSUER'),
 }

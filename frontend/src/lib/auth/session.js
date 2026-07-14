@@ -57,11 +57,6 @@ export function attachSession(res, session) {
   res.cookies.set(COOKIE_NAME, encrypt(session), sessionCookieOpts())
 }
 
-/** Delete the session cookie via next/headers. */
-export async function clearSession() {
-  ;(await cookies()).delete(COOKIE_NAME)
-}
-
 /** Expire the session cookie on a returned NextResponse. */
 export function clearSessionOn(res) {
   res.cookies.set(COOKIE_NAME, '', { ...sessionCookieOpts(), sameSite: 'lax', maxAge: 0 })
@@ -82,9 +77,4 @@ export function readLoginState(req) {
 /** Expire the login-state cookie on a returned NextResponse. */
 export function clearLoginStateOn(res) {
   res.cookies.set(LOGIN_COOKIE, '', { ...loginCookieOpts(), sameSite: 'lax', maxAge: 0 })
-}
-
-/** Whether a granted scope is present on the session. */
-export function hasScope(session, scope) {
-  return !!session?.grantedScopes?.includes(scope)
 }

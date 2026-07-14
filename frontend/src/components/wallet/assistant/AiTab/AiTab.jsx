@@ -60,6 +60,9 @@ export function AiTab() {
   // Greeting shows until the user starts composing or the thread has messages.
   const showEmpty = c.isEmpty && !c.hasText
   const auroraShown = c.isThinking || showEmpty
+  let auroraOpacity = 0
+  if (c.isThinking) auroraOpacity = 1
+  else if (showEmpty) auroraOpacity = 0.55
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted text-foreground">
@@ -69,7 +72,7 @@ export function AiTab() {
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-0 z-0 aspect-[1271/599] w-[130%] -translate-x-1/2"
         style={{
-          opacity: c.isThinking ? 1 : showEmpty ? 0.55 : 0,
+          opacity: auroraOpacity,
           transition: 'opacity 900ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
