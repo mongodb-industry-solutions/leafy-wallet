@@ -1,9 +1,11 @@
+import asyncio
 import time
 
 import pytest
 
 from db.client import get_db
 from routers.wallet_transactions import NOTE_EMBEDDING_INDEX
+from services.ollama import get_embedding
 
 BASE = "/api/v1/wallet-transactions"
 
@@ -32,7 +34,7 @@ def _search_until(client, params, predicate, attempts=30, delay=2.0):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _require_vector_index(client):
+def _require_vector_index_and_ollama(client):
     db = get_db()
     indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
     if not indexes or not indexes[0].get("queryable"):
@@ -40,6 +42,12 @@ def _require_vector_index(client):
             f"Vector search index '{NOTE_EMBEDDING_INDEX}' not provisioned/queryable; "
             "run scripts/create_vector_index.py"
         )
+
+    # Search embeds the query text via Ollama; skip cleanly (rather than
+    # asserting 503s) when Ollama isn't reachable, e.g. in CI where no
+    # Ollama service is configured.
+    if asyncio.run(get_embedding("ollama reachability check")) is None:
+        pytest.skip("Ollama unreachable; skipping semantic search tests")
 
 
 def test_search_ranks_semantically_similar_note_first(client):
