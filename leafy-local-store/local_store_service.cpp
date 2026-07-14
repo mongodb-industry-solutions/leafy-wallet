@@ -1,9 +1,8 @@
 /**
  * leafy-local-store: on-device ObjectBox store + HTTP API for offline wallet
- * transactions, syncing to Atlas via objectbox-sync-server. Mirrors the
- * voice-car-assistant-v2 reference's search-service pattern (same libraries,
- * same programmatic-model approach), scoped to a single entity for this
- * first pass: LocalTransaction.
+ * transactions and contacts, syncing to Atlas via objectbox-sync-server.
+ * Mirrors the voice-car-assistant-v2 reference's search-service pattern
+ * (same libraries, same programmatic-model approach).
  */
 
 #define OBX_CPP_FILE
@@ -125,6 +124,108 @@ struct LocalTransaction {
     };
 };
 
+// Mirrors backend/schemas/wallet_contacts.py's WalletContactCreate/Out. Every
+// field there is required (no nullable timestamps), so this entity has none
+// of LocalTransaction's epoch-zero-as-null sentinel concerns.
+
+struct LocalContact {
+    int64_t id = 0;
+    std::string ownerPartyRef;
+    std::string counterpartyArrangementReference;
+    std::string counterpartyLabel;
+    std::string counterpartyLookupType;
+    std::string counterpartyLookupHint;
+    int64_t createdAt = 0;   // epoch millis
+    int64_t updatedAt = 0;   // epoch millis
+    int64_t syncClock = 0;   // set by the Sync Server
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 2; }
+
+        static void setObjectId(LocalContact& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalContact& object) {
+            fbb.Clear();
+            auto offsetOwner = fbb.CreateString(object.ownerPartyRef);
+            auto offsetCounterparty = fbb.CreateString(object.counterpartyArrangementReference);
+            auto offsetLabel = fbb.CreateString(object.counterpartyLabel);
+            auto offsetLookupType = fbb.CreateString(object.counterpartyLookupType);
+            auto offsetLookupHint = fbb.CreateString(object.counterpartyLookupHint);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                  // 1: id
+            fbb.AddOffset(6, offsetOwner);                  // 2: ownerPartyRef
+            fbb.AddOffset(8, offsetCounterparty);           // 3: counterpartyArrangementReference
+            fbb.AddOffset(10, offsetLabel);                 // 4: counterpartyLabel
+            fbb.AddOffset(12, offsetLookupType);            // 5: counterpartyLookupType
+            fbb.AddOffset(14, offsetLookupHint);            // 6: counterpartyLookupHint
+            fbb.AddElement(16, object.createdAt);           // 7: createdAt
+            fbb.AddElement(18, object.updatedAt);           // 8: updatedAt
+            fbb.AddElement(20, object.syncClock);           // 9: syncClock
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalContact& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.ownerPartyRef);
+            readString(8, out.counterpartyArrangementReference);
+            readString(10, out.counterpartyLabel);
+            readString(12, out.counterpartyLookupType);
+            readString(14, out.counterpartyLookupHint);
+            out.createdAt = table->GetField<int64_t>(16, 0);
+            out.updatedAt = table->GetField<int64_t>(18, 0);
+            out.syncClock = table->GetField<int64_t>(20, 0);
+        }
+
+        static LocalContact fromFlatBuffer(const void* data, size_t size) {
+            LocalContact object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalContact> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalContact>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
+struct LocalContact_ {
+    static const obx::Property<LocalContact, OBXPropertyType_Long> id;
+    static const obx::Property<LocalContact, OBXPropertyType_String> ownerPartyRef;
+    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyArrangementReference;
+    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLabel;
+    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupType;
+    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupHint;
+    // Date (not Long): the Sync Server's MongoDB bridge maps Date to a real
+    // BSON ISODate; Long would map to a plain Int64.
+    static const obx::Property<LocalContact, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalContact, OBXPropertyType_Date> updatedAt;
+    static const obx::Property<LocalContact, OBXPropertyType_Long> syncClock;
+};
+
+const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::id(1);
+const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::ownerPartyRef(2);
+const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyArrangementReference(3);
+const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLabel(4);
+const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupType(5);
+const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupHint(6);
+const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::createdAt(7);
+const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::updatedAt(8);
+const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::syncClock(9);
+
 struct LocalTransaction_ {
     static const obx::Property<LocalTransaction, OBXPropertyType_Long> id;
     static const obx::Property<LocalTransaction, OBXPropertyType_String> leafyPayTransferReference;
@@ -196,7 +297,25 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "syncClock", OBXPropertyType_Long, 14, 7001000000000014ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
-    obx_model_last_entity_id(model, 1, 7001000000000000ULL);
+    // Entity 2: walletContacts — entity name is the target MongoDB collection
+    // name, same rule as entity 1 above.
+    obx_model_entity(model, "walletContacts", 2, 7002000000000000ULL);
+    obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7002000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "ownerPartyRef", OBXPropertyType_String, 2, 7002000000000002ULL);
+    obx_model_property(model, "counterpartyArrangementReference", OBXPropertyType_String, 3, 7002000000000003ULL);
+    obx_model_property(model, "counterpartyLabel", OBXPropertyType_String, 4, 7002000000000004ULL);
+    obx_model_property(model, "counterpartyLookupType", OBXPropertyType_String, 5, 7002000000000005ULL);
+    obx_model_property(model, "counterpartyLookupHint", OBXPropertyType_String, 6, 7002000000000006ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 7, 7002000000000007ULL);
+    obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
+    obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
+    obx_model_entity_last_property_id(model, 9, 7002000000000009ULL);
+
+    obx_model_last_entity_id(model, 2, 7002000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
 
     return model;
@@ -252,7 +371,8 @@ bool init_objectbox(const std::string& db_path, const std::string& sync_url) {
         obx::Options options(model);
         options.directory(db_path.c_str());
         store = std::make_shared<obx::Store>(options);
-        std::cout << "Store opened (" << store->box<LocalTransaction>().count() << " transactions)" << std::endl;
+        std::cout << "Store opened (" << store->box<LocalTransaction>().count() << " transactions, "
+                   << store->box<LocalContact>().count() << " contacts)" << std::endl;
 
         if (!sync_url.empty()) {
             if (obx_has_feature(OBXFeature_Sync)) {
@@ -298,6 +418,19 @@ json transaction_to_json(const LocalTransaction& t) {
     };
 }
 
+json contact_to_json(const LocalContact& c) {
+    return {
+        {"id", c.id},
+        {"ownerPartyRef", c.ownerPartyRef},
+        {"counterpartyArrangementReference", c.counterpartyArrangementReference},
+        {"counterpartyLabel", c.counterpartyLabel},
+        {"counterpartyLookupType", c.counterpartyLookupType},
+        {"counterpartyLookupHint", c.counterpartyLookupHint},
+        {"createdAt", c.createdAt},
+        {"updatedAt", c.updatedAt},
+    };
+}
+
 int main(int argc, char* argv[]) {
     std::string db_path = argc > 1 ? argv[1] : "/app/local-store-db";
     std::string sync_url = argc > 2 ? argv[2] : env_or("SYNC_SERVER_URL", "ws://objectbox-sync-server:9999");
@@ -314,6 +447,7 @@ int main(int argc, char* argv[]) {
             json response;
             response["status"] = "healthy";
             response["transaction_count"] = store->box<LocalTransaction>().count();
+            response["contact_count"] = store->box<LocalContact>().count();
             res.set_content(response.dump(), "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
@@ -381,6 +515,65 @@ int main(int argc, char* argv[]) {
 
             res.status = 201;
             res.set_content(transaction_to_json(t).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get("/local/v1/contacts", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            auto box = store->box<LocalContact>();
+            json results = json::array();
+            for (const auto& c : box.getAll()) {
+                results.push_back(contact_to_json(*c));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Queues a contact add locally; reconciled with Leafy Pay on reconnect
+    // (mirrors the architecture plan's §6.2 description of this endpoint).
+    svr.Post("/local/v1/contacts", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"ownerPartyRef", "counterpartyArrangementReference",
+                                   "counterpartyLabel", "counterpartyLookupType", "counterpartyLookupHint"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        try {
+            LocalContact c;
+            c.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+            c.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
+            c.counterpartyLabel = body.at("counterpartyLabel").get<std::string>();
+            c.counterpartyLookupType = body.at("counterpartyLookupType").get<std::string>();
+            c.counterpartyLookupHint = body.at("counterpartyLookupHint").get<std::string>();
+            c.createdAt = now_epoch_millis();
+            c.updatedAt = c.createdAt;
+
+            auto box = store->box<LocalContact>();
+            box.put(c);
+
+            res.status = 201;
+            res.set_content(contact_to_json(c).dump(), "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
             res.set_content(json{{"error", e.what()}}.dump(), "application/json");

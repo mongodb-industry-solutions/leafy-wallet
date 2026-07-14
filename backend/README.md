@@ -162,11 +162,11 @@ a different stack (C++) with its own build/runtime:
 ### How it fits with this backend
 
 Both `leafy-local-store` and this FastAPI backend write into the **same** `walletTransactions`
-Atlas collection, one online write path (this API), one offline-capable write path
-(`leafy-local-store`). That's the reasoning behind the flat `amount`/`currency` fields
-described in [Data Model Notes](#data-model-notes): the ObjectBox↔Mongo bridge is generic and
-can't produce nested documents, so the schema was flattened to match rather than have two
-shapes coexist in one collection.
+and `walletContacts` Atlas collections, one online write path (this API), one offline-capable
+write path (`leafy-local-store`). That's the reasoning behind the flat `amount`/`currency`
+fields described in [Data Model Notes](#data-model-notes): the ObjectBox↔Mongo bridge is
+generic and can't produce nested documents, so the schema was flattened to match rather than
+have two shapes coexist in one collection.
 
 ### Running it locally
 
@@ -196,14 +196,16 @@ local state is cleared):
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/local/v1/health` | Store status + local transaction count |
+| `GET` | `/local/v1/health` | Store status + local transaction/contact counts |
 | `GET` | `/local/v1/transactions` | List locally-stored transactions |
 | `POST` | `/local/v1/transactions/send` | Create a transaction locally (embeds `note` via Ollama, syncs to Atlas once connected) |
+| `GET` | `/local/v1/contacts` | List locally-stored contacts |
+| `POST` | `/local/v1/contacts` | Queue a contact add locally (reconciled with Leafy Pay on reconnect), syncs to Atlas once connected |
 
 **`GET /local/v1/health`**
 ```json
 // 200
-{"status": "healthy", "transaction_count": 3}
+{"status": "healthy", "transaction_count": 3, "contact_count": 1}
 // 500
 {"status": "error", "error": "..."}
 ```
@@ -246,6 +248,37 @@ Optional: `note` (embedded via Ollama if present and non-empty).
 // 500 — genuine server-side failure (e.g. store write): {"error": "..."}
 ```
 
+**`GET /local/v1/contacts`**: no request body; returns an array of the same object shape as
+the `POST` response below (`200`), or `{"error": "..."}` (`500`).
+
+**`POST /local/v1/contacts`**: required: `ownerPartyRef`, `counterpartyArrangementReference`,
+`counterpartyLabel`, `counterpartyLookupType`, `counterpartyLookupHint`. No optional fields,
+and (like `/transactions/send`) no validation beyond checking required fields are present, so
+e.g. `counterpartyLookupType` isn't restricted to `"phone"`/`"email"` here the way the backend's
+Pydantic model restricts it.
+```json
+// Request
+{
+  "ownerPartyRef": "string",
+  "counterpartyArrangementReference": "string",
+  "counterpartyLabel": "string",
+  "counterpartyLookupType": "phone | email",
+  "counterpartyLookupHint": "string"
+}
+// 201 — server-assigned: id, createdAt, updatedAt (both = now on create)
+{
+  "id": 1,
+  "ownerPartyRef": "string",
+  "counterpartyArrangementReference": "string",
+  "counterpartyLabel": "string",
+  "counterpartyLookupType": "phone | email",
+  "counterpartyLookupHint": "string",
+  "createdAt": 1784042566445,
+  "updatedAt": 1784042566445
+}
+// 400 — invalid JSON or missing required field: {"error": "..."}
+// 500 — genuine server-side failure (e.g. store write): {"error": "..."}
+```
 
 ### Non-obvious things learned building this (empirically, not from docs)
 
@@ -263,3 +296,9 @@ Optional: `note` (embedded via Ollama if present and non-empty).
   about.
 - **After clearing/recreating the sync server's local state, "Full Import" must be re-run.**
   It's tracked per local state, not per Atlas collection.
+- **Use `OBXPropertyType_Date`, not `Long`, for real timestamps.** The bridge maps `Date` to a
+  genuine BSON `ISODate`; `Long` maps to a plain `Int64`. We initially used `Long` for
+  `createdAt`/`settledAt` and only caught it by inspecting the raw Atlas document — the FastAPI
+  backend's Pydantic layer silently "fixed" the display (it coerces large ints into datetimes),
+  masking that the actual stored type was wrong. `syncClock` correctly stays `Long` — it's an
+  internal counter, not a real timestamp.
