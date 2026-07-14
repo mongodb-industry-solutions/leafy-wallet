@@ -30,16 +30,6 @@ export const CONTACTS = [
   { id: 'c5', name: 'Casey Brooks', lookupType: 'email', lookupHint: 'c•••@gmail.com', seed: 'casey-lp', bg: 'cffafe' },
 ]
 
-export const TRANSACTIONS = [
-  { id: 't1', name: 'Maria Garcia', lookupHint: 'm•••@gmail.com', amount: 50, note: 'Dinner split', date: 'Today', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
-  { id: 't2', name: 'Jordan Lee', lookupHint: '+1 ••• 4821', amount: -20, note: 'Coffee', date: 'Today', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
-  { id: 't3', name: 'Sam Rivera', lookupHint: 's•••@icloud.com', amount: 120, note: 'Concert tickets', date: 'Yesterday', isPending: false, seed: 'sam-lp', bg: 'dcfce7' },
-  { id: 't4', name: 'Casey Brooks', lookupHint: 'c•••@gmail.com', amount: -15, note: 'Parking', date: 'Jun 20', isPending: true, seed: 'casey-lp', bg: 'cffafe' },
-  { id: 't5', name: 'Taylor Kim', lookupHint: '+1 ••• 7702', amount: -82.15, note: 'Groceries', date: 'Jun 19', isPending: true, seed: 'taylor-lp', bg: 'ffedd5' },
-  { id: 't6', name: 'Maria Garcia', lookupHint: 'm•••@gmail.com', amount: 35, note: 'Movie night', date: 'Jun 18', isPending: false, seed: 'maria-lp', bg: 'ede9fe' },
-  { id: 't7', name: 'Jordan Lee', lookupHint: '+1 ••• 4821', amount: -12, note: 'Lunch', date: 'Jun 17', isPending: false, seed: 'jordan-lp', bg: 'fce7f3' },
-]
-
 export const SPENDING_DATA = [
   { label: 'Food', value: 114, color: 'var(--primary)' },
   { label: 'Fun', value: 27, color: 'var(--info)' },

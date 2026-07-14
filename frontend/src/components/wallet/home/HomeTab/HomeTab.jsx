@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { BALANCE, TRANSACTIONS } from '@/lib/wallet-data'
+import { getAccounts, getTransactions } from '@/lib/wallet/actions'
+import { useAsync } from '@/lib/hooks/useAsync'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow } from '@/components/wallet/transactions/TxRow/TxRow'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
@@ -10,8 +11,7 @@ import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
 const EU_STAR_COUNT = 12
 const EU_BLUE = '#003399'
 const EU_GOLD = '#FFCC00'
-
-const ACCOUNTS = [{ code: 'EUR', label: 'EURO account', last4: '7523', amount: '12,458.32' }]
+const HOME_TX_PREVIEW = 6
 
 // Send/Chat are short enough to pair with an icon. Request is left text-only
 // so the longer word keeps even padding inside its pill.
@@ -107,8 +107,17 @@ export function HomeTab({
   onHeroIntroPlayed,
 }) {
   const onCta = { send: onSend, request: onRequest, chat: () => onSetTab('ai') }
-  const balance = formatBalance(BALANCE)
-  const groups = groupByDate(TRANSACTIONS)
+  const accountsState = useAsync(getAccounts)
+  const txState = useAsync(getTransactions)
+  const accounts = accountsState.data ?? []
+  const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
+  const balance = formatBalance(primaryAccount?.balanceValue ?? 0)
+  const groups = groupByDate((txState.data ?? []).slice(0, HOME_TX_PREVIEW))
+
+  let txEmptyMessage
+  if (txState.isLoading) txEmptyMessage = 'Loading…'
+  else if (txState.error) txEmptyMessage = "Couldn't load transactions"
+  else if (groups.length === 0) txEmptyMessage = 'No transactions yet'
 
   // Capture the intro decision once on mount so it can't flip mid-animation.
   const [animateHero] = useState(playHeroIntro)
@@ -159,9 +168,9 @@ export function HomeTab({
 
           {/* Account card + shortcuts kept close together. */}
           <div className="flex flex-col gap-3">
-            {ACCOUNTS.map((acct) => (
+            {accounts.map((acct) => (
               <div
-                key={acct.code}
+                key={acct.reference}
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm"
               >
                 <EuFlag size={40} />
@@ -190,6 +199,9 @@ export function HomeTab({
           <section className="flex flex-col gap-3">
             <h2 className="text-base font-bold text-foreground">Transactions</h2>
             <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+              {txEmptyMessage && (
+                <p className="px-1 py-6 text-center text-sm text-muted-foreground">{txEmptyMessage}</p>
+              )}
               {groups.map((group) => (
                 <div key={group.date} className="px-1">
                   <p className="pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

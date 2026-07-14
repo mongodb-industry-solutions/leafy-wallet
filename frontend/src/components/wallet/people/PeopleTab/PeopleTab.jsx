@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { CONTACTS } from '@/lib/wallet-data'
+import { getContacts } from '@/lib/wallet/actions'
+import { useAsync } from '@/lib/hooks/useAsync'
 import { Peep } from '@/components/common/Peep/Peep'
 
 /**
@@ -11,13 +12,20 @@ import { Peep } from '@/components/common/Peep/Peep'
  * @param {(contact: object) => void} props.onSendTo
  */
 export function PeopleTab({ onSendTo }) {
+  const { data, isLoading, error } = useAsync(getContacts)
   const [q, setQ] = useState('')
+  const contacts = data ?? []
   const query = q.trim().toLowerCase()
   const filtered = query
-    ? CONTACTS.filter(
+    ? contacts.filter(
         (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
       )
-    : CONTACTS
+    : contacts
+
+  let emptyMessage
+  if (isLoading) emptyMessage = 'Loading…'
+  else if (error) emptyMessage = "Couldn't load contacts"
+  else if (filtered.length === 0) emptyMessage = query ? 'No one found' : 'No contacts yet'
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-8 pb-6">
@@ -35,13 +43,13 @@ export function PeopleTab({ onSendTo }) {
         />
       </label>
 
-      {!query && (
+      {!query && contacts.length > 0 && (
         <section>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Frequent
           </p>
           <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4">
-            {CONTACTS.map((c) => (
+            {contacts.map((c) => (
               <button
                 key={c.id}
                 onClick={() => onSendTo(c)}
@@ -78,8 +86,8 @@ export function PeopleTab({ onSendTo }) {
               </span>
             </button>
           ))}
-          {filtered.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">No one found</p>
+          {emptyMessage && (
+            <p className="py-10 text-center text-sm text-muted-foreground">{emptyMessage}</p>
           )}
         </div>
       </section>

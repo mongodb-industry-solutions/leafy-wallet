@@ -83,6 +83,24 @@ export async function exchangeCode(code, codeVerifier) {
   return res.json()
 }
 
+/** Refresh tokens via grant_type=refresh_token. */
+export async function refreshTokens(refreshToken) {
+  const cfg = oidcConfig()
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: ENV.clientId(),
+  })
+  const res = await fetch(cfg.token_endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
+    body,
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`token refresh failed: ${res.status}`)
+  return res.json()
+}
+
 // CIBA passwordless login.
 
 /** Error carrying Leafy Pay's OAuth error code and description so callers can render clean UX. */
