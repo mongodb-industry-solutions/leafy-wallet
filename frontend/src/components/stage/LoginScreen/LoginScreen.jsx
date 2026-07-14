@@ -22,13 +22,18 @@ function GoogleMark({ size = 18 }) {
 }
 
 const SSO_PROVIDER = 'Continue with SSO'
+const SSO_LOGIN_URL = '/api/auth/login'
 
 /**
- * First-run login screen: a hero area with sign-in options, where only "Continue with SSO" is wired (it calls `onLogin`, standing in for the Leafy Pay PKCE flow).
- * @param {object} props
- * @param {() => void} props.onLogin - Enter the app (mock SSO success).
+ * First-run login screen: a hero area with sign-in options. "Continue with SSO" starts the real Leafy
+ * Pay authorization_code + PKCE flow by navigating to the login route (Apple/Google stay mock).
  */
-export function LoginScreen({ onLogin }) {
+export function LoginScreen() {
+  // Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app.
+  function handleSso() {
+    window.location.href = SSO_LOGIN_URL
+  }
+
   return (
     <div className="relative flex h-full flex-col bg-white pb-8 text-foreground">
       {/* Hero art, centered toward the top. */}
@@ -53,7 +58,7 @@ export function LoginScreen({ onLogin }) {
         </button>
         <button
           type="button"
-          onClick={onLogin}
+          onClick={handleSso}
           className="flex h-14 items-center justify-center rounded-full bg-black text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
         >
           {SSO_PROVIDER}
