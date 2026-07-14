@@ -1,10 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { Ico } from '@/components/common/Icons/Icons'
-import { CURRENCIES } from '@/lib/wallet-data'
-import { MULTI_CURRENCY_ENABLED } from '@/lib/features'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
 const MAX_CENTS = 9999999
@@ -19,24 +16,17 @@ function amountScale(len) {
  * @param {object} props
  * @param {string} props.display - Formatted amount (e.g. "12.50").
  * @param {number} props.cents - Amount in cents.
- * @param {object} props.currency - Active currency, `{ code, symbol, balance }`.
+ * @param {object} props.currency - Account currency, `{ code, symbol, balance }`.
  * @param {object} [props.recipient] - Pre-selected recipient, if any.
- * @param {(currency: object) => void} props.setCurrency
  * @param {(updater: (cents: number) => number) => void} props.setCents
  * @param {() => void} props.onClose
  * @param {(mode: 'send'|'request') => void} props.onPick
  */
-export function NumpadStep({ display, cents, currency, recipient, setCurrency, setCents, onClose, onPick }) {
-  const [isPickerOpen, setIsPickerOpen] = useState(false)
+export function NumpadStep({ display, cents, currency, recipient, setCents, onClose, onPick }) {
   const handleDigit = (d) =>
     setCents((p) => (p * 10 + parseInt(d, 10) > MAX_CENTS ? p : p * 10 + parseInt(d, 10)))
   const handleBackspace = () => setCents((p) => Math.floor(p / 10))
   const isEmpty = cents === 0
-
-  function handleSelectCurrency(c) {
-    setCurrency(c)
-    setIsPickerOpen(false)
-  }
 
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
@@ -66,41 +56,6 @@ export function NumpadStep({ display, cents, currency, recipient, setCurrency, s
           <span className="text-[0.5em] text-muted-foreground">{currency.symbol}</span>
           <span>{display}</span>
         </div>
-
-        {MULTI_CURRENCY_ENABLED && (
-          <div className="relative mt-5">
-            <button
-              onClick={() => setIsPickerOpen((o) => !o)}
-              className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-3 py-1 text-sm font-semibold"
-            >
-              {currency.code}
-              <Icon glyph="CaretDown" size={12} />
-            </button>
-            {isPickerOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsPickerOpen(false)} />
-                <div className="absolute left-1/2 top-full z-20 mt-2 w-40 -translate-x-1/2 rounded-2xl border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-                  {CURRENCIES.map((c) => (
-                    <button
-                      key={c.code}
-                      onClick={() => handleSelectCurrency(c)}
-                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm"
-                    >
-                      <span className="font-semibold">
-                        {c.symbol} {c.code}
-                      </span>
-                      {c.code === currency.code && (
-                        <span className="text-secondary">
-                          <Icon glyph="Checkmark" size={14} />
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         <p className="mt-4 text-sm text-muted-foreground">
           Balance: {currency.symbol}

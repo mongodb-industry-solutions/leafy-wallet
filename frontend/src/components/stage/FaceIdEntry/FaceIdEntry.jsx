@@ -1,88 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'
-import { getMeta, sign, loginHintToken, deleteCredential } from '@/lib/auth/authenticator'
-import { cibaStart, cibaChallenge, cibaApprove, cibaPoll } from '@/lib/auth/actions'
+import { useCibaLogin } from '@/components/stage/FaceIdEntry/useCibaLogin'
 import { cn } from '@/lib/utils'
 
 const FACE_ID_LOTTIE = 'face-id.lottie'
 
-// Keep the scan visible for at least this long so a fast CIBA round-trip doesn't flash.
-const MIN_VISIBLE_MS = 1400
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-
 /**
- * Face-ID-style unlock shown on return visits when a passwordless credential exists. Runs the CIBA
- * login in the background while the scan animates: start → challenge → sign locally → approve → poll.
- * On success hands off to `onAuthed`; if the credential is gone/denied it clears it and calls `onFallback`.
+ * Face-ID-style unlock shown on return visits when a passwordless credential exists. The scan animates
+ * while useCibaLogin runs the login in the background and drives the exit transition.
  * @param {object} props
  * @param {() => void} props.onAuthed - Session established.
  * @param {() => void} props.onFallback - Fall back to the full SSO login.
  */
 export function FaceIdEntry({ onAuthed, onFallback }) {
-  const [isExiting, setIsExiting] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const startedAt = Date.now()
-
-    const succeed = async () => {
-      const remaining = MIN_VISIBLE_MS - (Date.now() - startedAt)
-      if (remaining > 0) await sleep(remaining)
-      if (cancelled) return
-      setIsExiting(true)
-      await sleep(500)
-      if (!cancelled) onAuthed?.()
-    }
-
-    const fallback = async ({ revoked } = {}) => {
-      if (revoked) await deleteCredential().catch(() => {})
-      if (!cancelled) onFallback?.()
-    }
-
-    async function run() {
-      try {
-        const meta = await getMeta()
-        if (!meta) return fallback()
-
-        const start = await cibaStart({ login_hint_token: loginHintToken(meta.sub) })
-        if (!start.ok) return fallback()
-        const authReqId = start.auth_req_id
-
-        const ch = await cibaChallenge(authReqId)
-        if (!ch.ok) return fallback()
-
-        const { credentialId, signature } = await sign(ch.challenge)
-        const approve = await cibaApprove({ auth_req_id: authReqId, credentialId, signature })
-        if (!approve.ok) {
-          // 401/400 → the credential was revoked at Leafy Pay; clear it and fall back.
-          return fallback({ revoked: approve.status === 401 || approve.status === 400 })
-        }
-
-        const interval = Math.max(Number(start.interval) || 5, 2) * 1000
-        const deadline = Date.now() + Math.max(Number(start.expires_in) || 300, 60) * 1000
-        while (!cancelled) {
-          await sleep(interval)
-          const p = await cibaPoll({ auth_req_id: authReqId })
-          if (p.status === 'done') return succeed()
-          if (p.status === 'pending' || p.status === 'slow_down') {
-            if (Date.now() > deadline) return fallback()
-            continue
-          }
-          return fallback() // denied / expired / error
-        }
-      } catch {
-        if (!cancelled) fallback()
-      }
-    }
-
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [onAuthed, onFallback])
+  const { isExiting } = useCibaLogin(onAuthed, onFallback)
 
   return (
     <div

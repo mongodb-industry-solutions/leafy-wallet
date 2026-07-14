@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { BALANCE, TRANSACTIONS } from '@/lib/wallet-data'
-import { MULTI_CURRENCY_ENABLED } from '@/lib/features'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow } from '@/components/wallet/transactions/TxRow/TxRow'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
@@ -12,12 +11,7 @@ const EU_STAR_COUNT = 12
 const EU_BLUE = '#003399'
 const EU_GOLD = '#FFCC00'
 
-// Other accounts kept for when MULTI_CURRENCY_ENABLED is turned back on.
-const ALL_ACCOUNTS = [
-  { code: 'EUR', label: 'EURO account', last4: '7523', amount: '12,458.32' },
-  { code: 'CNY', label: 'Yuan account', last4: '2044', amount: '2,500,000.00' },
-]
-const ACCOUNTS = MULTI_CURRENCY_ENABLED ? ALL_ACCOUNTS : ALL_ACCOUNTS.slice(0, 1)
+const ACCOUNTS = [{ code: 'EUR', label: 'EURO account', last4: '7523', amount: '12,458.32' }]
 
 // Send/Chat are short enough to pair with an icon. Request is left text-only
 // so the longer word keeps even padding inside its pill.
@@ -155,20 +149,12 @@ export function HomeTab({
 
         {/* pt pushes the balance down into the white area near the gradient tail. */}
         <div className="flex flex-col gap-6 px-4 pt-32 pb-6">
-          <div>
-            {MULTI_CURRENCY_ENABLED && (
-              <button className="mb-1.5 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                <Icon glyph="Plus" size={15} />
-                Create account
-              </button>
-            )}
-            <div className="flex items-baseline tracking-[-0.06em] tabular-nums">
-              <span className="text-[2.4rem] font-normal leading-none">€</span>
-              <span className="text-[2.4rem] font-bold leading-none">{balance.int}</span>
-              <span className="text-[2.4rem] font-bold leading-none text-muted-foreground/70">
-                .{balance.cents}
-              </span>
-            </div>
+          <div className="flex items-baseline tracking-[-0.06em] tabular-nums">
+            <span className="text-[2.4rem] font-normal leading-none">€</span>
+            <span className="text-[2.4rem] font-bold leading-none">{balance.int}</span>
+            <span className="text-[2.4rem] font-bold leading-none text-muted-foreground/70">
+              .{balance.cents}
+            </span>
           </div>
 
           {/* Account card + shortcuts kept close together. */}

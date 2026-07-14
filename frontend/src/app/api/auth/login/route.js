@@ -1,4 +1,4 @@
-// GET /api/auth/login — start authorization_code + PKCE, redirect to Leafy Pay's login page.
+// GET /api/auth/login. Starts authorization_code with PKCE and redirects to Leafy Pay's login page.
 import { NextResponse } from 'next/server'
 import { buildAuthorizeUrl, generatePkce, randomToken } from '@/lib/auth/oauth'
 import { attachLoginState } from '@/lib/auth/session'

@@ -19,11 +19,8 @@ export const LINKED_ACCOUNT = {
   currency: 'EUR',
 }
 
-export const CURRENCIES = [
-  { code: 'EUR', symbol: '€', balance: '12,458.32' },
-  { code: 'USD', symbol: '$', balance: '2,144.89' },
-  { code: 'GBP', symbol: '£', balance: '860.10' },
-]
+// The wallet's single account currency (EUR).
+export const ACCOUNT_CURRENCY = { code: 'EUR', symbol: '€', balance: '12,458.32' }
 
 export const CONTACTS = [
   { id: 'c1', name: 'Maria Garcia', lookupType: 'email', lookupHint: 'm•••@gmail.com', seed: 'maria-lp', bg: 'ede9fe' },

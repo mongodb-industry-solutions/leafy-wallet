@@ -29,7 +29,7 @@ function decrypt(blob) {
     const out = Buffer.concat([decipher.update(Buffer.from(dataB, 'base64url')), decipher.final()])
     return JSON.parse(out.toString('utf8'))
   } catch {
-    return null // tampered or wrong key → treat as no session
+    return null // tampered or wrong key, treat as no session
   }
 }
 

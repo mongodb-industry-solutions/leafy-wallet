@@ -1,4 +1,4 @@
-// GET /api/auth/callback — validate state, exchange code→tokens, verify id_token, set session.
+// GET /api/auth/callback. Validates state, exchanges the code for tokens, verifies the id_token, sets the session.
 import { NextResponse } from 'next/server'
 import { exchangeCode, verifyIdToken, fetchUserinfo } from '@/lib/auth/oauth'
 import { attachSession, clearLoginStateOn, readLoginState } from '@/lib/auth/session'

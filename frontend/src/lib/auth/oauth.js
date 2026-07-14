@@ -30,6 +30,7 @@ export function generatePkce() {
   return { verifier, challenge }
 }
 
+/** Random base64url token, used for the OAuth state and nonce values. */
 export const randomToken = () => b64url(randomBytes(16))
 
 // Confidential client auth via HTTP Basic (client_secret_basic).
@@ -94,8 +95,9 @@ export async function refreshTokens(refreshToken) {
   return res.json()
 }
 
-// ── CIBA (passwordless login) ─────────────────────────────────────────────────
-// Carries Leafy Pay's OAuth error code + description so callers can render clean UX.
+// CIBA passwordless login.
+
+/** Error carrying Leafy Pay's OAuth error code and description so callers can render clean UX. */
 export class OAuthUpstreamError extends Error {
   constructor(code, description, status) {
     super(description || code)
@@ -110,7 +112,7 @@ function backchannelEndpoint(cfg) {
   return cfg.backchannel_authentication_endpoint ?? cfg.token_endpoint.replace(/\/token$/, '/bc-authorize')
 }
 
-/** Initiate the CIBA backchannel request → { auth_req_id, expires_in, interval }. */
+/** Initiate the CIBA backchannel request and return { auth_req_id, expires_in, interval }. */
 export async function backchannelAuthorize({ loginHintToken, scope, bindingMessage }) {
   const cfg = await discover()
   const body = new URLSearchParams({ login_hint_token: loginHintToken, scope, client_id: ENV.clientId() })

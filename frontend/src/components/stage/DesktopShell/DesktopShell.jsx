@@ -1,10 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Cpu } from 'lucide-react'
-import { me } from '@/lib/auth/actions'
-import { hasCredential } from '@/lib/auth/authenticator'
 import { useConnection } from '@/components/stage/DesktopShell/useConnection'
+import { useAuthGate } from '@/components/stage/DesktopShell/useAuthGate'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow/ConnectionGlow'
 import { PhoneFrame } from '@/components/stage/PhoneFrame/PhoneFrame'
 import { ConnectionControl } from '@/components/stage/ConnectionControl/ConnectionControl'
@@ -15,71 +14,14 @@ import { WalletApp } from '@/components/wallet/shell/WalletApp/WalletApp'
 import { Frame, FrameHeader } from '@/components/ui/Frame'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
-// Brand tint used for the identity avatar until we cache a per-user color.
-const AVATAR_BG = '00684A'
-
-/**
- * Shapes the `me()` identity into the user object the wallet UI expects (Peep seed/bg + display name).
- */
-function toUser(identity) {
-  return {
-    name: identity.name || identity.email || 'You',
-    email: identity.email || '',
-    seed: identity.sub,
-    bg: AVATAR_BG,
-    sub: identity.sub,
-  }
-}
-
 /**
  * Top-level presenter stage: the phone frame beside the "Under the hood" panel. Gates the phone on the
- * real Leafy Pay session — LoginScreen (SSO), the FaceID passwordless path, or the wallet app.
+ * real Leafy Pay session, showing the LoginScreen (SSO), the FaceID passwordless path, or the wallet app.
  */
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
-  // 'loading' | 'login' | 'faceid' | 'authed'
-  const [phase, setPhase] = useState('loading')
-  const [user, setUser] = useState(null)
+  const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
   const [flow, setFlow] = useState('home')
-
-  useEffect(() => {
-    let cancelled = false
-    async function boot() {
-      const identity = await me().catch(() => null)
-      if (cancelled) return
-      if (identity) {
-        setUser(toUser(identity))
-        setPhase('authed')
-        return
-      }
-      const enrolled = await hasCredential().catch(() => false)
-      if (cancelled) return
-      setPhase(enrolled ? 'faceid' : 'login')
-    }
-    boot()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Called after the FaceID/CIBA path establishes a session.
-  const handleAuthed = useCallback(async () => {
-    const identity = await me().catch(() => null)
-    if (identity) {
-      setUser(toUser(identity))
-      setPhase('authed')
-    } else {
-      setPhase('login')
-    }
-  }, [])
-
-  // Full navigation: single sign-out at Leafy Pay, then back to the app (reloads into the LoginScreen).
-  const handleSignOut = useCallback(() => {
-    window.location.href = '/api/auth/logout'
-  }, [])
-
-  // Credential revoked at Leafy Pay → drop back to SSO.
-  const handlePasswordlessFallback = useCallback(() => setPhase('login'), [])
 
   const shouldNudge = isOnline && Boolean(WALKTHROUGH[flow]?.offlineMoment)
 

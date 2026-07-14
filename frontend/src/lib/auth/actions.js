@@ -33,7 +33,7 @@ export async function me() {
   return { sub: session.sub, name: session.name, email: session.email }
 }
 
-// ── Passwordless enrollment (session-gated relays; Bearer attached server-side) ──
+// Passwordless enrollment. Session-gated relays with the Bearer attached server-side.
 /** Get an enrollment challenge from Leafy Pay for the logged-in user. */
 export async function enrollChallenge() {
   const session = await getSession()
@@ -60,8 +60,8 @@ export async function enroll(body) {
   return { ok: true, ...data }
 }
 
-// ── CIBA passwordless login (session-less; signature is the auth) ──
-/** Begin the backchannel request → { auth_req_id, interval, expires_in, binding_message }. */
+// CIBA passwordless login. Session-less relays where the signature is the authentication.
+/** Begin the backchannel request and return { auth_req_id, interval, expires_in, binding_message }. */
 export async function cibaStart({ login_hint_token: loginHintToken } = {}) {
   if (!loginHintToken) return { ok: false, error: 'invalid_request' }
   const bindingMessage = `Leafy Wallet ${randomInt(1000, 9999)}`

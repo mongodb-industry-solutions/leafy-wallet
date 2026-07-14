@@ -141,7 +141,7 @@ export async function signWithCredential(credentialId, challenge) {
   return b64UrlFromBuffer(sig)
 }
 
-/** Sign a challenge with the enrolled credential → { credentialId, signature } (base64url raw r||s). */
+/** Sign a challenge with the enrolled credential, returning { credentialId, signature } (base64url raw r||s). */
 export async function sign(challenge) {
   const meta = await idbGet(META_STORE, META_KEY)
   if (!meta) throw new Error('No local credential (enroll on this device first)')
@@ -149,7 +149,7 @@ export async function sign(challenge) {
   return { credentialId: meta.credentialId, signature }
 }
 
-/** Build a compact login_hint_token (base64url JSON of the opaque sub) — no raw PII. */
+/** Build a compact login_hint_token (base64url JSON of the opaque sub), no raw PII. */
 export function loginHintToken(sub) {
   const json = JSON.stringify({ sub })
   return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')

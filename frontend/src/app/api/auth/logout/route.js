@@ -1,6 +1,6 @@
-// GET /api/auth/logout — single sign-out. Server-side: bump the Leafy Pay session epoch (invalidates
-// the user's outstanding session tokens) and revoke our tokens. Then clear our session cookie and
-// front-channel through Leafy Pay's logout page so its portal cookie (demo_token) is cleared too.
+// GET /api/auth/logout. Single sign-out that bumps the Leafy Pay session epoch (invalidating the
+// user's outstanding session tokens), revokes our tokens, clears our session cookie, and
+// front-channels through Leafy Pay's logout page so its portal cookie (demo_token) is cleared too.
 import { NextResponse } from 'next/server'
 import { getSession, clearSessionOn } from '@/lib/auth/session'
 import { revoke } from '@/lib/auth/oauth'

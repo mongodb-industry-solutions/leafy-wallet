@@ -1,19 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { LINKED_ACCOUNT } from '@/lib/wallet-data'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Ico } from '@/components/common/Icons/Icons'
+import { usePasswordless } from '@/components/wallet/profile/ProfileScreen/usePasswordless'
 import { cn } from '@/lib/utils'
-import {
-  hasCredential,
-  createCredential,
-  saveMeta,
-  signWithCredential,
-  deleteCredential,
-} from '@/lib/auth/authenticator'
-import { enrollChallenge, enroll } from '@/lib/auth/actions'
 
 /** A small iOS-style on/off switch. */
 function Toggle({ checked, onChange, label, disabled }) {
@@ -68,82 +60,21 @@ function SectionLabel({ icon, children }) {
 /**
  * Full-screen Profile view: SSO identity, masked linked Leafy Pay account, passwordless-login control, and decorative security/legal links.
  * @param {object} props
- * @param {{name: string, email: string, seed: string, bg: string}} props.user
+ * @param {{name: string, email: string, seed: string, bg: string, sub: string}} props.user
  * @param {() => void} props.onClose
  * @param {() => void} props.onSignOut
  */
 export function ProfileScreen({ user, onClose, onSignOut }) {
-  // Passwordless = an enrolled non-extractable WebCrypto key in IndexedDB, registered at Leafy Pay.
-  const [isPasswordlessEnabled, setIsPasswordlessEnabled] = useState(false)
-  const [isBusy, setIsBusy] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
-  const [isRemoveOpen, setIsRemoveOpen] = useState(false)
-
-  useEffect(() => {
-    hasCredential()
-      .then(setIsPasswordlessEnabled)
-      .catch(() => setIsPasswordlessEnabled(false))
-  }, [])
-
-  // Enabling runs the enrollment ceremony; disabling asks for confirmation first.
-  const handleTogglePasswordless = (next) => {
-    if (next) {
-      handleEnable()
-    } else {
-      setIsRemoveOpen(true)
-    }
-  }
-
-  async function handleEnable() {
-    setIsBusy(true)
-    setErrorMsg('')
-    try {
-      const cred = await createCredential()
-      const ch = await enrollChallenge()
-      if (!ch.ok) throw new Error(ch.error || 'Could not get an enrollment challenge')
-      const signature = await signWithCredential(cred.credentialId, ch.challenge)
-      const reg = await enroll({
-        challenge: ch.challenge,
-        publicKeyPem: cred.publicKeyPem,
-        alg: cred.alg,
-        signature,
-        credentialId: cred.credentialId,
-        authenticatorMetadata: { deviceName: 'This browser', createdVia: 'leafy-wallet' },
-      })
-      if (!reg.ok) throw new Error(reg.error || 'Enrollment failed')
-      await saveMeta({
-        credentialId: cred.credentialId,
-        alg: cred.alg,
-        sub: user.sub,
-        email: user.email,
-        createdAt: new Date().toISOString(),
-      })
-      setIsPasswordlessEnabled(true)
-    } catch (e) {
-      await deleteCredential().catch(() => {})
-      setIsPasswordlessEnabled(false)
-      setErrorMsg(e.message || 'Enrollment failed')
-    } finally {
-      setIsBusy(false)
-    }
-  }
-
-  async function handleConfirmRemove() {
-    await deleteCredential().catch(() => {})
-    setIsPasswordlessEnabled(false)
-    setIsRemoveOpen(false)
-  }
-
-  let passwordlessStatus
-  if (errorMsg) {
-    passwordlessStatus = errorMsg
-  } else if (isBusy) {
-    passwordlessStatus = 'Enrolling this device…'
-  } else if (isPasswordlessEnabled) {
-    passwordlessStatus = 'Enabled. This browser can unlock without a password.'
-  } else {
-    passwordlessStatus = 'Sign in with Face ID instead of the full login next time.'
-  }
+  const {
+    isEnabled,
+    isBusy,
+    errorMsg,
+    statusText,
+    isRemoveOpen,
+    handleToggle,
+    handleConfirmRemove,
+    handleCancelRemove,
+  } = usePasswordless(user)
 
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
@@ -183,12 +114,12 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">Face ID on this device</p>
                 <p className={cn('mt-0.5 text-xs', errorMsg ? 'text-destructive' : 'text-muted-foreground')}>
-                  {passwordlessStatus}
+                  {statusText}
                 </p>
               </div>
               <Toggle
-                checked={isPasswordlessEnabled}
-                onChange={handleTogglePasswordless}
+                checked={isEnabled}
+                onChange={handleToggle}
                 label="Enable passwordless login"
                 disabled={isBusy}
               />
@@ -216,11 +147,7 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
 
       {isRemoveOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-6">
-          <button
-            aria-label="Cancel"
-            onClick={() => setIsRemoveOpen(false)}
-            className="absolute inset-0 bg-black/50"
-          />
+          <button aria-label="Cancel" onClick={handleCancelRemove} className="absolute inset-0 bg-black/50" />
           <div className="relative w-full max-w-xs rounded-2xl border border-border bg-card p-5 text-center shadow-xl">
             <p className="text-base font-bold">Remove Face ID?</p>
             <p className="mt-1.5 text-sm text-muted-foreground">
@@ -228,7 +155,7 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
             </p>
             <div className="mt-5 flex gap-2.5">
               <button
-                onClick={() => setIsRemoveOpen(false)}
+                onClick={handleCancelRemove}
                 className="h-11 flex-1 rounded-full bg-foreground/[0.06] text-sm font-semibold"
               >
                 Cancel
