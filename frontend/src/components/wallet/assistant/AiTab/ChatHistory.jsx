@@ -1,6 +1,7 @@
 'use client'
 
 import Icon from '@leafygreen-ui/icon'
+import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
 
 /** Last message text of a chat, for the history row subtitle. */
@@ -26,21 +27,13 @@ export function ChatHistory({ chats, activeId, onOpen, onNew, onClose }) {
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <header className="flex items-center gap-2 px-3 pt-5 pb-2">
-        <button
-          onClick={onClose}
-          aria-label="Back"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onClose} aria-label="Back">
           <Icon glyph="ArrowLeft" size={18} />
-        </button>
+        </IconButton>
         <span className="min-w-0 flex-1 text-center text-base font-bold">Chat history</span>
-        <button
-          onClick={onNew}
-          aria-label="New chat"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onNew} aria-label="New chat">
           <Icon glyph="Plus" size={18} />
-        </button>
+        </IconButton>
       </header>
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-4 pt-2 pb-6">

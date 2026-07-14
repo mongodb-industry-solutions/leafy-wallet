@@ -2,6 +2,7 @@
 
 import Icon from '@leafygreen-ui/icon'
 import { AnimatePresence, motion } from 'motion/react'
+import { IconButton } from '@/components/ui/IconButton'
 
 /**
  * AI chat top bar: back to history (left), the current chat title (center,
@@ -14,13 +15,9 @@ import { AnimatePresence, motion } from 'motion/react'
 export function ChatHeader({ title, onBack, onNew }) {
   return (
     <header className="relative z-20 flex items-center gap-2 px-3 pt-5 pb-2">
-      <button
-        onClick={onBack}
-        aria-label="Chat history"
-        className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground"
-      >
+      <IconButton onClick={onBack} aria-label="Chat history">
         <Icon glyph="ArrowLeft" size={18} />
-      </button>
+      </IconButton>
 
       <div className="relative min-w-0 flex-1 text-center">
         <AnimatePresence mode="wait" initial={false}>
@@ -37,13 +34,9 @@ export function ChatHeader({ title, onBack, onNew }) {
         </AnimatePresence>
       </div>
 
-      <button
-        onClick={onNew}
-        aria-label="New chat"
-        className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground"
-      >
+      <IconButton onClick={onNew} aria-label="New chat">
         <Icon glyph="Plus" size={18} />
-      </button>
+      </IconButton>
     </header>
   )
 }

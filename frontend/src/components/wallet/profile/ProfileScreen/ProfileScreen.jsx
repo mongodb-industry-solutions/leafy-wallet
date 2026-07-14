@@ -5,6 +5,7 @@ import { LINKED_ACCOUNT } from '@/lib/wallet-data'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Ico } from '@/components/common/Icons/Icons'
 import { usePasswordless } from '@/components/wallet/profile/ProfileScreen/usePasswordless'
+import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
 
 /** A small iOS-style on/off switch. */
@@ -79,13 +80,9 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
-        <button
-          onClick={onClose}
-          aria-label="Back"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onClose} aria-label="Back">
           <Icon glyph="ArrowLeft" size={18} />
-        </button>
+        </IconButton>
         <span className="text-base font-bold">Profile</span>
       </div>
 

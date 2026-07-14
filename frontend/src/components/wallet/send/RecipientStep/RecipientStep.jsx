@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { CONTACTS } from '@/lib/wallet-data'
 import { Peep } from '@/components/common/Peep/Peep'
+import { IconButton } from '@/components/ui/IconButton'
 
 /**
  * Second step of the send/request flow: pick or search for a recipient and
@@ -46,13 +47,9 @@ export function RecipientStep({
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onBack} aria-label="Back">
           <Icon glyph="ArrowLeft" size={18} />
-        </button>
+        </IconButton>
         <span className="flex-1 text-center text-lg font-bold tabular-nums">
           {symbol}
           {display}

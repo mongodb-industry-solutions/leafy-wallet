@@ -2,6 +2,7 @@
 
 import Icon from '@leafygreen-ui/icon'
 import { Ico } from '@/components/common/Icons/Icons'
+import { IconButton } from '@/components/ui/IconButton'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
 const MAX_CENTS = 9999999
@@ -31,13 +32,9 @@ export function NumpadStep({ display, cents, currency, recipient, setCents, onCl
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center px-4 py-3">
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10"
-        >
+        <IconButton onClick={onClose} aria-label="Close">
           <Icon glyph="ArrowLeft" size={18} />
-        </button>
+        </IconButton>
         {recipient && (
           <>
             <span className="mx-auto text-sm font-semibold text-muted-foreground">
