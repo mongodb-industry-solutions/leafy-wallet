@@ -71,3 +71,8 @@ class MongoDBConnector:
         collection = self.get_collection(collection_name)
         result = collection.delete_many(query)
         return result.deleted_count
+
+    def aggregate(self, collection_name, pipeline):
+        """Run an aggregation pipeline against a collection."""
+        collection = self.get_collection(collection_name)
+        return list(collection.aggregate(pipeline))

@@ -19,6 +19,7 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
 - RESTful CRUD API for `walletContacts` and `walletTransactions`, powered by FastAPI + Pydantic schemas.
 - MongoDB Atlas persistence via `pymongo`, with a shared connection injected through FastAPI dependencies.
 - Automatic semantic-search embedding generation for transaction notes via a local Ollama model, without blocking writes if Ollama is unavailable.
+- Semantic search over transaction notes via Atlas Vector Search (`GET /api/v1/wallet-transactions/search`).
 - Dependency management with uv ([more info](https://docs.astral.sh/uv/)).
 
 ## Prerequisites
@@ -27,7 +28,7 @@ Before you begin, ensure you have:
 
 - Python 3.13 (but less than 3.14)
 - uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
-- A MongoDB Atlas cluster with a database user (Database Access) and your IP allow-listed (Network Access)
+- A MongoDB Atlas cluster with a database user (Database Access) and your IP allow-listed (Network Access). For `/wallet-transactions/search`, the cluster tier must support [Atlas Vector Search](https://www.mongodb.com/docs/atlas/atlas-search/) (M10+ dedicated, or Search Nodes/Serverless).
 - [Ollama](https://ollama.com/) running locally with the `nomic-embed-text` model pulled — optional, only needed for `noteEmbedding` generation on transactions. Two ways to get this:
   - Native install: `ollama pull nomic-embed-text`, then leave `ollama serve` running.
   - Docker (matches the deployed setup): from the repo root, run `docker compose up -d ollama ollama-pull`. This starts Ollama on `localhost:11434` (published from the container) and pulls the model automatically. Either way, the backend's default `OLLAMA_BASE_URL=http://localhost:11434` works unchanged for local `uvicorn` runs.
@@ -43,6 +44,12 @@ Before you begin, ensure you have:
    make uv_sync       # installs dependencies from uv.lock
    ```
 2. Verify that the `.venv` folder was generated inside `backend/`.
+3. One-time per Atlas cluster: provision the vector search index backing `/wallet-transactions/search`:
+   ```bash
+   cd backend
+   uv run python scripts/create_vector_index.py
+   ```
+   This is idempotent — safe to re-run if the index definition changes.
 
 ### Environment Variables
 
@@ -83,6 +90,7 @@ The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g
 | `DELETE` | `/api/v1/wallet-contacts/{id}` | Delete a contact |
 | `POST` | `/api/v1/wallet-transactions` | Create a transaction (generates `noteEmbedding` via Ollama if `note` is set) |
 | `GET` | `/api/v1/wallet-transactions` | List transactions (optional `ownerPartyRef`, `direction`, `leafyPayStatus` filters) |
+| `GET` | `/api/v1/wallet-transactions/search` | Semantic search over transaction notes via Atlas Vector Search (`q`, optional `ownerPartyRef`, `limit`) |
 | `GET` | `/api/v1/wallet-transactions/{id}` | Get a transaction by id |
 | `PATCH` | `/api/v1/wallet-transactions/{id}` | Partially update a transaction (status, settlement, embedding) |
 | `DELETE` | `/api/v1/wallet-transactions/{id}` | Delete a transaction |
@@ -105,7 +113,9 @@ backend/
 │   └── ollama.py             # Embedding client for noteEmbedding
 ├── routers/
 │   ├── wallet_contacts.py    # CRUD endpoints
-│   └── wallet_transactions.py
+│   └── wallet_transactions.py  # CRUD + semantic search
+├── scripts/
+│   └── create_vector_index.py  # Provisions the Atlas Vector Search index (run once per cluster)
 └── tests/                    # pytest integration tests (run against Atlas)
 ```
 
@@ -117,3 +127,5 @@ uv run pytest -v
 ```
 
 Tests run as integration tests directly against MongoDB Atlas using the credentials in `.env`. If Atlas isn't reachable (e.g. no database user configured yet), the whole suite skips cleanly instead of failing. Each test cleans up the documents it creates.
+
+Tests in `test_wallet_transactions_search.py` additionally skip if the vector search index hasn't been provisioned (see `scripts/create_vector_index.py` above), and poll for up to ~60s per assertion since Atlas Search indexes newly written documents asynchronously.
