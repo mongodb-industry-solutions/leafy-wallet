@@ -42,3 +42,14 @@ def test_get_embedding_returns_none_when_ollama_unreachable(monkeypatch):
     result = asyncio.run(ollama.get_embedding("Dinner split"))
 
     assert result is None
+
+
+def test_get_embedding_returns_none_on_http_status_error(monkeypatch):
+    async def fake_post(self, url, json):
+        return httpx.Response(status_code=500, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    result = asyncio.run(ollama.get_embedding("Dinner split"))
+
+    assert result is None
