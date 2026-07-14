@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pymongo.errors import OperationFailure
 
 from db.client import get_db
 from db.mdb import MongoDBConnector
@@ -80,8 +81,16 @@ async def search_transactions(
     pipeline = [
         {"$vectorSearch": vector_search_stage},
         {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+        {"$project": {"noteEmbedding": 0}},
     ]
-    return [with_str_id(doc) for doc in db.aggregate(COLLECTION, pipeline)]
+    try:
+        docs = db.aggregate(COLLECTION, pipeline)
+    except OperationFailure:
+        raise HTTPException(
+            status_code=503,
+            detail="Semantic search index is not available; run scripts/create_vector_index.py",
+        )
+    return [with_str_id(doc) for doc in docs]
 
 
 @router.get("/{transaction_id}", response_model=WalletTransactionOut)

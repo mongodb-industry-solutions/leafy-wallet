@@ -2,6 +2,7 @@ import asyncio
 import time
 
 import pytest
+from pymongo.errors import OperationFailure
 
 from db.client import get_db
 from routers.wallet_transactions import NOTE_EMBEDDING_INDEX
@@ -36,7 +37,11 @@ def _search_until(client, params, predicate, attempts=30, delay=2.0):
 @pytest.fixture(scope="module", autouse=True)
 def _require_vector_index_and_ollama(client):
     db = get_db()
-    indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
+    try:
+        indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
+    except OperationFailure as exc:
+        pytest.skip(f"Atlas Vector Search not available on this cluster: {exc}")
+
     if not indexes or not indexes[0].get("queryable"):
         pytest.skip(
             f"Vector search index '{NOTE_EMBEDDING_INDEX}' not provisioned/queryable; "
