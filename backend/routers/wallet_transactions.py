@@ -85,10 +85,11 @@ async def search_transactions(
     ]
     try:
         docs = db.aggregate(COLLECTION, pipeline)
-    except OperationFailure:
+    except OperationFailure as exc:
+        atlas_message = (exc.details or {}).get("errmsg") or str(exc)
         raise HTTPException(
             status_code=503,
-            detail="Semantic search index is not available; run scripts/create_vector_index.py",
+            detail=f"Semantic search is temporarily unavailable (Atlas error: {atlas_message})",
         )
     return [with_str_id(doc) for doc in docs]
 

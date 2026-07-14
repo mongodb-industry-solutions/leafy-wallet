@@ -22,16 +22,20 @@ TRANSACTION_PAYLOAD = {
 def _search_until(client, params, predicate, attempts=30, delay=2.0):
     """Atlas Search indexes newly written documents asynchronously, so a
     search run immediately after an insert can miss it. Poll briefly until
-    `predicate` matches or we give up.
+    `predicate` matches or we give up. Tolerates transient non-200s during
+    Atlas Search warm-up by retrying, only asserting on the final attempt.
     """
+    response = None
     for _ in range(attempts):
         response = client.get(f"{BASE}/search", params=params)
-        assert response.status_code == 200
-        results = response.json()
-        if predicate(results):
-            return results
+        if response.status_code == 200:
+            results = response.json()
+            if predicate(results):
+                return results
         time.sleep(delay)
-    return results
+    assert response is not None, "no search attempts were made"
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -50,8 +54,14 @@ def _require_vector_index_and_ollama(client):
 
     # Search embeds the query text via Ollama; skip cleanly (rather than
     # asserting 503s) when Ollama isn't reachable, e.g. in CI where no
-    # Ollama service is configured.
-    if asyncio.run(get_embedding("ollama reachability check")) is None:
+    # Ollama service is configured. A short explicit timeout keeps this
+    # fast locally instead of blocking on get_embedding()'s full 30s
+    # HTTP timeout when Ollama simply isn't running.
+    try:
+        embedding = asyncio.run(asyncio.wait_for(get_embedding("ollama reachability check"), timeout=5.0))
+    except asyncio.TimeoutError:
+        embedding = None
+    if embedding is None:
         pytest.skip("Ollama unreachable; skipping semantic search tests")
 
 
