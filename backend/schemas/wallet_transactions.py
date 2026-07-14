@@ -64,3 +64,27 @@ class WalletTransactionOut(BaseModel):
     localSyncStatus: Literal["local_pending", "synced"]
     createdAt: datetime
     settledAt: datetime | None = None
+
+
+class WalletTransactionSearchResult(BaseModel):
+    """Outbound shape for GET /wallet-transactions/search.
+
+    Same core fields as `WalletTransactionOut`, but omits the raw
+    `noteEmbedding` vector (not useful to callers, and needlessly bloats
+    a results list) and adds the vector-search relevance `score`.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(alias="_id")
+    leafyPayTransferReference: str
+    ownerPartyRef: str
+    counterpartyArrangementReference: str
+    amount: Money
+    note: str | None = None
+    direction: Literal["sent", "received"]
+    leafyPayStatus: Literal["pending", "settled", "failed", "exception"]
+    localSyncStatus: Literal["local_pending", "synced"]
+    createdAt: datetime
+    settledAt: datetime | None = None
+    score: float
