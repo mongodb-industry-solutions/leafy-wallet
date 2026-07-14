@@ -137,8 +137,10 @@ struct LocalTransaction_ {
     static const obx::Property<LocalTransaction, OBXPropertyType_String> direction;
     static const obx::Property<LocalTransaction, OBXPropertyType_String> leafyPayStatus;
     static const obx::Property<LocalTransaction, OBXPropertyType_String> localSyncStatus;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Long> createdAt;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Long> settledAt;
+    // Date (not Long): the Sync Server's MongoDB bridge maps Date to a real
+    // BSON ISODate; Long would map to a plain Int64.
+    static const obx::Property<LocalTransaction, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalTransaction, OBXPropertyType_Date> settledAt;
     static const obx::Property<LocalTransaction, OBXPropertyType_Long> syncClock;
 };
 
@@ -153,8 +155,8 @@ const obx::Property<LocalTransaction, OBXPropertyType_FloatVector> LocalTransact
 const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::direction(9);
 const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::leafyPayStatus(10);
 const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::localSyncStatus(11);
-const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::createdAt(12);
-const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::settledAt(13);
+const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::createdAt(12);
+const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
 // ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
@@ -189,8 +191,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "direction", OBXPropertyType_String, 9, 7001000000000009ULL);
     obx_model_property(model, "leafyPayStatus", OBXPropertyType_String, 10, 7001000000000010ULL);
     obx_model_property(model, "localSyncStatus", OBXPropertyType_String, 11, 7001000000000011ULL);
-    obx_model_property(model, "createdAt", OBXPropertyType_Long, 12, 7001000000000012ULL);
-    obx_model_property(model, "settledAt", OBXPropertyType_Long, 13, 7001000000000013ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7001000000000012ULL);
+    obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
     obx_model_property(model, "syncClock", OBXPropertyType_Long, 14, 7001000000000014ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 

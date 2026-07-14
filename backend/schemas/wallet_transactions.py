@@ -1,7 +1,25 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _none_if_epoch_zero(value):
+    """leafy-local-store writes an "absent" settledAt as epoch-zero (there's
+    no other way to represent "unset" for a fixed-width timestamp property),
+    which the Sync Server's MongoDB bridge then stores as a literal
+    1970-01-01 rather than an omitted field. Without this, reading such a
+    transaction back here would show a fake settlement time instead of None.
+    Handles both raw ints (older synced documents, before the field was a
+    proper ObjectBox Date type) and real datetimes (current documents).
+    """
+    if value == 0:
+        return None
+    if isinstance(value, datetime) and value == _EPOCH:
+        return None
+    return value
 
 
 class WalletTransactionCreate(BaseModel):
@@ -67,6 +85,8 @@ class WalletTransactionOut(BaseModel):
     createdAt: datetime
     settledAt: datetime | None = None
 
+    _validate_settled_at = field_validator("settledAt", mode="before")(_none_if_epoch_zero)
+
 
 class WalletTransactionSearchResult(BaseModel):
     """Outbound shape for GET /wallet-transactions/search.
@@ -91,3 +111,5 @@ class WalletTransactionSearchResult(BaseModel):
     createdAt: datetime
     settledAt: datetime | None = None
     score: float
+
+    _validate_settled_at = field_validator("settledAt", mode="before")(_none_if_epoch_zero)
