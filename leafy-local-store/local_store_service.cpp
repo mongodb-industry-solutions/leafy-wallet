@@ -689,6 +689,68 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    // Semantic search over locally-stored transaction notes, entirely offline:
+    // embeds `q` via the local Ollama container, then runs ObjectBox's own
+    // HNSW nearestNeighbors query against noteEmbedding — no Atlas round
+    // trip. Mirrors backend/routers/wallet_transactions.py's
+    // GET /wallet-transactions/search, but against the on-device store.
+    svr.Get("/local/v1/transactions/search", [](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_param("q")) {
+            res.status = 400;
+            res.set_content(json{{"error", "Missing required query param: q"}}.dump(), "application/json");
+            return;
+        }
+
+        try {
+            std::string q = req.get_param_value("q");
+            int limit = 10;
+            if (req.has_param("limit")) {
+                limit = std::stoi(req.get_param_value("limit"));
+            }
+            std::string ownerPartyRef = req.has_param("ownerPartyRef")
+                ? req.get_param_value("ownerPartyRef")
+                : "";
+
+            std::vector<float> queryVector = get_embedding(q);
+            if (queryVector.empty()) {
+                res.status = 503;
+                res.set_content(
+                    json{{"error", "Semantic search is temporarily unavailable (Ollama unreachable)"}}.dump(),
+                    "application/json");
+                return;
+            }
+
+            auto box = store->box<LocalTransaction>();
+            // nearestNeighbors alone can't also filter by ownerPartyRef, so
+            // over-fetch and filter client-side when a filter is requested —
+            // fine at this PoC's local scale (a handful of records).
+            int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
+            auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
+            // findWithScores() returns `score` as a *distance* (lower = more
+            // similar), already sorted nearest-first — the opposite
+            // convention from Atlas's $vectorSearch score (higher = better),
+            // which backend/routers/wallet_transactions.py's /search uses.
+            auto foundWithScores = query.findWithScores();
+
+            json results = json::array();
+            for (const auto& [t, score] : foundWithScores) {
+                if (!ownerPartyRef.empty() && t.ownerPartyRef != ownerPartyRef) {
+                    continue;
+                }
+                json item = transaction_to_json(t);
+                item["score"] = score;
+                results.push_back(item);
+                if (static_cast<int>(results.size()) >= limit) {
+                    break;
+                }
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
     svr.Post("/local/v1/transactions/send", [](const httplib::Request& req, httplib::Response& res) {
         auto bad_request = [&res](const std::string& msg) {
             res.status = 400;
@@ -735,6 +797,25 @@ int main(int argc, char* argv[]) {
 
             res.status = 201;
             res.set_content(transaction_to_json(t).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Deletes propagate through ObjectBox Sync like any other write, so this
+    // also removes the corresponding document from Atlas once connected —
+    // primarily here so integration tests can clean up after themselves.
+    svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id id = std::stoll(req.matches[1]);
+            auto box = store->box<LocalTransaction>();
+            if (!box.remove(id)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Transaction not found"}}.dump(), "application/json");
+                return;
+            }
+            res.status = 204;
         } catch (const std::exception& e) {
             res.status = 500;
             res.set_content(json{{"error", e.what()}}.dump(), "application/json");
@@ -966,6 +1047,15 @@ int main(int argc, char* argv[]) {
             }
 
             messageBox.remove(messageId);
+    svr.Delete(R"(/local/v1/contacts/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id id = std::stoll(req.matches[1]);
+            auto box = store->box<LocalContact>();
+            if (!box.remove(id)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Contact not found"}}.dump(), "application/json");
+                return;
+            }
             res.status = 204;
         } catch (const std::exception& e) {
             res.status = 500;

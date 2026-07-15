@@ -1,17 +1,11 @@
 'use client'
 
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
+import { groupByDate } from '@/lib/wallet/format'
 import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const SKELETON_ROWS = 6
-
-function groupByDate(transactions) {
-  const groups = {}
-  for (const tx of transactions) {
-    ;(groups[tx.date] ||= []).push(tx)
-  }
-  return Object.entries(groups)
-}
 
 /**
  * The "Activity" tab: the full transaction history, grouped by date.
@@ -21,10 +15,6 @@ function groupByDate(transactions) {
 export function ActivityTab({ onDetail }) {
   const { transactions: txState } = useWalletData()
   const transactions = txState.data ?? []
-
-  let emptyMessage
-  if (txState.error) emptyMessage = "Couldn't load activity"
-  else if (transactions.length === 0) emptyMessage = 'No transactions yet'
 
   if (txState.isLoading) {
     return (
@@ -43,15 +33,30 @@ export function ActivityTab({ onDetail }) {
     <div className="flex flex-col gap-5 px-4 pt-8 pb-6">
       <h1 className="text-xl font-bold text-foreground">Activity</h1>
 
-      {emptyMessage && <p className="px-1 text-sm text-muted-foreground">{emptyMessage}</p>}
+      {transactions.length === 0 &&
+        (txState.error ? (
+          <EmptyState
+            glyph="Warning"
+            title="Couldn't load activity"
+            subtitle="Check your connection and try again."
+            className="mt-16"
+          />
+        ) : (
+          <EmptyState
+            glyph="CreditCard"
+            title="No transactions yet"
+            subtitle="Your payments and requests will show up here."
+            className="mt-16"
+          />
+        ))}
 
-      {groupByDate(transactions).map(([date, txs]) => (
+      {groupByDate(transactions).map(({ date, items }) => (
         <section key={date} className="flex flex-col gap-2">
           <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {date}
           </p>
           <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
-            {txs.map((tx) => (
+            {items.map((tx) => (
               <TxRow key={tx.id} tx={tx} onClick={() => onDetail(tx)} />
             ))}
           </div>

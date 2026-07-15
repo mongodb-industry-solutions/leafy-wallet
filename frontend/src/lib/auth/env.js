@@ -32,6 +32,6 @@ export const ENV = {
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,
   // Local-dev only: a corp SSO session cookie so server-side calls pass the Istio/Envoy gate that
   // fronts the deployed PSP. Inert in production (deployed on Mongo infra, server-to-server isn't
-  // gated). See LOCAL_DEV_AUTH.md and PSP_DEV_COOKIE in .env.local.
+  // gated). See PSP_DEV_COOKIE in .env.local.
   pspDevCookie: () => (process.env.NODE_ENV === 'production' ? '' : envVar('PSP_DEV_COOKIE') ?? ''),
 }

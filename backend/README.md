@@ -274,6 +274,14 @@ Tests run as integration tests directly against MongoDB Atlas using the credenti
 
 Tests in `test_wallet_transactions_search.py` additionally skip if the vector search index hasn't been provisioned (see `scripts/create_vector_index.py` above), and poll for up to ~60s per assertion since Atlas Search indexes newly written documents asynchronously.
 
+`test_leafy_local_store.py` is **local-only, not part of CI** — it needs `leafy-local-store`
+actually running (see [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and
+deploying that whole stack in CI wasn't judged worth it for this PoC. It skips cleanly if the
+service isn't reachable, same pattern as the Atlas/Ollama skips above. It creates records that
+sync into the real `walletTransactions`/`walletContacts` Atlas collections, so every test
+cleans up via `DELETE /local/v1/.../{id}` (which propagates the deletion through Sync back to
+Atlas too) rather than leaving test data behind.
+
 ## ObjectBox Offline Sync (PoC)
 
 This is a proof of concept toward the project's broader *offline-ready mobile wallet*
@@ -333,7 +341,9 @@ local state is cleared):
 |---|---|---|
 | `GET` | `/local/v1/health` | Store status + local transaction/contact/chat/message counts |
 | `GET` | `/local/v1/transactions` | List locally-stored transactions |
+| `GET` | `/local/v1/transactions/search` | Semantic search over local transaction notes — entirely offline, via ObjectBox's own HNSW index (`q`, optional `ownerPartyRef`, `limit`) |
 | `POST` | `/local/v1/transactions/send` | Create a transaction locally (embeds `note` via Ollama, syncs to Atlas once connected) |
+| `DELETE` | `/local/v1/transactions/{id}` | Delete a local transaction by its ObjectBox id (propagates through Sync to Atlas too) |
 | `GET` | `/local/v1/contacts` | List locally-stored contacts |
 | `POST` | `/local/v1/contacts` | Queue a contact add locally (reconciled with Leafy Pay on reconnect), syncs to Atlas once connected |
 | `GET` | `/local/v1/chats` | List locally-stored chats |
@@ -342,6 +352,7 @@ local state is cleared):
 | `GET` | `/local/v1/chats/{chatId}/messages` | List a chat's locally-stored messages |
 | `POST` | `/local/v1/chats/{chatId}/messages` | Create a message locally, syncs to Atlas once connected |
 | `DELETE` | `/local/v1/chats/{chatId}/messages/{messageId}` | Delete a message locally, syncs to Atlas once connected |
+| `DELETE` | `/local/v1/contacts/{id}` | Delete a local contact by its ObjectBox id (propagates through Sync to Atlas too) |
 
 **`GET /local/v1/health`**
 ```json
@@ -353,6 +364,40 @@ local state is cleared):
 
 **`GET /local/v1/transactions`**: no request body; returns an array of the same object shape
 as the `send` response below (`200`), or `{"error": "..."}` (`500`).
+
+**`GET /local/v1/transactions/search`**: mirrors the backend's `GET /wallet-transactions/search`
+(same params: `q` required, `ownerPartyRef`/`limit` optional), but runs entirely offline —
+embeds `q` via the local Ollama container, then queries ObjectBox's own HNSW index directly
+(no Atlas round trip). **Important difference from the Atlas endpoint**: the returned `score`
+is a *distance* (lower = more similar, already sorted nearest-first) — the opposite convention
+from Atlas's `$vectorSearch` score (higher = better). `ownerPartyRef` filtering happens
+client-side in `local_store_service.cpp` (ObjectBox's `nearestNeighbors` query can't combine
+with an equality filter directly), so it over-fetches and filters in code — fine at this
+PoC's local scale.
+```json
+// 200
+[
+  {
+    "id": 1,
+    "leafyPayTransferReference": "string",
+    "ownerPartyRef": "string",
+    "counterpartyArrangementReference": "string",
+    "amount": 42.0,
+    "currency": "USD",
+    "note": "string",
+    "hasEmbedding": true,
+    "direction": "sent",
+    "leafyPayStatus": "pending",
+    "localSyncStatus": "local_pending",
+    "createdAt": 1784038802411,
+    "settledAt": null,
+    "score": 0.397
+  }
+]
+// 400 — missing q: {"error": "Missing required query param: q"}
+// 503 — Ollama unreachable: {"error": "Semantic search is temporarily unavailable (Ollama unreachable)"}
+// 500 — genuine server-side failure: {"error": "..."}
+```
 
 **`POST /local/v1/transactions/send`**: required: `leafyPayTransferReference`,
 `ownerPartyRef`, `counterpartyArrangementReference`, `amount`, `currency`, `direction`.
@@ -387,6 +432,15 @@ Optional: `note` (embedded via Ollama if present and non-empty).
 }
 // 400 — invalid JSON or missing required field: {"error": "..."}
 // 500 — genuine server-side failure (e.g. store write): {"error": "..."}
+```
+
+**`DELETE /local/v1/transactions/{id}`**: `{id}` is the numeric ObjectBox id (not the Mongo
+`_id`). Deleting propagates through ObjectBox Sync like any other write, so it also removes
+the corresponding document from Atlas once connected.
+```json
+// 204 — no body
+// 404 — {"error": "Transaction not found"}
+// 500 — genuine server-side failure: {"error": "..."}
 ```
 
 **`GET /local/v1/contacts`**: no request body; returns an array of the same object shape as
@@ -474,6 +528,13 @@ object shape as the `POST` response below (`200`), 404 if `chatId` doesn't exist
 // 404 — messageId doesn't exist, or doesn't belong to chatId: {"error": "Chat message not found"}
 ```
 
+**`DELETE /local/v1/contacts/{id}`**: same semantics as the transaction delete above.
+```json
+// 204 — no body
+// 404 — {"error": "Contact not found"}
+// 500 — genuine server-side failure: {"error": "..."}
+```
+
 ### Non-obvious things learned building this (empirically, not from docs)
 
 - **The ObjectBox entity's registered name is the target MongoDB collection name. Not the
@@ -504,3 +565,9 @@ object shape as the `POST` response below (`200`), 404 if `chatId` doesn't exist
   masking that the actual stored type was wrong. `syncClock` stays `Long` regardless — it's
   never held a timestamp-shaped value in anything we've observed, whatever its actual purpose
   turns out to be (see [Sync-related fields](#sync-related-fields)).
+  masking that the actual stored type was wrong. `syncClock` correctly stays `Long` — it's an
+  internal counter, not a real timestamp.
+- **ObjectBox's vector search `score` is a distance, not a similarity.** `findWithScores()`
+  returns lower-is-better, already sorted nearest-first — opposite of Atlas's `$vectorSearch`
+  score (higher-is-better). Easy to misread a result set as "backwards" if you forget which
+  convention applies to which endpoint.

@@ -135,26 +135,34 @@ Implemented on main. Notes auto-embedded via Ollama on create; queried by `owner
 ## 5. Status / next
 
 - **Done:** Auth (§1), merged to main. Backend enrichment layer (§3.2), on main.
+- **Done (corp gate):** server-side calls to the gated staging PSP pass via `PSP_DEV_COOKIE` (a copied
+  corp session), read **only when `NODE_ENV !== 'production'`** and inert on Mongo infra.
 - **Done (reads):** read data layer, field-mapped from docs/technical-spec.md §1.17 (§2.3). Pattern:
   read Leafy Pay (base, source of truth) **in parallel with** its Atlas enrichment, merged.
-  `src/lib/psp/PspClient.js` (server-only, Bearer + refresh-on-401: `listAccounts`/`listBeneficiaries`/
-  `listTransactions`), `src/lib/backend/enrichment.js` (Atlas note/embedding), Server Actions
-  `src/lib/wallet/actions.js` (`getAccounts`/`getContacts`/`getTransactions`), `src/lib/wallet/format.js`,
-  `src/lib/hooks/useAsync.js`. `getTransactions` merges the Atlas note by `leafyPayTransferReference`
-  (Leafy Pay `paymentExecutionRemittanceInformation` is the fallback). Home / People / Activity render
-  real data (mock `wallet-data.js` reads removed). Contacts have no distinct display enrichment today,
-  so `getContacts` reads Leafy Pay only (the Atlas `walletContacts` is the offline replica).
+  `src/lib/psp/PspClient.js` (server-only, Bearer + refresh-on-401), `src/lib/backend/enrichment.js`
+  (Atlas note/embedding), Server Actions `src/lib/wallet/actions.js`
+  (`getAccounts`/`getContacts`/`getTransactions`), `src/lib/wallet/format.js`. `getTransactions` merges
+  the Atlas note by `leafyPayTransferReference` (Leafy Pay `paymentExecutionRemittanceInformation` is the
+  fallback). Home / People / Activity render real data. `getContacts` reads Leafy Pay only (the Atlas
+  `walletContacts` is the offline replica).
 - **Done (send write):** `sendMoney` — Leafy Pay `POST /beneficiaries/{ref}/transfer` in parallel with
   the Atlas note write-back (`createTransactionEnrichment`, embedded by Ollama). Send flow wired to real
-  balance + real contacts (RecipientStep) + real submit (loading/error). Profile linked-account IBAN
-  reads real accounts.
+  balance + real contacts + real submit (loading/error). Profile linked-account IBAN reads real accounts.
+- **Done (data flow / UX):** `src/lib/wallet/WalletDataProvider.jsx` — client cache shared across tabs
+  (fetch once per login, event-driven revalidation: `refresh()` after a write, auto-refresh on
+  reconnect). Skeleton loading states, horizontal account carousel on Home, logout returns to the app
+  (no PSP front-channel).
+- **Done (add/remove contacts):** `addContact` resolves a registered Leafy Pay email/phone into a saved
+  beneficiary (`POST /beneficiaries`) ∥ `walletContacts` write-back, erroring cleanly if none matches;
+  `removeContact` (`DELETE /beneficiaries/{ref}` + replica cleanup). People tab has add (`+` sheet) and
+  per-row remove. Addable identities: see `LEAFY_PAY_TEST_USERS.md`.
 - **Still mocked** (`wallet-data.js`): AI chat only (chart data, sample queries, intent parsing,
   action-card draft) + a `WalletApp` user fallback.
 
 **Next:**
-1. Add-contact write (`POST /beneficiaries` + `walletContacts` write-back) — needs a small add-contact UI.
-2. AI chat — `useAiChat` over the real Server Actions + `wallet-transactions/search` (Atlas).
-3. Offline: `leafy-local-store` + ObjectBox sync (§2.2, §3.3); the send flow's offline "saved" branch is
-   the placeholder.
-
-All Leafy Pay reads depend on the §1 corp-gate blocker being resolved for end-to-end testing (in progress).
+1. AI chat — `useAiChat` over the real Server Actions + `wallet-transactions/search` (Atlas vector
+   search). Light intent routing first; LangGraph.js as a later phase.
+2. Send: let the user pick a **source account** — contract confirmed, the transfer accepts an optional
+   `fromAccountRef` (OAuth resolves the default when omitted), so this is now a pure frontend feature.
+3. Offline: `leafy-local-store` + ObjectBox sync (§2.2, §3.3); the send flow's offline "saved" branch and
+   the provider's reconnect-refresh are the placeholders.
