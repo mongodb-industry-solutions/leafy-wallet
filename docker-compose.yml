@@ -23,6 +23,45 @@ services:
       - OLLAMA_HOST=ollama:11434
     entrypoint: ["ollama", "pull", "nomic-embed-text"]
     restart: "no"
+  objectbox-sync-server:
+    image: objectboxio/sync-server-trial
+    container_name: leafy-wallet-objectbox-sync
+    user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      - backend/.env
+    ports:
+      - "9980:9980"  # Admin UI - activate the trial license here
+      - "9999:9999"  # Sync protocol port for leafy-local-store
+    volumes:
+      - ./objectbox-sync-server:/data
+    working_dir: /data
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec /sync-server \
+          --model objectbox-model.json \
+          --unsecured-no-authentication \
+          --admin-bind 0.0.0.0:9980 \
+          --mongo-url "$$MONGODB_URI" \
+          --mongo-db "$$DATABASE_NAME"
+    restart: always
+  leafy-local-store:
+    build:
+      context: ./leafy-local-store
+    container_name: leafy-wallet-local-store
+    ports:
+      - "8090:8090"
+    volumes:
+      - leafy_local_store_data:/app/local-store-db
+    depends_on:
+      objectbox-sync-server:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SYNC_SERVER_URL=ws://objectbox-sync-server:9999
+    restart: always
   demoname-backend:
     build:
       context: .
@@ -54,3 +93,4 @@ services:
 
 volumes:
   ollama_data:
+  leafy_local_store_data:

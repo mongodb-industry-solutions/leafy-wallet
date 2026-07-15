@@ -14,7 +14,8 @@ TRANSACTION_PAYLOAD = {
     "leafyPayTransferReference": "search-test-ref",
     "ownerPartyRef": "search-test-owner",
     "counterpartyArrangementReference": "search-test-counterparty",
-    "amount": {"value": 10.0, "currency": "EUR"},
+    "amount": 10.0,
+    "currency": "EUR",
     "direction": "sent",
 }
 

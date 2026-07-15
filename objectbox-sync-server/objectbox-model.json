@@ -1,0 +1,52 @@
+{
+  "modelVersionParserMinimum": 5,
+  "entities": [
+    {
+      "id": "1:7001000000000000",
+      "name": "walletTransactions",
+      "flags": 2,
+      "lastPropertyId": "14:7001000000000014",
+      "properties": [
+        { "id": "1:7001000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7001000000000002", "name": "leafyPayTransferReference", "type": 9 },
+        { "id": "3:7001000000000003", "name": "ownerPartyRef", "type": 9 },
+        { "id": "4:7001000000000004", "name": "counterpartyArrangementReference", "type": 9 },
+        { "id": "5:7001000000000005", "name": "amount", "type": 8 },
+        { "id": "6:7001000000000006", "name": "currency", "type": 9 },
+        { "id": "7:7001000000000007", "name": "note", "type": 9 },
+        { "id": "8:7001000000000008", "name": "noteEmbedding", "type": 28, "flags": 8, "indexId": "1:7001000000000100" },
+        { "id": "9:7001000000000009", "name": "direction", "type": 9 },
+        { "id": "10:7001000000000010", "name": "leafyPayStatus", "type": 9 },
+        { "id": "11:7001000000000011", "name": "localSyncStatus", "type": 9 },
+        { "id": "12:7001000000000012", "name": "createdAt", "type": 10 },
+        { "id": "13:7001000000000013", "name": "settledAt", "type": 10 },
+        { "id": "14:7001000000000014", "name": "syncClock", "type": 6 }
+      ]
+    },
+    {
+      "id": "2:7002000000000000",
+      "name": "walletContacts",
+      "flags": 2,
+      "lastPropertyId": "9:7002000000000009",
+      "properties": [
+        { "id": "1:7002000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7002000000000002", "name": "ownerPartyRef", "type": 9 },
+        { "id": "3:7002000000000003", "name": "counterpartyArrangementReference", "type": 9 },
+        { "id": "4:7002000000000004", "name": "counterpartyLabel", "type": 9 },
+        { "id": "5:7002000000000005", "name": "counterpartyLookupType", "type": 9 },
+        { "id": "6:7002000000000006", "name": "counterpartyLookupHint", "type": 9 },
+        { "id": "7:7002000000000007", "name": "createdAt", "type": 10 },
+        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 },
+        { "id": "9:7002000000000009", "name": "syncClock", "type": 6 }
+      ]
+    }
+  ],
+  "lastEntityId": "2:7002000000000000",
+  "lastIndexId": "1:7001000000000100",
+  "lastRelationId": "0:0",
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

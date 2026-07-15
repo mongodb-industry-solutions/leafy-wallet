@@ -241,5 +241,8 @@ frontend/next-env.d.ts
 *.pem
 frontend/package-lock.json
 
+# ObjectBox Sync Server local runtime state (LMDB files) — regenerated on
+# startup, not source; committing it just produces noisy binary diffs.
+objectbox-sync-server/objectbox/
 # macOS Finder metadata
 .DS_Store
