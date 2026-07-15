@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { Peep } from '@/components/common/Peep/Peep'
 import { IconButton } from '@/components/ui/IconButton'
+import { AccountPickerSheet } from '@/components/wallet/send/AccountPickerSheet/AccountPickerSheet'
 
 function Row({ label, value }) {
   return (
@@ -14,14 +16,19 @@ function Row({ label, value }) {
 }
 
 /**
- * Third step of the send/request flow: review the amount, recipient, and
- * note before submitting.
+ * Third step of the send/request flow: review the amount, recipient, source account, and note before
+ * submitting. The source account is selectable when the user has more than one.
  * @param {object} props
  * @param {string} props.display - Formatted amount.
  * @param {string} props.symbol - Currency symbol.
  * @param {boolean} props.isRequest
  * @param {object} props.recipient
  * @param {string} props.note
+ * @param {object} [props.fromAccount] - The selected source account.
+ * @param {object[]} [props.accounts] - All accounts (for the picker).
+ * @param {boolean} [props.canPickAccount] - Whether there's more than one account to choose from.
+ * @param {(account: object) => void} [props.onPickAccount]
+ * @param {boolean} [props.insufficient] - The amount exceeds the source account's balance.
  * @param {string} props.remaining - Formatted balance remaining after this send.
  * @param {boolean} [props.isSubmitting] - The transfer is in flight.
  * @param {string} [props.error] - A failure message to surface.
@@ -34,12 +41,19 @@ export function ConfirmStep({
   isRequest,
   recipient,
   note,
+  fromAccount,
+  accounts = [],
+  canPickAccount,
+  onPickAccount,
+  insufficient,
   remaining,
   isSubmitting,
   error,
   onBack,
   onSubmit,
 }) {
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
+
   let submitLabel
   if (isSubmitting) submitLabel = 'Sending…'
   else if (isRequest) submitLabel = `Request ${symbol}${display}`
@@ -80,7 +94,21 @@ export function ConfirmStep({
             <Row label="You'll receive" value={`${symbol}${display}`} />
           ) : (
             <>
-              <Row label="From" value="Cash Balance" />
+              <button
+                type="button"
+                onClick={() => setIsPickerOpen(true)}
+                disabled={!canPickAccount}
+                className="flex items-center justify-between gap-3 text-sm disabled:cursor-default"
+              >
+                <span className="text-muted-foreground">From</span>
+                <span className="flex min-w-0 items-center gap-1.5 font-semibold">
+                  <span className="truncate">{fromAccount?.label ?? 'Account'}</span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">•••• {fromAccount?.last4}</span>
+                  {canPickAccount && (
+                    <Icon glyph="ChevronRight" size={14} className="shrink-0 text-muted-foreground" />
+                  )}
+                </span>
+              </button>
               <Row label="Remaining" value={`${symbol}${remaining}`} />
             </>
           )}
@@ -88,15 +116,29 @@ export function ConfirmStep({
       </div>
 
       <div className="px-4 pt-2 pb-6">
-        {error && <p className="mb-2 text-center text-sm text-destructive">{error}</p>}
+        {insufficient && (
+          <p className="mb-2 text-center text-sm text-destructive">
+            Not enough balance in this account.
+          </p>
+        )}
+        {error && !insufficient && <p className="mb-2 text-center text-sm text-destructive">{error}</p>}
         <button
           onClick={onSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || insufficient}
           className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-60"
         >
           {submitLabel}
         </button>
       </div>
+
+      {isPickerOpen && (
+        <AccountPickerSheet
+          accounts={accounts}
+          selectedReference={fromAccount?.reference}
+          onSelect={onPickAccount}
+          onClose={() => setIsPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }

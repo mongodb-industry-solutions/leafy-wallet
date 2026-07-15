@@ -99,6 +99,7 @@ export function HomeTab({
   user,
   onSignOut,
   onProfile,
+  onOpenNotifications,
   onSetTab,
   onDetail,
   onSend,
@@ -149,7 +150,12 @@ export function HomeTab({
       </div>
 
       <div className="relative flex flex-col">
-        <HomeHero user={user} onSignOut={onSignOut} onProfile={onProfile} />
+        <HomeHero
+          user={user}
+          onSignOut={onSignOut}
+          onProfile={onProfile}
+          onOpenNotifications={onOpenNotifications}
+        />
 
         {/* pt pushes the balance down into the white area near the gradient tail. */}
         <div className="flex flex-col gap-6 px-4 pt-32 pb-6">

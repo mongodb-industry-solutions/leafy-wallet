@@ -142,15 +142,15 @@ export async function getTransactions() {
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
 
   const rows = transactions.map((t) => {
-    const contact = contactByRef.get(t.counterpartyReference)
     const enrich = enrichByRef.get(t.reference)
+    const counterpartyRef = t.counterpartyReference ?? enrich?.counterpartyArrangementReference ?? null
+    const contact = contactByRef.get(counterpartyRef)
     const magnitude = Math.abs(t.value)
     return {
       id: t.reference,
       reference: t.reference,
       name: contact?.label ?? t.beneficiaryName ?? t.destinationMasked ?? 'Payment',
       lookupHint: contact?.lookupHint ?? t.destinationMasked ?? '',
-      // Note lives in the Atlas enrichment layer; fall back to Leafy Pay's remittance if none.
       note: enrich?.note ?? t.note ?? '',
       amount: t.direction === 'received' ? magnitude : -magnitude,
       currency: t.currency,
@@ -158,7 +158,7 @@ export async function getTransactions() {
       createdAt: t.createdAt,
       status: t.status,
       isPending: t.status !== 'completed',
-      ...avatarFor(t.counterpartyReference ?? t.reference),
+      ...avatarFor(counterpartyRef ?? t.reference),
     }
   })
 
@@ -168,17 +168,22 @@ export async function getTransactions() {
 
 /**
  * Send a P2P transfer: Leafy Pay moves the money (base), then the note is written to Atlas in parallel
- * so it gets embedded for search. The Atlas write is best-effort (money already moved).
- * @param {{counterpartyArrangementReference: string, amount: number, note?: string}} input
+ * so it gets embedded for search. The Atlas write is best-effort (money already moved). `fromAccountReference`
+ * picks the source account; omit it to let Leafy Pay use the default.
+ * @param {{counterpartyArrangementReference: string, fromAccountReference?: string, amount: number, note?: string}} input
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
-export async function sendMoney({ counterpartyArrangementReference, amount, note = '' }) {
+export async function sendMoney({ counterpartyArrangementReference, fromAccountReference, amount, note = '' }) {
   if (!counterpartyArrangementReference || !(amount > 0)) {
     return { ok: false, error: 'A recipient and an amount are required' }
   }
   let transfer
   try {
-    transfer = await sendToBeneficiary(counterpartyArrangementReference, { amount, note })
+    transfer = await sendToBeneficiary(counterpartyArrangementReference, {
+      amount,
+      note,
+      fromAccountRef: fromAccountReference,
+    })
   } catch (e) {
     return { ok: false, error: e?.body || 'Transfer failed. Please try again.' }
   }
@@ -190,7 +195,8 @@ export async function sendMoney({ counterpartyArrangementReference, amount, note
       leafyPayTransferReference: transfer.reference,
       ownerPartyRef: owner,
       counterpartyArrangementReference,
-      amount: { value: amount, currency: 'EUR' },
+      amount,
+      currency: 'EUR',
       note: note || null,
       direction: 'sent',
       leafyPayStatus: transfer.status === 'completed' ? 'settled' : 'pending',
@@ -198,4 +204,20 @@ export async function sendMoney({ counterpartyArrangementReference, amount, note
   }
 
   return { ok: true, reference: transfer.reference, status: transfer.status }
+}
+
+/**
+ * Settlement status of a sent transfer, read from the transaction list (the dedicated status endpoint is
+ * session-only, so we resolve it from the OAuth-visible transactions). `pending` while still settling.
+ * @param {string} reference - The transfer reference returned by `sendMoney`.
+ * @returns {Promise<{status: 'completed'|'pending'|'failed'|'unknown'}>}
+ */
+export async function getTransferStatus(reference) {
+  if (!reference) return { status: 'unknown' }
+  const transactions = await listTransactions()
+  const match = transactions.find((t) => t.reference === reference)
+  if (!match) return { status: 'pending' }
+  if (match.status === 'completed') return { status: 'completed' }
+  if (match.status === 'failed' || match.status === 'exception') return { status: 'failed' }
+  return { status: 'pending' }
 }
