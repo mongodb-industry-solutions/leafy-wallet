@@ -6,6 +6,7 @@ import { Peep } from '@/components/common/Peep/Peep'
 import { Ico } from '@/components/common/Icons/Icons'
 import { usePasswordless } from '@/components/wallet/profile/ProfileScreen/usePasswordless'
 import { IconButton } from '@/components/ui/IconButton'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
 
 const LINKED_PROVIDER = 'Leafy Pay'
@@ -151,29 +152,13 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
       </div>
 
       {isRemoveOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-6">
-          <button aria-label="Cancel" onClick={handleCancelRemove} className="absolute inset-0 bg-black/50" />
-          <div className="relative w-full max-w-xs rounded-2xl border border-border bg-card p-5 text-center shadow-xl">
-            <p className="text-base font-bold">Remove Face ID?</p>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              This turns off passwordless login on this device. You'll use the full login next time.
-            </p>
-            <div className="mt-5 flex gap-2.5">
-              <button
-                onClick={handleCancelRemove}
-                className="h-11 flex-1 rounded-full bg-foreground/[0.06] text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmRemove}
-                className="h-11 flex-1 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Remove Face ID?"
+          message="This turns off passwordless login on this device. You'll use the full login next time."
+          confirmLabel="Remove"
+          onCancel={handleCancelRemove}
+          onConfirm={handleConfirmRemove}
+        />
       )}
     </div>
   )

@@ -37,3 +37,22 @@ export function formatDate(iso) {
 export function formatMoney(value) {
   return Number(value ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+/**
+ * Groups a date-sorted transaction list into consecutive runs sharing the same `date` label, so a list
+ * can render a header before each run. Input is assumed newest-first, so same-date items are adjacent.
+ * @param {object[]} transactions
+ * @returns {{date: string, items: object[]}[]}
+ */
+export function groupByDate(transactions) {
+  const groups = []
+  for (const tx of transactions) {
+    const last = groups[groups.length - 1]
+    if (last && last.date === tx.date) {
+      last.items.push(tx)
+    } else {
+      groups.push({ date: tx.date, items: [tx] })
+    }
+  }
+  return groups
+}

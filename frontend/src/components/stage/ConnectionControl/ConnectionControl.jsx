@@ -37,7 +37,7 @@ export function ConnectionControl({ isOnline, onToggle, shouldNudge = false }) {
             </button>
           }
         />
-        <TooltipContent side="bottom" sideOffset={8} className="dark w-56 py-3">
+        <TooltipContent side="bottom" sideOffset={8} className="w-56 py-3">
           <div className="space-y-2.5">
             <WifiPulse />
             <p className="font-medium text-[13px]">Good moment to go offline!</p>

@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
-
 :root {
   color-scheme: light;
   --background: oklch(1.0000 0 0);
@@ -27,19 +25,6 @@
   --border: oklch(0.9417 0.0060 170.4415);
   --input: oklch(0.9417 0.0060 170.4415);
   --ring: oklch(0.8254 0.2367 148.3680);
-  --chart-1: oklch(0.8254 0.2367 148.3680);
-  --chart-2: oklch(0.4584 0.0963 165.0871);
-  --chart-3: oklch(0.2932 0.0500 186.4609);
-  --chart-4: oklch(0.5672 0.2264 259.6430);
-  --chart-5: oklch(0.9715 0.0268 182.4139);
-  --sidebar: oklch(0.9863 0.0025 165.0769);
-  --sidebar-foreground: oklch(0.2201 0.0440 230.1730);
-  --sidebar-primary: oklch(0.8254 0.2367 148.3680);
-  --sidebar-primary-foreground: oklch(0.2201 0.0440 230.1730);
-  --sidebar-accent: oklch(0.9417 0.0060 170.4415);
-  --sidebar-accent-foreground: oklch(0.4584 0.0963 165.0871);
-  --sidebar-border: oklch(0.9417 0.0060 170.4415);
-  --sidebar-ring: oklch(0.8254 0.2367 148.3680);
   --radius: 1rem;
   --shadow-2xs: 0px 4px 16px 0px hsl(198.1395 100.0000% 8.4314% / 0.02);
   --shadow-xs: 0px 4px 16px 0px hsl(198.1395 100.0000% 8.4314% / 0.02);
@@ -51,62 +36,6 @@
   --shadow-2xl: 0px 4px 16px 0px hsl(198.1395 100.0000% 8.4314% / 0.10);
   --tracking-normal: -0.02em;
   --spacing: 0.25rem;
-  --info: var(--color-blue-500);
-  --info-foreground: var(--color-blue-700);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-700);
-}
-
-.dark {
-  color-scheme: dark;
-  --background: oklch(0.2201 0.0440 230.1730);
-  --foreground: oklch(0.9863 0.0025 165.0769);
-  --card: oklch(0.2328 0.0476 232.2135);
-  --card-foreground: oklch(0.9863 0.0025 165.0769);
-  --popover: oklch(0.2328 0.0476 232.2135);
-  --popover-foreground: oklch(0.9863 0.0025 165.0769);
-  --primary: oklch(0.8254 0.2367 148.3680);
-  --primary-foreground: oklch(0.2201 0.0440 230.1730);
-  --secondary: oklch(0.4584 0.0963 165.0871);
-  --secondary-foreground: oklch(1.0000 0 0);
-  --muted: oklch(0.2954 0.0623 234.6227);
-  --muted-foreground: oklch(0.6556 0.0141 221.5114);
-  --accent: oklch(0.2954 0.0623 234.6227);
-  --accent-foreground: oklch(0.8254 0.2367 148.3680);
-  --destructive: oklch(0.6822 0.2063 24.4310);
-  --destructive-foreground: oklch(1.0000 0 0);
-  --positive: oklch(0.8254 0.2367 148.3680);
-  --positive-foreground: oklch(0.2201 0.0440 230.1730);
-  --warning: oklch(0.8000 0.1500 80.0000);
-  --warning-foreground: oklch(0.2201 0.0440 230.1730);
-  --border: oklch(0.2954 0.0623 234.6227);
-  --input: oklch(0.2954 0.0623 234.6227);
-  --ring: oklch(0.8254 0.2367 148.3680);
-  --chart-1: oklch(0.8254 0.2367 148.3680);
-  --chart-2: oklch(0.4584 0.0963 165.0871);
-  --chart-3: oklch(0.6283 0.1563 154.6897);
-  --chart-4: oklch(0.5672 0.2264 259.6430);
-  --chart-5: oklch(0.9863 0.0025 165.0769);
-  --sidebar: oklch(0.2201 0.0440 230.1730);
-  --sidebar-foreground: oklch(0.9863 0.0025 165.0769);
-  --sidebar-primary: oklch(0.8254 0.2367 148.3680);
-  --sidebar-primary-foreground: oklch(0.2201 0.0440 230.1730);
-  --sidebar-accent: oklch(0.2954 0.0623 234.6227);
-  --sidebar-accent-foreground: oklch(0.8254 0.2367 148.3680);
-  --sidebar-border: oklch(0.2954 0.0623 234.6227);
-  --sidebar-ring: oklch(0.8254 0.2367 148.3680);
-  --shadow-2xs: 0px 12px 24px 0px hsl(0 0% 0% / 0.20);
-  --shadow-xs: 0px 12px 24px 0px hsl(0 0% 0% / 0.20);
-  --shadow-sm: 0px 12px 24px 0px hsl(0 0% 0% / 0.40), 0px 1px 2px -1px hsl(0 0% 0% / 0.40);
-  --shadow: 0px 12px 24px 0px hsl(0 0% 0% / 0.40), 0px 1px 2px -1px hsl(0 0% 0% / 0.40);
-  --shadow-md: 0px 12px 24px 0px hsl(0 0% 0% / 0.40), 0px 2px 4px -1px hsl(0 0% 0% / 0.40);
-  --shadow-lg: 0px 12px 24px 0px hsl(0 0% 0% / 0.40), 0px 4px 6px -1px hsl(0 0% 0% / 0.40);
-  --shadow-xl: 0px 12px 24px 0px hsl(0 0% 0% / 0.40), 0px 8px 10px -1px hsl(0 0% 0% / 0.40);
-  --shadow-2xl: 0px 12px 24px 0px hsl(0 0% 0% / 1.00);
-  --info: var(--color-blue-500);
-  --info-foreground: var(--color-blue-400);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-400);
 }
 
 @theme inline {
@@ -133,19 +62,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 
   --font-sans: var(--font-sans);
 
@@ -169,10 +85,6 @@
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
   --tracking-wider: calc(var(--tracking-normal) + 0.05em);
   --tracking-widest: calc(var(--tracking-normal) + 0.1em);
-  --color-success-foreground: var(--success-foreground);
-  --color-success: var(--success);
-  --color-info-foreground: var(--info-foreground);
-  --color-info: var(--info);
 }
 
 @layer base {
@@ -225,40 +137,6 @@
   }
 }
 
-/* Bottom-sheet entrance (transaction detail). */
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-@keyframes scrim-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes sheet-down {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(100%);
-  }
-}
-@keyframes scrim-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
 /* Presenter tooltip */
 @keyframes wifi-state {
   0%,
@@ -292,5 +170,37 @@
   100% {
     opacity: 1;
     stroke-dashoffset: 0;
+  }
+}
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sheet-slide-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
