@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { cn } from '@/lib/utils'
+import { groupByDate } from '@/lib/wallet/format'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 const TX_SKELETON_ROWS = 4
 
@@ -33,25 +35,6 @@ const CTAS = [
 function formatBalance(value) {
   const [int, cents] = value.toFixed(2).split('.')
   return { int: int.replace(/\B(?=(\d{3})+(?!\d))/g, ','), cents }
-}
-
-/**
- * Groups a transaction list into runs of consecutive same-date entries, so the
- * Home preview can show a date header before each run.
- * @param {object[]} txs
- * @returns {{date: string, items: object[]}[]}
- */
-function groupByDate(txs) {
-  const groups = []
-  for (const tx of txs) {
-    const last = groups[groups.length - 1]
-    if (last && last.date === tx.date) {
-      last.items.push(tx)
-    } else {
-      groups.push({ date: tx.date, items: [tx] })
-    }
-  }
-  return groups
 }
 
 /**
@@ -129,10 +112,7 @@ export function HomeTab({
   const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
   const balance = formatBalance(primaryAccount?.balanceValue ?? 0)
   const groups = groupByDate((txState.data ?? []).slice(0, HOME_TX_PREVIEW))
-
-  let txEmptyMessage
-  if (txState.error) txEmptyMessage = "Couldn't load transactions"
-  else if (groups.length === 0) txEmptyMessage = 'No transactions yet'
+  const showTxEmpty = !txState.isLoading && groups.length === 0
 
   // Capture the intro decision once on mount so it can't flip mid-animation.
   const [animateHero] = useState(playHeroIntro)
@@ -237,9 +217,20 @@ export function HomeTab({
                   ))}
                 </div>
               )}
-              {!txState.isLoading && txEmptyMessage && (
-                <p className="px-1 py-6 text-center text-sm text-muted-foreground">{txEmptyMessage}</p>
-              )}
+              {showTxEmpty &&
+                (txState.error ? (
+                  <EmptyState
+                    glyph="Warning"
+                    title="Couldn't load transactions"
+                    subtitle="Check your connection and try again."
+                  />
+                ) : (
+                  <EmptyState
+                    glyph="CreditCard"
+                    title="No transactions yet"
+                    subtitle="Your payments and requests will show up here."
+                  />
+                ))}
               {!txState.isLoading &&
                 groups.map((group) => (
                 <div key={group.date} className="px-1">

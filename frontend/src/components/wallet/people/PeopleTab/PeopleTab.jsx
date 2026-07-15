@@ -3,8 +3,11 @@
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
+import { removeContact } from '@/lib/wallet/actions'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 const SKELETON_ROWS = 6
 
@@ -22,15 +25,22 @@ function ContactRowSkeleton() {
 }
 
 /**
- * The "People" tab: a searchable contact list where tapping a contact starts a send flow.
+ * The "People" tab: a searchable contact list where tapping a contact starts a send flow, plus adding
+ * (by a registered Leafy Pay email/phone) and removing saved contacts.
  * @param {object} props
  * @param {(contact: object) => void} props.onSendTo
+ * @param {() => void} props.onAddContact - Opens the add-contact sheet (rendered at the shell level).
  */
-export function PeopleTab({ onSendTo }) {
+export function PeopleTab({ onSendTo, onAddContact }) {
   const {
     contacts: { data, isLoading, error },
+    refresh,
   } = useWalletData()
   const [q, setQ] = useState('')
+  const [contactToRemove, setContactToRemove] = useState(null)
+  const [isRemoving, setIsRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState('')
+
   const contacts = data ?? []
   const query = q.trim().toLowerCase()
   const filtered = query
@@ -39,13 +49,40 @@ export function PeopleTab({ onSendTo }) {
       )
     : contacts
 
-  let emptyMessage
-  if (error) emptyMessage = "Couldn't load contacts"
-  else if (filtered.length === 0) emptyMessage = query ? 'No one found' : 'No contacts yet'
+  let empty = null
+  if (error) {
+    empty = { glyph: 'Warning', title: "Couldn't load contacts", subtitle: 'Check your connection and try again.' }
+  } else if (filtered.length === 0) {
+    empty = query
+      ? { glyph: 'MagnifyingGlass', title: 'No one found', subtitle: 'Try a different name, email, or phone.' }
+      : { glyph: 'Person', title: 'No contacts yet', subtitle: 'Tap + to add someone on Leafy Pay.' }
+  }
+
+  async function handleConfirmRemove() {
+    setRemoveError('')
+    setIsRemoving(true)
+    const res = await removeContact(contactToRemove.reference)
+    setIsRemoving(false)
+    if (res.ok) {
+      setContactToRemove(null)
+      refresh(['contacts'])
+    } else {
+      setRemoveError(res.error)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 px-4 pt-8 pb-6">
-      <h1 className="text-xl font-bold text-foreground">People</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-foreground">People</h1>
+        <button
+          onClick={onAddContact}
+          aria-label="Add contact"
+          className="grid size-9 place-items-center rounded-full bg-foreground text-background shadow-sm transition-opacity hover:opacity-90"
+        >
+          <Icon glyph="Plus" size={18} />
+        </button>
+      </div>
 
       <label className="flex h-11 items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 text-foreground shadow-sm">
         <span className="text-muted-foreground">
@@ -90,26 +127,42 @@ export function PeopleTab({ onSendTo }) {
             Array.from({ length: SKELETON_ROWS }).map((_, i) => <ContactRowSkeleton key={i} />)}
           {!isLoading &&
             filtered.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => onSendTo(c)}
-                className="flex w-full items-center gap-3 py-3.5 text-left"
-              >
-                <Peep seed={c.seed} bg={c.bg} size={44} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
-                </div>
-                <span className="text-muted-foreground">
-                  <Icon glyph="ChevronRight" size={18} />
-                </span>
-              </button>
+              <div key={c.id} className="flex items-center gap-3 py-3.5">
+                <button
+                  onClick={() => onSendTo(c)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <Peep seed={c.seed} bg={c.bg} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setContactToRemove(c)}
+                  aria-label={`Remove ${c.name}`}
+                  className="flex-none p-1 text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <Icon glyph="Trash" size={16} />
+                </button>
+              </div>
             ))}
-          {!isLoading && emptyMessage && (
-            <p className="py-10 text-center text-sm text-muted-foreground">{emptyMessage}</p>
-          )}
+          {!isLoading && empty && <EmptyState {...empty} />}
         </div>
       </section>
+
+      {contactToRemove && (
+        <ConfirmDialog
+          title={`Remove ${contactToRemove.name}?`}
+          message="They'll be removed from your saved contacts. You can add them again anytime."
+          error={removeError}
+          confirmLabel="Remove"
+          busyLabel="Removing…"
+          isBusy={isRemoving}
+          onCancel={() => setContactToRemove(null)}
+          onConfirm={handleConfirmRemove}
+        />
+      )}
     </div>
   )
 }

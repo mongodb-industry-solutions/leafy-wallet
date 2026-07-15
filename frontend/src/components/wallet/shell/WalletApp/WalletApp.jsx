@@ -11,6 +11,7 @@ import { AiTab } from '@/components/wallet/assistant/AiTab/AiTab'
 import { TxDetail } from '@/components/wallet/transactions/TxDetail/TxDetail'
 import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
+import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
 
 /**
  * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
@@ -28,6 +29,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   const [isSendOpen, setIsSendOpen] = useState(false)
   const [sendMode, setSendMode] = useState('send')
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [isAddContactOpen, setIsAddContactOpen] = useState(false)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
   // aurora intro plays once per login, not on every return to the Home tab.
   const heroIntroPlayedRef = useRef(false)
@@ -87,7 +89,12 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
                   />
                 )}
                 {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
-                {tab === 'people' && <PeopleTab onSendTo={(c) => handleOpenSend('send', c)} />}
+                {tab === 'people' && (
+                  <PeopleTab
+                    onSendTo={(c) => handleOpenSend('send', c)}
+                    onAddContact={() => setIsAddContactOpen(true)}
+                  />
+                )}
               </div>
             )}
 
@@ -104,6 +111,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
           />
         )}
         {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
+        {isAddContactOpen && <AddContactSheet onClose={() => setIsAddContactOpen(false)} />}
         {isProfileOpen && (
           <div className="absolute inset-0 z-40">
             <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />

@@ -119,6 +119,34 @@ export async function listTransactions() {
 }
 
 // ── Writes ───────────────────────────────────────────────────────────────────
+/**
+ * Save a beneficiary by resolving a registered Leafy Pay email/phone (scope `write:beneficiaries`).
+ * Leafy Pay is anti-enumeration: it returns `{ found: false }` (HTTP 200) both when no user matches and
+ * when the beneficiary already exists. On success it returns the arrangement reference, label, and a
+ * masked hint (never the raw value or the counterparty's identity).
+ * @returns {Promise<{found: boolean, beneficiary?: object}>}
+ */
+export async function createBeneficiary({ lookupType, lookupValue, label }) {
+  const body = { lookupType, lookupValue, ...(label ? { label } : {}) }
+  const data = await call('POST', '/api/v1/beneficiaries', body)
+  if (!data?.found) return { found: false }
+  return {
+    found: true,
+    beneficiary: {
+      reference: data.counterpartyArrangementReference,
+      label: data.counterpartyLabel,
+      lookupType, // the response omits the type; echo back what we sent
+      lookupHint: data.counterpartyLookupHint ?? '••••',
+      status: 'active',
+    },
+  }
+}
+
+/** Remove a saved beneficiary (scope `write:beneficiaries`). */
+export async function removeBeneficiary(reference) {
+  await call('DELETE', `/api/v1/beneficiaries/${encodeURIComponent(reference)}`)
+}
+
 /** Send a P2P transfer to a saved beneficiary (scope `write:transfers`). */
 export async function sendToBeneficiary(reference, { amount, currency = 'EUR', note }) {
   const body = { amount, currency, ...(note ? { note } : {}) }
