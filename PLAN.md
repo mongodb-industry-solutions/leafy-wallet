@@ -11,54 +11,31 @@ an **enrichment layer only** (display cache + one embedding field), keyed by Lea
 - **`leafy-local-store` (C++)** — on-device store + vector search (offline).
 - **`objectbox-sync-server`** — bridges ObjectBox → Atlas.
 
-## 1. Auth (port of `sec-fsi-pci-dss` `merchant/` reference into the Next app)
+## 1. Auth — ✅ Done (merged to main)
 
-Code layout:
-- `src/lib/auth/{oauth,session,env}.js` — `server-only`. `client_secret`, token exchange/refresh/CIBA,
-  id_token verify, AES-256-GCM cookie.
-- `src/lib/auth/authenticator.js` — browser WebCrypto ES256 key in IndexedDB + signing.
-- `src/lib/auth/actions.js` — Server Actions: `me`, `logout`, `enrollChallenge`, `enroll`,
-  `cibaStart`, `cibaChallenge`, `cibaApprove`, `cibaPoll`.
-- Route Handlers: `GET /api/auth/login`, `GET /api/auth/callback`.
-- `src/lib/psp/PspClient.js` — `server-only` Leafy Pay client (Bearer from session, refresh-on-401).
+SSO login, passwordless enrollment, FaceID/CIBA return, and single sign-out are implemented in the Next
+app. Code: `src/lib/auth/{env,session,oauth,actions,authenticator}.js` and the route handlers
+`src/app/api/auth/{login,callback,logout}`; wired via `useAuthGate`, `LoginScreen`,
+`FaceIdEntry`/`useCibaLogin`, and `ProfileScreen`/`usePasswordless`.
 
-### 1.1 OAuth client (already provisioned on Leafy Pay)
-- `grant_types`: `authorization_code`, `refresh_token`, `urn:openid:params:grant-type:ciba`
-- `scopes`: `openid profile email read:beneficiaries write:beneficiaries write:transfers read:accounts read:transactions`
-- `require_pkce: true`
-- `redirect_uris`: `http://localhost:3000/api/auth/callback`
-- User: `amara.okafor@back.es`
+Config in `frontend/.env.local` (gitignored, not `NEXT_PUBLIC_`): `CLIENT_ID`, `CLIENT_SECRET`,
+`PSP_BASE_URL` (**API/backend** host), `PSP_FRONTEND_URL` (**frontend** host), `SESSION_SECRET`,
+`APP_BASE_URL`, `REDIRECT_URI`. Leafy Pay splits auth across two hosts: the **frontend** host serves the
+browser pages `authorize` + `logout` (built directly from `PSP_FRONTEND_URL`, so starting login needs no
+server-side call); the **backend** host serves discovery + token/jwks/userinfo/revoke + the business API
+(resolved via `PSP_BASE_URL/.well-known/openid-configuration` at callback/refresh time). Session cookie:
+encrypted httpOnly AES-256-GCM `{accessToken, refreshToken, expiresAt, grantedScopes, sub, name, email}`.
 
-### 1.2 Frontend server env
-Values live in `frontend/.env.local` (gitignored, not `NEXT_PUBLIC_`) — deployed-staging URLs are kept
-out of this repo. Keys: `CLIENT_ID`, `CLIENT_SECRET`, `PSP_BASE_URL`, `SESSION_SECRET`, `APP_BASE_URL`,
-`REDIRECT_URI`. Authorize/token/jwks/userinfo/revoke resolved from
-`PSP_BASE_URL/.well-known/openid-configuration`.
+OAuth client: grant types `authorization_code` / `refresh_token` / `ciba`; 8 scopes
+(`openid profile email read:beneficiaries write:beneficiaries write:transfers read:accounts
+read:transactions`); `require_pkce`; `redirect_uris=http://localhost:3000/api/auth/callback`; demo user
+`amara.okafor@back.es`.
 
-### 1.3 First login (SSO)
-1. `GET /api/auth/login` → PKCE + state/nonce, set login-state cookie, redirect to authorize endpoint.
-2. User logs in on Leafy Pay.
-3. `GET /api/auth/callback?code&state` → verify state, exchange code (`client_secret_basic`), verify
-   id_token, set session cookie, redirect into app.
-
-### 1.4 Enable passwordless (Profile)
-1. WebCrypto ES256 keypair, private key non-extractable in IndexedDB.
-2. `enrollChallenge()` (Bearer from session) → sign locally → `enroll({challenge, publicKeyPem, alg,
-   signature, credentialId, authenticatorMetadata?})`.
-3. Save `{credentialId, alg, sub, email, createdAt}` to IndexedDB.
-
-Disable = delete IndexedDB key (local only, no server call).
-
-### 1.5 Return visit
-1. `hasCredential()` in IndexedDB?
-2. **Yes** → FaceID animation while CIBA runs: `cibaStart({login_hint_token})` → `cibaChallenge` →
-   sign → `cibaApprove` → poll `cibaPoll` until `done` (session cookie set). On approve 401/400 →
-   delete credential, fall to step 3.
-3. **No** → `GET /api/auth/login`.
-
-### 1.6 Session cookie
-Encrypted httpOnly AES-256-GCM, set by the Next app: `{accessToken, refreshToken, expiresAt,
-grantedScopes, sub, name, email}`. Refresh silently on 401 via `refresh_token`.
+**Known blocker (infra, not code):** the deployed staging host sits behind MongoDB corp SSO
+(`login.corp.mongodb.com`), which only browsers pass. The server-side token exchange can't cross it from
+a dev laptop, so end-to-end login isn't yet runnable locally. Unblock via `kubectl port-forward` to the
+backend, a corp service token/cookie, or a local Leafy Pay. The code is complete and works once the API
+is reachable server-side.
 
 ## 2. Data models
 
@@ -85,23 +62,34 @@ struct LocalTransaction { int64_t id; std::string local_id, counterparty_arrange
 struct LocalWalletSnapshot { int64_t id; double balance; std::string currency; int64_t last_refreshed_at; }; // singleton
 ```
 
+### 2.3 Leafy Pay read entities (source of truth — `sec-fsi-pci-dss` docs/technical-spec.md §1.17)
+Fields the read layer maps (list responses are `{ results, total, page, limit }`):
+- **Accounts** `GET /api/v1/accounts` → `payoutAccountArrangement` (SD-66): `payoutAccountInstanceReference`,
+  `payoutAccountAlias`/`payoutAccountBankName`, `payoutAccountCurrency`, `payoutAccountIsDefault`,
+  `payoutAccountMaskedIban` (raw IBAN stripped in list views), `payoutAccountBalance.availableAmount`.
+- **Beneficiaries** `GET /api/v1/beneficiaries` → `counterpartyArrangement` (SD-54):
+  `counterpartyArrangementReference`, `counterpartyLabel`, `counterpartyLookupType` (phone|email),
+  `counterpartyLookupHint` (masked), `counterpartyArrangementStatus`.
+- **Transactions** `GET /api/v1/transactions` → `paymentExecutionProcedure` (SD-65):
+  `paymentExecutionInstanceReference`, `beneficiaryArrangementReference` (→ beneficiary),
+  `beneficiaryName`/`destinationAccountMasked`, `grossAmount`, `currency`, `paymentExecutionStatus`,
+  `paymentExecutionRemittanceInformation` (the P2P note), `completedAt`/`initiatedAt`.
+
 ## 3. API contracts
 
 ### 3.1 Frontend auth (Next app) — see §1 code layout
 Route Handlers `GET /api/auth/login`, `GET /api/auth/callback`; Server Actions `me`, `logout`,
 `enrollChallenge`, `enroll`, `cibaStart`, `cibaChallenge`, `cibaApprove`, `cibaPoll`.
 
-### 3.2 Backend (FastAPI) — enrichment/AI only, scoped by `owner` (OAuth `sub`)
+### 3.2 Backend (FastAPI) — enrichment/AI only, scoped by `ownerPartyRef` (OAuth `sub`)
+Implemented on main. Notes auto-embedded via Ollama on create; queried by `ownerPartyRef`.
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/enrichment/contacts?owner=` | `walletContacts` for owner |
-| `POST` | `/api/v1/enrichment/contacts` | Upsert cache doc |
-| `DELETE` | `/api/v1/enrichment/contacts/{ref}` | Remove cache doc |
-| `GET` | `/api/v1/enrichment/transactions?owner=` | Notes/status/embeddings |
-| `POST` | `/api/v1/enrichment/transactions` | Write enrichment doc |
-| `GET` | `/api/v1/enrichment/transactions/search?owner=&q=` | Vector search over `noteEmbedding` |
-| `POST` | `/api/v1/embeddings` | Embed a note (Grove Gateway/Ollama) |
-| `*` | `/mcp` | Agent tool `search_transactions` (vector search) |
+| `GET`/`POST` | `/api/v1/wallet-contacts` | List (`?ownerPartyRef=`) / create `walletContacts` |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/wallet-contacts/{id}` | Get / update / remove |
+| `GET`/`POST` | `/api/v1/wallet-transactions` | List (`?ownerPartyRef=&direction=&leafyPayStatus=`) / create (auto-embeds note) |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/wallet-transactions/{id}` | Get / update / remove |
+| `GET` | `/api/v1/wallet-transactions/search?q=&ownerPartyRef=` | Vector search over `noteEmbedding` |
 
 ### 3.3 `leafy-local-store`
 | Method | Path | Purpose |
@@ -144,6 +132,29 @@ Route Handlers `GET /api/auth/login`, `GET /api/auth/callback`; Server Actions `
   via frontend PspClient. Inference via Grove Gateway/Ollama.
 - **AI (offline)**: LangGraph.js → local-store tools + Ollama.
 
-## 5. Scope now
-Auth only (§1): login, session, passwordless enroll, FaceID/CIBA return, logout. Contacts/transactions/
-send/AI stay mocked (`wallet-data.js`) until wired later.
+## 5. Status / next
+
+- **Done:** Auth (§1), merged to main. Backend enrichment layer (§3.2), on main.
+- **Done (reads):** read data layer, field-mapped from docs/technical-spec.md §1.17 (§2.3). Pattern:
+  read Leafy Pay (base, source of truth) **in parallel with** its Atlas enrichment, merged.
+  `src/lib/psp/PspClient.js` (server-only, Bearer + refresh-on-401: `listAccounts`/`listBeneficiaries`/
+  `listTransactions`), `src/lib/backend/enrichment.js` (Atlas note/embedding), Server Actions
+  `src/lib/wallet/actions.js` (`getAccounts`/`getContacts`/`getTransactions`), `src/lib/wallet/format.js`,
+  `src/lib/hooks/useAsync.js`. `getTransactions` merges the Atlas note by `leafyPayTransferReference`
+  (Leafy Pay `paymentExecutionRemittanceInformation` is the fallback). Home / People / Activity render
+  real data (mock `wallet-data.js` reads removed). Contacts have no distinct display enrichment today,
+  so `getContacts` reads Leafy Pay only (the Atlas `walletContacts` is the offline replica).
+- **Done (send write):** `sendMoney` — Leafy Pay `POST /beneficiaries/{ref}/transfer` in parallel with
+  the Atlas note write-back (`createTransactionEnrichment`, embedded by Ollama). Send flow wired to real
+  balance + real contacts (RecipientStep) + real submit (loading/error). Profile linked-account IBAN
+  reads real accounts.
+- **Still mocked** (`wallet-data.js`): AI chat only (chart data, sample queries, intent parsing,
+  action-card draft) + a `WalletApp` user fallback.
+
+**Next:**
+1. Add-contact write (`POST /beneficiaries` + `walletContacts` write-back) — needs a small add-contact UI.
+2. AI chat — `useAiChat` over the real Server Actions + `wallet-transactions/search` (Atlas).
+3. Offline: `leafy-local-store` + ObjectBox sync (§2.2, §3.3); the send flow's offline "saved" branch is
+   the placeholder.
+
+All Leafy Pay reads depend on the §1 corp-gate blocker being resolved for end-to-end testing (in progress).

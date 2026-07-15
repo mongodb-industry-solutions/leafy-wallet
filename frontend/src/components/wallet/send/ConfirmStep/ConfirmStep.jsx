@@ -23,10 +23,28 @@ function Row({ label, value }) {
  * @param {object} props.recipient
  * @param {string} props.note
  * @param {string} props.remaining - Formatted balance remaining after this send.
+ * @param {boolean} [props.isSubmitting] - The transfer is in flight.
+ * @param {string} [props.error] - A failure message to surface.
  * @param {() => void} props.onBack
  * @param {() => void} props.onSubmit
  */
-export function ConfirmStep({ display, symbol, isRequest, recipient, note, remaining, onBack, onSubmit }) {
+export function ConfirmStep({
+  display,
+  symbol,
+  isRequest,
+  recipient,
+  note,
+  remaining,
+  isSubmitting,
+  error,
+  onBack,
+  onSubmit,
+}) {
+  let submitLabel
+  if (isSubmitting) submitLabel = 'Sending…'
+  else if (isRequest) submitLabel = `Request ${symbol}${display}`
+  else submitLabel = `Send ${symbol}${display}`
+
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
@@ -70,11 +88,13 @@ export function ConfirmStep({ display, symbol, isRequest, recipient, note, remai
       </div>
 
       <div className="px-4 pt-2 pb-6">
+        {error && <p className="mb-2 text-center text-sm text-destructive">{error}</p>}
         <button
           onClick={onSubmit}
-          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
+          disabled={isSubmitting}
+          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-60"
         >
-          {isRequest ? `Request ${symbol}${display}` : `Send ${symbol}${display}`}
+          {submitLabel}
         </button>
       </div>
     </div>

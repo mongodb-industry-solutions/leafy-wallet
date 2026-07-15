@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { BALANCE, TRANSACTIONS } from '@/lib/wallet-data'
+import { cn } from '@/lib/utils'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
-import { TxRow } from '@/components/wallet/transactions/TxRow/TxRow'
+import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
+import { Skeleton } from '@/components/ui/Skeleton'
+
+const TX_SKELETON_ROWS = 4
 
 const EU_STAR_COUNT = 12
 const EU_BLUE = '#003399'
 const EU_GOLD = '#FFCC00'
-
-const ACCOUNTS = [{ code: 'EUR', label: 'EURO account', last4: '7523', amount: '12,458.32' }]
+const HOME_TX_PREVIEW = 6
 
 // Send/Chat are short enough to pair with an icon. Request is left text-only
 // so the longer word keeps even padding inside its pill.
@@ -81,6 +84,20 @@ function EuFlag({ size = 40 }) {
   )
 }
 
+/** Placeholder card matching an account card's layout, shown while accounts load. */
+function AccountCardSkeleton() {
+  return (
+    <div className="flex w-[86%] flex-none items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <Skeleton className="size-10 flex-none rounded-full" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <Skeleton className="h-4 w-20" />
+    </div>
+  )
+}
+
 /**
  * The "Home" tab: gradient hero, total balance, the EUR account card,
  * Send/Request/Chat shortcuts, and a date-grouped preview of recent transactions.
@@ -107,8 +124,15 @@ export function HomeTab({
   onHeroIntroPlayed,
 }) {
   const onCta = { send: onSend, request: onRequest, chat: () => onSetTab('ai') }
-  const balance = formatBalance(BALANCE)
-  const groups = groupByDate(TRANSACTIONS)
+  const { accounts: accountsState, transactions: txState } = useWalletData()
+  const accounts = accountsState.data ?? []
+  const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
+  const balance = formatBalance(primaryAccount?.balanceValue ?? 0)
+  const groups = groupByDate((txState.data ?? []).slice(0, HOME_TX_PREVIEW))
+
+  let txEmptyMessage
+  if (txState.error) txEmptyMessage = "Couldn't load transactions"
+  else if (groups.length === 0) txEmptyMessage = 'No transactions yet'
 
   // Capture the intro decision once on mount so it can't flip mid-animation.
   const [animateHero] = useState(playHeroIntro)
@@ -149,29 +173,45 @@ export function HomeTab({
 
         {/* pt pushes the balance down into the white area near the gradient tail. */}
         <div className="flex flex-col gap-6 px-4 pt-32 pb-6">
-          <div className="flex items-baseline tracking-[-0.06em] tabular-nums">
-            <span className="text-[2.4rem] font-normal leading-none">€</span>
-            <span className="text-[2.4rem] font-bold leading-none">{balance.int}</span>
-            <span className="text-[2.4rem] font-bold leading-none text-muted-foreground/70">
-              .{balance.cents}
-            </span>
-          </div>
+          {accountsState.isLoading ? (
+            <Skeleton className="h-[2.4rem] w-52" />
+          ) : (
+            <div className="flex items-baseline tracking-[-0.06em] tabular-nums">
+              <span className="text-[2.4rem] font-normal leading-none">€</span>
+              <span className="text-[2.4rem] font-bold leading-none">{balance.int}</span>
+              <span className="text-[2.4rem] font-bold leading-none text-muted-foreground/70">
+                .{balance.cents}
+              </span>
+            </div>
+          )}
 
-          {/* Account card + shortcuts kept close together. */}
+          {/* Account cards (horizontal, scrollable) + shortcuts kept close together. */}
           <div className="flex flex-col gap-3">
-            {ACCOUNTS.map((acct) => (
-              <div
-                key={acct.code}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm"
-              >
-                <EuFlag size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground">{acct.label}</p>
-                  <p className="text-xs font-medium tracking-tight text-muted-foreground tabular-nums">•••• {acct.last4}</p>
-                </div>
-                <span className="text-sm font-bold tabular-nums text-foreground">{acct.amount} €</span>
+            {accountsState.isLoading ? (
+              <div className="-mx-4 flex gap-3 overflow-hidden px-4">
+                <AccountCardSkeleton />
+                <AccountCardSkeleton />
               </div>
-            ))}
+            ) : (
+              <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-pl-4 px-4">
+                {accounts.map((acct) => (
+                  <div
+                    key={acct.reference}
+                    className={cn(
+                      'flex flex-none snap-start items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm',
+                      accounts.length > 1 ? 'w-[86%]' : 'w-full',
+                    )}
+                  >
+                    <EuFlag size={40} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{acct.label}</p>
+                      <p className="text-xs font-medium tracking-tight text-muted-foreground tabular-nums">•••• {acct.last4}</p>
+                    </div>
+                    <span className="whitespace-nowrap text-sm font-bold tabular-nums text-foreground">{acct.amount} €</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex gap-2.5">
               {CTAS.map(({ id, label, glyph }) => (
@@ -190,7 +230,18 @@ export function HomeTab({
           <section className="flex flex-col gap-3">
             <h2 className="text-base font-bold text-foreground">Transactions</h2>
             <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
-              {groups.map((group) => (
+              {txState.isLoading && (
+                <div className="flex flex-col divide-y divide-border px-1">
+                  {Array.from({ length: TX_SKELETON_ROWS }).map((_, i) => (
+                    <TxRowSkeleton key={i} />
+                  ))}
+                </div>
+              )}
+              {!txState.isLoading && txEmptyMessage && (
+                <p className="px-1 py-6 text-center text-sm text-muted-foreground">{txEmptyMessage}</p>
+              )}
+              {!txState.isLoading &&
+                groups.map((group) => (
                 <div key={group.date} className="px-1">
                   <p className="pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {group.date}

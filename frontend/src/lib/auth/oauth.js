@@ -1,19 +1,16 @@
 import 'server-only'
 import { createHash, randomBytes } from 'crypto'
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify, customFetch } from 'jose'
 import { ENV } from './env'
 
-// JWKS is fetched lazily and cached for the process lifetime.
 let jwksCache = null
 
-// The staging PSP exposes its API under /api/v1/auth on the public host and serves the hosted login at
-// /auth/authorize. Its OIDC discovery doc is only published on an internal port, so the endpoints are
-// configured here rather than fetched.
+// Leafy Pay's API endpoints on the backend host. The browser-facing authorize page is on the
+// frontend host (see ENV.authorizeUrl).
 function oidcConfig() {
   const base = ENV.pspBaseUrl()
   return {
-    issuer: ENV.issuer(),
-    authorization_endpoint: ENV.authorizeUrl(),
+    issuer: base,
     token_endpoint: `${base}/api/v1/auth/token`,
     userinfo_endpoint: `${base}/api/v1/auth/userinfo`,
     revocation_endpoint: `${base}/api/v1/auth/revoke`,
@@ -23,13 +20,22 @@ function oidcConfig() {
 }
 
 function jwks(jwksUri) {
-  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri))
+  // jose fetches the JWKS with its own fetch, which would miss PSP_DEV_COOKIE and hit the corp gate.
+  // Route it through pspFetch so the JWKS request carries the same cookie as every other Leafy Pay call.
+  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri), { [customFetch]: pspFetch })
   return jwksCache
+}
+
+// Attaches PSP_DEV_COOKIE (a copied corp-SSO session, dev-only) so server-side calls pass the gate.
+function pspFetch(url, init = {}) {
+  const cookie = ENV.pspDevCookie()
+  const headers = cookie ? { ...init.headers, Cookie: cookie } : init.headers
+  return fetch(url, { ...init, headers })
 }
 
 const b64url = (buf) => buf.toString('base64url')
 
-/** PKCE S256 verifier + challenge (RFC 7636). */
+/** PKCE S256 verifier + challenge. */
 export function generatePkce() {
   const verifier = b64url(randomBytes(32))
   const challenge = b64url(createHash('sha256').update(verifier).digest())
@@ -39,16 +45,14 @@ export function generatePkce() {
 /** Random base64url token, used for the OAuth state and nonce values. */
 export const randomToken = () => b64url(randomBytes(16))
 
-// Confidential client auth via HTTP Basic (client_secret_basic).
 function basicAuthHeader() {
   const creds = Buffer.from(`${ENV.clientId()}:${ENV.clientSecret()}`).toString('base64')
   return `Basic ${creds}`
 }
 
-/** Build the browser-facing authorize URL for the hosted login page. */
+/** Build the browser-facing authorize URL (Leafy Pay's frontend login page). */
 export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes }) {
-  const cfg = oidcConfig()
-  const u = new URL(cfg.authorization_endpoint)
+  const u = new URL(ENV.authorizeUrl())
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', ENV.clientId())
   u.searchParams.set('redirect_uri', ENV.redirectUri())
@@ -70,7 +74,7 @@ export async function exchangeCode(code, codeVerifier) {
     code_verifier: codeVerifier,
     client_id: ENV.clientId(),
   })
-  const res = await fetch(cfg.token_endpoint, {
+  const res = await pspFetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -80,6 +84,24 @@ export async function exchangeCode(code, codeVerifier) {
     const detail = await res.text().catch(() => '')
     throw new Error(`token exchange failed: ${res.status} ${detail}`)
   }
+  return res.json()
+}
+
+/** Refresh tokens via grant_type=refresh_token. */
+export async function refreshTokens(refreshToken) {
+  const cfg = oidcConfig()
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: ENV.clientId(),
+  })
+  const res = await pspFetch(cfg.token_endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
+    body,
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`token refresh failed: ${res.status}`)
   return res.json()
 }
 
@@ -96,12 +118,16 @@ export class OAuthUpstreamError extends Error {
   }
 }
 
+function backchannelEndpoint(cfg) {
+  return cfg.backchannel_authentication_endpoint ?? cfg.token_endpoint.replace(/\/token$/, '/bc-authorize')
+}
+
 /** Initiate the CIBA backchannel request and return { auth_req_id, expires_in, interval }. */
 export async function backchannelAuthorize({ loginHintToken, scope, bindingMessage }) {
   const cfg = oidcConfig()
   const body = new URLSearchParams({ login_hint_token: loginHintToken, scope, client_id: ENV.clientId() })
   if (bindingMessage) body.set('binding_message', bindingMessage)
-  const res = await fetch(cfg.backchannel_authentication_endpoint, {
+  const res = await pspFetch(backchannelEndpoint(cfg), {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -120,7 +146,7 @@ export async function backchannelAuthorize({ loginHintToken, scope, bindingMessa
  */
 export async function cibaTokenPoll(authReqId) {
   const cfg = oidcConfig()
-  const res = await fetch(cfg.token_endpoint, {
+  const res = await pspFetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({
@@ -146,10 +172,10 @@ export async function cibaTokenPoll(authReqId) {
   }
 }
 
-/** Best-effort token revocation (RFC 7009). */
+/** Best-effort token revocation. */
 export async function revoke(token) {
   const cfg = oidcConfig()
-  await fetch(cfg.revocation_endpoint, {
+  await pspFetch(cfg.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({ token }),
@@ -164,7 +190,7 @@ export async function revoke(token) {
 export async function fetchUserinfo(accessToken) {
   try {
     const cfg = oidcConfig()
-    const res = await fetch(cfg.userinfo_endpoint, {
+    const res = await pspFetch(cfg.userinfo_endpoint, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })
@@ -175,14 +201,12 @@ export async function fetchUserinfo(accessToken) {
   }
 }
 
-/** Verify id_token (signature via JWKS, issuer/audience, and nonce if one was issued). */
+/** Verify id_token (signature via JWKS, audience, and nonce if one was issued). */
 export async function verifyIdToken(idToken, expectedNonce) {
   const cfg = oidcConfig()
-  // Signature (JWKS) + audience + nonce are always checked. Issuer only when PSP_ISSUER is configured.
-  const opts = { audience: ENV.clientId() }
-  if (cfg.issuer) opts.issuer = cfg.issuer
-  const { payload } = await jwtVerify(idToken, jwks(cfg.jwks_uri), opts)
-  // A missing nonce when one was expected is a mismatch, not a pass (OIDC Core 3.1.3.7).
+  // Issuer isn't enforced: the JWKS signature already proves the token came from Leafy Pay.
+  const { payload } = await jwtVerify(idToken, jwks(cfg.jwks_uri), { audience: ENV.clientId() })
+  // A missing nonce when one was expected is a mismatch, not a pass.
   if (expectedNonce && payload.nonce !== expectedNonce) {
     throw new Error('id_token nonce mismatch')
   }

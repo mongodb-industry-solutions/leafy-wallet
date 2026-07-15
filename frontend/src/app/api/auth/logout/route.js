@@ -1,6 +1,7 @@
-// GET /api/auth/logout. Single sign-out that bumps the Leafy Pay session epoch (invalidating the
-// user's outstanding session tokens), revokes our tokens, clears our session cookie, and
-// front-channels through Leafy Pay's logout page so its portal cookie (demo_token) is cleared too.
+// GET /api/auth/logout. Single sign-out: bumps the Leafy Pay session epoch (invalidating the user's
+// outstanding session tokens) and revokes our tokens server-side, then clears our session cookie and
+// returns to the app. We don't front-channel through Leafy Pay's logout page: it doesn't honour a
+// post-logout redirect back to localhost, so it would strand the user on the PSP frontend.
 import { NextResponse } from 'next/server'
 import { getSession, clearSessionOn } from '@/lib/auth/session'
 import { revoke } from '@/lib/auth/oauth'
@@ -30,11 +31,7 @@ async function handle() {
     }
   }
 
-  // Front-channel: bounce through Leafy Pay's logout page to clear its portal cookie same-origin,
-  // then it redirects back to the app.
-  const back = new URL('/', ENV.appBaseUrl()).toString()
-  const pspLogout = `${ENV.pspBaseUrl()}/auth/logout?redirect=${encodeURIComponent(back)}`
-  const res = NextResponse.redirect(pspLogout)
+  const res = NextResponse.redirect(new URL('/', ENV.appBaseUrl()))
   clearSessionOn(res)
   return res
 }

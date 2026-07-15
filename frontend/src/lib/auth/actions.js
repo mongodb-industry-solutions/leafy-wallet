@@ -14,8 +14,10 @@ import {
 const localPart = (v) => (v && v.includes('@') ? v.split('@')[0] : v)
 
 /** Relay a request to Leafy Pay and return { res, data } with the body parsed as JSON. */
-async function pspFetch(path, init) {
-  const res = await fetch(`${ENV.pspBaseUrl()}${path}`, { cache: 'no-store', ...init })
+async function pspFetch(path, init = {}) {
+  const cookie = ENV.pspDevCookie()
+  const headers = cookie ? { ...init.headers, Cookie: cookie } : init.headers
+  const res = await fetch(`${ENV.pspBaseUrl()}${path}`, { cache: 'no-store', ...init, headers })
   const text = await res.text()
   let data
   try {

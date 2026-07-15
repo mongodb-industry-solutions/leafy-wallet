@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { APP_USERS } from '@/lib/wallet-data'
+import { WalletDataProvider } from '@/lib/wallet/WalletDataProvider'
 import { BottomNav } from '@/components/wallet/shell/BottomNav/BottomNav'
 import { HomeTab } from '@/components/wallet/home/HomeTab/HomeTab'
 import { ActivityTab } from '@/components/wallet/activity/ActivityTab/ActivityTab'
@@ -62,51 +63,53 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   }, [])
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
-      {!isSendOpen && (
-        <>
-          {/* Home has its own gradient hero (with the profile menu). Activity /
-              People / Chat stand on their own titles, no top bar. */}
-          {tab === 'ai' ? (
-            <AiTab />
-          ) : (
-            <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24">
-              {tab === 'home' && (
-                <HomeTab
-                  user={user}
-                  onSignOut={onSignOut}
-                  onProfile={() => setIsProfileOpen(true)}
-                  onSetTab={setTab}
-                  onDetail={setDetail}
-                  onSend={() => handleOpenSend('send')}
-                  onRequest={() => handleOpenSend('request')}
-                  playHeroIntro={!heroIntroPlayedRef.current}
-                  onHeroIntroPlayed={handleHeroIntroPlayed}
-                />
-              )}
-              {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
-              {tab === 'people' && <PeopleTab onSendTo={(c) => handleOpenSend('send', c)} />}
-            </div>
-          )}
+    <WalletDataProvider isOnline={isOnline}>
+      <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
+        {!isSendOpen && (
+          <>
+            {/* Home has its own gradient hero (with the profile menu). Activity /
+                People / Chat stand on their own titles, no top bar. */}
+            {tab === 'ai' ? (
+              <AiTab />
+            ) : (
+              <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24">
+                {tab === 'home' && (
+                  <HomeTab
+                    user={user}
+                    onSignOut={onSignOut}
+                    onProfile={() => setIsProfileOpen(true)}
+                    onSetTab={setTab}
+                    onDetail={setDetail}
+                    onSend={() => handleOpenSend('send')}
+                    onRequest={() => handleOpenSend('request')}
+                    playHeroIntro={!heroIntroPlayedRef.current}
+                    onHeroIntroPlayed={handleHeroIntroPlayed}
+                  />
+                )}
+                {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
+                {tab === 'people' && <PeopleTab onSendTo={(c) => handleOpenSend('send', c)} />}
+              </div>
+            )}
 
-          <BottomNav tab={tab} setTab={setTab} />
-        </>
-      )}
+            <BottomNav tab={tab} setTab={setTab} />
+          </>
+        )}
 
-      {isSendOpen && (
-        <SendFlow
-          initialContact={sendContact || undefined}
-          initialMode={sendMode}
-          isOnline={isOnline}
-          onClose={handleCloseSend}
-        />
-      )}
-      {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
-      {isProfileOpen && (
-        <div className="absolute inset-0 z-40">
-          <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />
-        </div>
-      )}
-    </div>
+        {isSendOpen && (
+          <SendFlow
+            initialContact={sendContact || undefined}
+            initialMode={sendMode}
+            isOnline={isOnline}
+            onClose={handleCloseSend}
+          />
+        )}
+        {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
+        {isProfileOpen && (
+          <div className="absolute inset-0 z-40">
+            <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />
+          </div>
+        )}
+      </div>
+    </WalletDataProvider>
   )
 }
