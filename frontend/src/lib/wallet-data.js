@@ -9,18 +9,8 @@ export const APP_USERS = [
   { id: 'u4', name: 'Sam Rivera', email: 'sam.rivera@leafymail.com', seed: 'sam-lp', bg: '34d399' },
 ]
 
-// Primary account balance (EUR), numeric, the source for "remaining" math.
+// Primary account balance (EUR), numeric. Still used by the AI action-card mock (draft "remaining" math).
 export const BALANCE = 12458.32
-
-// The SSO-linked Leafy Pay account, surfaced (masked) on the Profile screen.
-export const LINKED_ACCOUNT = {
-  provider: 'Leafy Pay',
-  maskedIban: 'IE•• •••• •••• •• 7523',
-  currency: 'EUR',
-}
-
-// The wallet's single account currency (EUR).
-export const ACCOUNT_CURRENCY = { code: 'EUR', symbol: '€', balance: '12,458.32' }
 
 export const CONTACTS = [
   { id: 'c1', name: 'Maria Garcia', lookupType: 'email', lookupHint: 'm•••@gmail.com', seed: 'maria-lp', bg: 'ede9fe' },

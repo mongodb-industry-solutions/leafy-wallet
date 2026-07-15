@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { CONTACTS } from '@/lib/wallet-data'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 import { IconButton } from '@/components/ui/IconButton'
 
@@ -31,13 +31,15 @@ export function RecipientStep({
   onBack,
   onNext,
 }) {
+  const { contacts: contactsState } = useWalletData()
+  const contacts = contactsState.data ?? []
   const [search, setSearch] = useState('')
   const query = search.trim().toLowerCase()
   const filtered = query
-    ? CONTACTS.filter(
+    ? contacts.filter(
         (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
       )
-    : CONTACTS
+    : contacts
 
   function handleSelectRecipient(c) {
     setRecipient(c)

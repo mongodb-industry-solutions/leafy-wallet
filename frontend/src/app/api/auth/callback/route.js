@@ -25,7 +25,6 @@ export async function GET(req) {
   const state = searchParams.get('state')
   const login = readLoginState(req)
 
-  // CSRF: state must match the value issued at /login.
   if (!code || !login || !state || state !== login.state) return fail('invalid_state')
 
   try {

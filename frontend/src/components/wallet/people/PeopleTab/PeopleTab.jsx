@@ -2,9 +2,24 @@
 
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { getContacts } from '@/lib/wallet/actions'
-import { useAsync } from '@/lib/hooks/useAsync'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
+import { Skeleton } from '@/components/ui/Skeleton'
+
+const SKELETON_ROWS = 6
+
+/** Placeholder row matching a contact row's layout, shown while contacts load. */
+function ContactRowSkeleton() {
+  return (
+    <div className="flex w-full items-center gap-3 py-3.5">
+      <Skeleton className="size-11 flex-none rounded-full" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-3.5 w-1/3" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+    </div>
+  )
+}
 
 /**
  * The "People" tab: a searchable contact list where tapping a contact starts a send flow.
@@ -12,7 +27,9 @@ import { Peep } from '@/components/common/Peep/Peep'
  * @param {(contact: object) => void} props.onSendTo
  */
 export function PeopleTab({ onSendTo }) {
-  const { data, isLoading, error } = useAsync(getContacts)
+  const {
+    contacts: { data, isLoading, error },
+  } = useWalletData()
   const [q, setQ] = useState('')
   const contacts = data ?? []
   const query = q.trim().toLowerCase()
@@ -23,8 +40,7 @@ export function PeopleTab({ onSendTo }) {
     : contacts
 
   let emptyMessage
-  if (isLoading) emptyMessage = 'Loading…'
-  else if (error) emptyMessage = "Couldn't load contacts"
+  if (error) emptyMessage = "Couldn't load contacts"
   else if (filtered.length === 0) emptyMessage = query ? 'No one found' : 'No contacts yet'
 
   return (
@@ -70,23 +86,26 @@ export function PeopleTab({ onSendTo }) {
           {query ? 'Results' : 'All people'}
         </p>
         <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
-          {filtered.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => onSendTo(c)}
-              className="flex w-full items-center gap-3 py-3.5 text-left"
-            >
-              <Peep seed={c.seed} bg={c.bg} size={44} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
-              </div>
-              <span className="text-muted-foreground">
-                <Icon glyph="ChevronRight" size={18} />
-              </span>
-            </button>
-          ))}
-          {emptyMessage && (
+          {isLoading &&
+            Array.from({ length: SKELETON_ROWS }).map((_, i) => <ContactRowSkeleton key={i} />)}
+          {!isLoading &&
+            filtered.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onSendTo(c)}
+                className="flex w-full items-center gap-3 py-3.5 text-left"
+              >
+                <Peep seed={c.seed} bg={c.bg} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
+                </div>
+                <span className="text-muted-foreground">
+                  <Icon glyph="ChevronRight" size={18} />
+                </span>
+              </button>
+            ))}
+          {!isLoading && emptyMessage && (
             <p className="py-10 text-center text-sm text-muted-foreground">{emptyMessage}</p>
           )}
         </div>

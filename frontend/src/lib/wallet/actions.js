@@ -1,8 +1,8 @@
 'use server'
 
 import { getSession } from '@/lib/auth/session'
-import { listAccounts, listBeneficiaries, listTransactions } from '@/lib/psp/PspClient'
-import { listTransactionEnrichment } from '@/lib/backend/enrichment'
+import { listAccounts, listBeneficiaries, listTransactions, sendToBeneficiary } from '@/lib/psp/PspClient'
+import { listTransactionEnrichment, createTransactionEnrichment } from '@/lib/backend/enrichment'
 import { avatarFor, formatDate, formatMoney } from './format'
 
 async function ownerRef() {
@@ -23,6 +23,7 @@ export async function getAccounts() {
     reference: a.reference,
     label: a.label,
     currency: a.currency,
+    maskedIban: a.maskedIban,
     last4: last4Of(a.maskedIban),
     amount: formatMoney(a.balanceValue),
     balanceValue: a.balanceValue,
@@ -81,4 +82,38 @@ export async function getTransactions() {
 
   rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
   return rows
+}
+
+/**
+ * Send a P2P transfer: Leafy Pay moves the money (base), then the note is written to Atlas in parallel
+ * so it gets embedded for search. The Atlas write is best-effort (money already moved).
+ * @param {{counterpartyArrangementReference: string, amount: number, note?: string}} input
+ * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
+ */
+export async function sendMoney({ counterpartyArrangementReference, amount, note = '' }) {
+  if (!counterpartyArrangementReference || !(amount > 0)) {
+    return { ok: false, error: 'A recipient and an amount are required' }
+  }
+  let transfer
+  try {
+    transfer = await sendToBeneficiary(counterpartyArrangementReference, { amount, note })
+  } catch (e) {
+    return { ok: false, error: e?.body || 'Transfer failed. Please try again.' }
+  }
+
+  const owner = await ownerRef()
+  if (transfer.reference && owner) {
+    // Best-effort: the money has moved regardless of whether the note gets embedded.
+    await createTransactionEnrichment({
+      leafyPayTransferReference: transfer.reference,
+      ownerPartyRef: owner,
+      counterpartyArrangementReference,
+      amount: { value: amount, currency: 'EUR' },
+      note: note || null,
+      direction: 'sent',
+      leafyPayStatus: transfer.status === 'completed' ? 'settled' : 'pending',
+    }).catch(() => {})
+  }
+
+  return { ok: true, reference: transfer.reference, status: transfer.status }
 }

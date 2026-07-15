@@ -1,12 +1,14 @@
 'use client'
 
 import Icon from '@leafygreen-ui/icon'
-import { LINKED_ACCOUNT } from '@/lib/wallet-data'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Ico } from '@/components/common/Icons/Icons'
 import { usePasswordless } from '@/components/wallet/profile/ProfileScreen/usePasswordless'
 import { IconButton } from '@/components/ui/IconButton'
 import { cn } from '@/lib/utils'
+
+const LINKED_PROVIDER = 'Leafy Pay'
 
 /** A small iOS-style on/off switch. */
 function Toggle({ checked, onChange, label, disabled }) {
@@ -77,6 +79,10 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
     handleCancelRemove,
   } = usePasswordless(user)
 
+  const { accounts: accountsState } = useWalletData()
+  const accounts = accountsState.data ?? []
+  const linkedAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
+
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
@@ -96,11 +102,13 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
         <div>
           <SectionLabel icon={<Ico.Card size={13} />}>Linked account</SectionLabel>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-sm font-semibold">{LINKED_ACCOUNT.provider}</p>
+            <p className="text-sm font-semibold">{LINKED_PROVIDER}</p>
             <p className="mt-2 font-mono text-xs tracking-tight text-muted-foreground tabular-nums">
-              {LINKED_ACCOUNT.maskedIban}
+              {linkedAccount?.maskedIban ?? '••••'}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{LINKED_ACCOUNT.currency} account</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {linkedAccount?.currency ?? 'EUR'} account
+            </p>
           </div>
         </div>
 

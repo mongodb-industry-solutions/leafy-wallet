@@ -19,11 +19,12 @@ app. Code: `src/lib/auth/{env,session,oauth,actions,authenticator}.js` and the r
 `FaceIdEntry`/`useCibaLogin`, and `ProfileScreen`/`usePasswordless`.
 
 Config in `frontend/.env.local` (gitignored, not `NEXT_PUBLIC_`): `CLIENT_ID`, `CLIENT_SECRET`,
-`PSP_BASE_URL`, `SESSION_SECRET`, `APP_BASE_URL`, `REDIRECT_URI`, optional `PSP_AUTHORIZE_URL` /
-`PSP_ISSUER`. The deployed PSP serves its API at `{PSP_BASE_URL}/api/v1/auth/*` and the hosted login at
-`{PSP_BASE_URL}/auth/authorize`; discovery is not published on the public host, so the endpoints are
-configured (`src/lib/auth/oauth.js oidcConfig()`), not fetched. Session cookie: encrypted httpOnly
-AES-256-GCM `{accessToken, refreshToken, expiresAt, grantedScopes, sub, name, email}`.
+`PSP_BASE_URL` (**API/backend** host), `PSP_FRONTEND_URL` (**frontend** host), `SESSION_SECRET`,
+`APP_BASE_URL`, `REDIRECT_URI`. Leafy Pay splits auth across two hosts: the **frontend** host serves the
+browser pages `authorize` + `logout` (built directly from `PSP_FRONTEND_URL`, so starting login needs no
+server-side call); the **backend** host serves discovery + token/jwks/userinfo/revoke + the business API
+(resolved via `PSP_BASE_URL/.well-known/openid-configuration` at callback/refresh time). Session cookie:
+encrypted httpOnly AES-256-GCM `{accessToken, refreshToken, expiresAt, grantedScopes, sub, name, email}`.
 
 OAuth client: grant types `authorization_code` / `refresh_token` / `ciba`; 8 scopes
 (`openid profile email read:beneficiaries write:beneficiaries write:transfers read:accounts
@@ -143,12 +144,17 @@ Implemented on main. Notes auto-embedded via Ollama on create; queried by `owner
   (Leafy Pay `paymentExecutionRemittanceInformation` is the fallback). Home / People / Activity render
   real data (mock `wallet-data.js` reads removed). Contacts have no distinct display enrichment today,
   so `getContacts` reads Leafy Pay only (the Atlas `walletContacts` is the offline replica).
-- **Still mocked** (`wallet-data.js`): send flow, AI chat.
+- **Done (send write):** `sendMoney` — Leafy Pay `POST /beneficiaries/{ref}/transfer` in parallel with
+  the Atlas note write-back (`createTransactionEnrichment`, embedded by Ollama). Send flow wired to real
+  balance + real contacts (RecipientStep) + real submit (loading/error). Profile linked-account IBAN
+  reads real accounts.
+- **Still mocked** (`wallet-data.js`): AI chat only (chart data, sample queries, intent parsing,
+  action-card draft) + a `WalletApp` user fallback.
 
 **Next:**
-1. Writes — add contact (`POST /beneficiaries`), send/transfer (`POST /beneficiaries/{ref}/transfer`)
-   with the pending-status poll (§4); write-back enrichment doc (note + embedding) to §3.2.
+1. Add-contact write (`POST /beneficiaries` + `walletContacts` write-back) — needs a small add-contact UI.
 2. AI chat — `useAiChat` over the real Server Actions + `wallet-transactions/search` (Atlas).
-3. Offline: `leafy-local-store` + ObjectBox sync (§2.2, §3.3).
+3. Offline: `leafy-local-store` + ObjectBox sync (§2.2, §3.3); the send flow's offline "saved" branch is
+   the placeholder.
 
 All Leafy Pay reads depend on the §1 corp-gate blocker being resolved for end-to-end testing (in progress).

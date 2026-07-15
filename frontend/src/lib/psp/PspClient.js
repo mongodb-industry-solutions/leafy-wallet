@@ -13,10 +13,17 @@ export class PspError extends Error {
   }
 }
 
-// GET Leafy Pay with a Bearer token; on 401 refresh once and retry with the rotated token.
-async function pspGet(path, token, refreshToken, retried = false) {
+// Call Leafy Pay with a Bearer token; on 401 refresh once and retry with the rotated token.
+async function pspRequest(method, path, body, token, refreshToken, retried = false) {
+  const cookie = ENV.pspDevCookie()
   const res = await fetch(`${ENV.pspBaseUrl()}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: 'no-store',
   })
   if (res.status === 401 && !retried && refreshToken) {
@@ -26,7 +33,6 @@ async function pspGet(path, token, refreshToken, retried = false) {
     } catch {
       throw new PspError(401, 'session expired')
     }
-    // Persist the rotated token so later requests in this session reuse it.
     const session = await getSession()
     if (session) {
       await setSession({
@@ -36,16 +42,17 @@ async function pspGet(path, token, refreshToken, retried = false) {
         expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       }).catch(() => {})
     }
-    return pspGet(path, tokens.access_token, tokens.refresh_token ?? refreshToken, true)
+    return pspRequest(method, path, body, tokens.access_token, tokens.refresh_token ?? refreshToken, true)
   }
   if (!res.ok) throw new PspError(res.status, await res.text().catch(() => ''))
-  return res.json()
+  const text = await res.text()
+  return text ? JSON.parse(text) : {}
 }
 
-async function get(path) {
+async function call(method, path, body) {
   const session = await getSession()
   if (!session) throw new PspError(401, 'not_authenticated')
-  return pspGet(path, session.accessToken, session.refreshToken)
+  return pspRequest(method, path, body, session.accessToken, session.refreshToken)
 }
 
 // Field names from docs/technical-spec.md §1.17 (BIAN SD-54/65/66). Alternate keys are kept as
@@ -92,20 +99,39 @@ function normalizeTransaction(t) {
   }
 }
 
+// ── Reads ────────────────────────────────────────────────────────────────────
 /** The signed-in user's payout accounts (scope `read:accounts`). */
 export async function listAccounts() {
-  const data = await get('/api/v1/accounts')
+  const data = await call('GET', '/api/v1/accounts')
   return (data.results ?? []).map(normalizeAccount)
 }
 
 /** The user's active saved beneficiaries (scope `read:beneficiaries`). */
 export async function listBeneficiaries() {
-  const data = await get('/api/v1/beneficiaries')
+  const data = await call('GET', '/api/v1/beneficiaries')
   return (data.results ?? []).map(normalizeBeneficiary).filter((b) => b.status !== 'removed')
 }
 
 /** The user's transaction history (payment executions, scope `read:transactions`). */
 export async function listTransactions() {
-  const data = await get('/api/v1/transactions')
+  const data = await call('GET', '/api/v1/transactions')
   return (data.results ?? []).map(normalizeTransaction)
+}
+
+// ── Writes ───────────────────────────────────────────────────────────────────
+/** Send a P2P transfer to a saved beneficiary (scope `write:transfers`). */
+export async function sendToBeneficiary(reference, { amount, currency = 'EUR', note }) {
+  const body = { amount, currency, ...(note ? { note } : {}) }
+  const r = await call('POST', `/api/v1/beneficiaries/${encodeURIComponent(reference)}/transfer`, body)
+  return {
+    reference: r.transferReference ?? r.paymentExecutionInstanceReference ?? null,
+    status: r.status ?? r.paymentExecutionStatus ?? 'pending',
+    failureReason: r.failureReason ?? null,
+  }
+}
+
+/** Poll a transfer's status (scope `read:transactions`). */
+export async function getTransferStatus(reference) {
+  const r = await call('GET', `/api/v1/gateway/transfers/${encodeURIComponent(reference)}/status`)
+  return { status: r.status ?? r.paymentExecutionStatus ?? 'pending' }
 }

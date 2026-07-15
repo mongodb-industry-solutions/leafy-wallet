@@ -2,6 +2,21 @@
 
 import Icon from '@leafygreen-ui/icon'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/Skeleton'
+
+/** Placeholder row matching TxRow's layout, shown while a transaction list loads. */
+export function TxRowSkeleton() {
+  return (
+    <div className="flex w-full items-center gap-3 py-3">
+      <Skeleton className="size-10 flex-none rounded-full" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-3.5 w-1/3" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+      <Skeleton className="h-3.5 w-14" />
+    </div>
+  )
+}
 
 /** Picks an icon glyph for a transaction based on its amount and note. */
 function glyphFor(tx) {
