@@ -202,6 +202,140 @@ struct LocalContact {
     };
 };
 
+// A conversation. Messages live in the separate LocalChatMessage entity
+// (ObjectBox has no nested/array attributes), linked by chatId.
+
+struct LocalChat {
+    int64_t id = 0;
+    std::string title;
+    int64_t createdAt = 0;   // epoch millis
+    int64_t updatedAt = 0;   // epoch millis
+    int64_t syncClock = 0;   // set by the Sync Server
+    // Mirrors `id` once it's assigned, but as a *non-PK* field. ObjectBox's
+    // Sync Server drops the PK `id` when bridging to Mongo (Mongo assigns its
+    // own `_id` instead), so without this, LocalChatMessage.chatId (which
+    // does sync through as a plain field) has nothing to join against once
+    // synced. Set right after `id` is assigned by the first `put()`.
+    int64_t localId = 0;
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 3; }
+
+        static void setObjectId(LocalChat& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalChat& object) {
+            fbb.Clear();
+            auto offsetTitle = fbb.CreateString(object.title);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                  // 1: id
+            fbb.AddOffset(6, offsetTitle);                  // 2: title
+            fbb.AddElement(8, object.createdAt);            // 3: createdAt
+            fbb.AddElement(10, object.updatedAt);           // 4: updatedAt
+            fbb.AddElement(12, object.syncClock);           // 5: syncClock
+            fbb.AddElement(14, object.localId);             // 6: localId
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalChat& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.title);
+            out.createdAt = table->GetField<int64_t>(8, 0);
+            out.updatedAt = table->GetField<int64_t>(10, 0);
+            out.syncClock = table->GetField<int64_t>(12, 0);
+            out.localId = table->GetField<int64_t>(14, 0);
+        }
+
+        static LocalChat fromFlatBuffer(const void* data, size_t size) {
+            LocalChat object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalChat> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalChat>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
+// A single message within a LocalChat conversation. `role` mirrors the
+// frontend's message shape ("user" | "assistant").
+
+struct LocalChatMessage {
+    int64_t id = 0;
+    int64_t chatId = 0;
+    std::string role;
+    std::string text;
+    int64_t createdAt = 0;   // epoch millis
+    int64_t syncClock = 0;   // set by the Sync Server
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 4; }
+
+        static void setObjectId(LocalChatMessage& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalChatMessage& object) {
+            fbb.Clear();
+            auto offsetRole = fbb.CreateString(object.role);
+            auto offsetText = fbb.CreateString(object.text);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                  // 1: id
+            fbb.AddElement(6, object.chatId);               // 2: chatId
+            fbb.AddOffset(8, offsetRole);                   // 3: role
+            fbb.AddOffset(10, offsetText);                  // 4: text
+            fbb.AddElement(12, object.createdAt);           // 5: createdAt
+            fbb.AddElement(14, object.syncClock);           // 6: syncClock
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalChatMessage& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            out.chatId = table->GetField<int64_t>(6, 0);
+            readString(8, out.role);
+            readString(10, out.text);
+            out.createdAt = table->GetField<int64_t>(12, 0);
+            out.syncClock = table->GetField<int64_t>(14, 0);
+        }
+
+        static LocalChatMessage fromFlatBuffer(const void* data, size_t size) {
+            LocalChatMessage object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalChatMessage> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalChatMessage>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
 struct LocalContact_ {
     static const obx::Property<LocalContact, OBXPropertyType_Long> id;
     static const obx::Property<LocalContact, OBXPropertyType_String> ownerPartyRef;
@@ -260,6 +394,38 @@ const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::c
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
+struct LocalChat_ {
+    static const obx::Property<LocalChat, OBXPropertyType_Long> id;
+    static const obx::Property<LocalChat, OBXPropertyType_String> title;
+    static const obx::Property<LocalChat, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalChat, OBXPropertyType_Date> updatedAt;
+    static const obx::Property<LocalChat, OBXPropertyType_Long> syncClock;
+    static const obx::Property<LocalChat, OBXPropertyType_Long> localId;
+};
+
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::id(1);
+const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::title(2);
+const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::createdAt(3);
+const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::updatedAt(4);
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::syncClock(5);
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::localId(6);
+
+struct LocalChatMessage_ {
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> id;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> chatId;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_String> role;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_String> text;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> syncClock;
+};
+
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::id(1);
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::chatId(2);
+const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::role(3);
+const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::text(4);
+const obx::Property<LocalChatMessage, OBXPropertyType_Date> LocalChatMessage_::createdAt(5);
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::syncClock(6);
+
 // ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
 
 constexpr int EMBEDDING_DIMENSIONS = 768;
@@ -315,7 +481,37 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
     obx_model_entity_last_property_id(model, 9, 7002000000000009ULL);
 
-    obx_model_last_entity_id(model, 2, 7002000000000000ULL);
+    // Entity 3: chats — a conversation. Entity name is the target MongoDB
+    // collection name, same rule as entities 1-2 above.
+    obx_model_entity(model, "chats", 3, 7003000000000000ULL);
+    obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7003000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "title", OBXPropertyType_String, 2, 7003000000000002ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 3, 7003000000000003ULL);
+    obx_model_property(model, "updatedAt", OBXPropertyType_Date, 4, 7003000000000004ULL);
+    obx_model_property(model, "syncClock", OBXPropertyType_Long, 5, 7003000000000005ULL);
+    obx_model_property(model, "localId", OBXPropertyType_Long, 6, 7003000000000006ULL);
+    obx_model_entity_last_property_id(model, 6, 7003000000000006ULL);
+
+    // Entity 4: chatMessages — a single message within a chats conversation,
+    // linked by chatId (ObjectBox has no nested/array attributes).
+    obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
+    obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7004000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "chatId", OBXPropertyType_Long, 2, 7004000000000002ULL);
+    obx_model_property(model, "role", OBXPropertyType_String, 3, 7004000000000003ULL);
+    obx_model_property(model, "text", OBXPropertyType_String, 4, 7004000000000004ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 5, 7004000000000005ULL);
+    obx_model_property(model, "syncClock", OBXPropertyType_Long, 6, 7004000000000006ULL);
+    obx_model_entity_last_property_id(model, 6, 7004000000000006ULL);
+
+    obx_model_last_entity_id(model, 4, 7004000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
 
     return model;
@@ -372,7 +568,9 @@ bool init_objectbox(const std::string& db_path, const std::string& sync_url) {
         options.directory(db_path.c_str());
         store = std::make_shared<obx::Store>(options);
         std::cout << "Store opened (" << store->box<LocalTransaction>().count() << " transactions, "
-                   << store->box<LocalContact>().count() << " contacts)" << std::endl;
+                   << store->box<LocalContact>().count() << " contacts, "
+                   << store->box<LocalChat>().count() << " chats, "
+                   << store->box<LocalChatMessage>().count() << " chat messages)" << std::endl;
 
         if (!sync_url.empty()) {
             if (obx_has_feature(OBXFeature_Sync)) {
@@ -431,6 +629,26 @@ json contact_to_json(const LocalContact& c) {
     };
 }
 
+json chat_to_json(const LocalChat& c) {
+    return {
+        {"id", c.id},
+        {"title", c.title},
+        {"createdAt", c.createdAt},
+        {"updatedAt", c.updatedAt},
+        {"localId", c.localId},
+    };
+}
+
+json chat_message_to_json(const LocalChatMessage& m) {
+    return {
+        {"id", m.id},
+        {"chatId", m.chatId},
+        {"role", m.role},
+        {"text", m.text},
+        {"createdAt", m.createdAt},
+    };
+}
+
 int main(int argc, char* argv[]) {
     std::string db_path = argc > 1 ? argv[1] : "/app/local-store-db";
     std::string sync_url = argc > 2 ? argv[2] : env_or("SYNC_SERVER_URL", "ws://objectbox-sync-server:9999");
@@ -448,6 +666,8 @@ int main(int argc, char* argv[]) {
             response["status"] = "healthy";
             response["transaction_count"] = store->box<LocalTransaction>().count();
             response["contact_count"] = store->box<LocalContact>().count();
+            response["chat_count"] = store->box<LocalChat>().count();
+            response["chat_message_count"] = store->box<LocalChatMessage>().count();
             res.set_content(response.dump(), "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
@@ -574,6 +794,179 @@ int main(int argc, char* argv[]) {
 
             res.status = 201;
             res.set_content(contact_to_json(c).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get("/local/v1/chats", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            auto box = store->box<LocalChat>();
+            json results = json::array();
+            for (const auto& c : box.getAll()) {
+                results.push_back(chat_to_json(*c));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Post("/local/v1/chats", [](const httplib::Request& req, httplib::Response& res) {
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(), "application/json");
+            return;
+        }
+
+        try {
+            LocalChat c;
+            c.title = body.value("title", "New chat");
+            c.createdAt = now_epoch_millis();
+            c.updatedAt = c.createdAt;
+
+            auto box = store->box<LocalChat>();
+            box.put(c);       // assigns c.id
+            c.localId = c.id;
+            box.put(c);       // persist localId so it's carried into the Atlas sync
+
+            res.status = 201;
+            res.set_content(chat_to_json(c).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            int64_t chatId = std::stoll(req.matches[1]);
+            if (!store->box<LocalChat>().get(chatId)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            auto query = store->box<LocalChatMessage>().query(LocalChatMessage_::chatId.equals(chatId)).build();
+            json results = json::array();
+            for (const auto& m : query.find()) {
+                results.push_back(chat_message_to_json(m));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Bumps the parent LocalChat's updatedAt on every new message (two
+    // sequential puts, no explicit transaction — same simplicity level as
+    // the rest of this file).
+    svr.Post(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        int64_t chatId = std::stoll(req.matches[1]);
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"role", "text"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        std::string role = body.at("role").get<std::string>();
+        if (role != "user" && role != "assistant") {
+            bad_request("role must be \"user\" or \"assistant\"");
+            return;
+        }
+
+        try {
+            auto chatBox = store->box<LocalChat>();
+            auto chat = chatBox.get(chatId);
+            if (!chat) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            LocalChatMessage m;
+            m.chatId = chatId;
+            m.role = role;
+            m.text = body.at("text").get<std::string>();
+            m.createdAt = now_epoch_millis();
+
+            store->box<LocalChatMessage>().put(m);
+
+            chat->updatedAt = m.createdAt;
+            chatBox.put(*chat);
+
+            res.status = 201;
+            res.set_content(chat_message_to_json(m).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Deletes propagate through ObjectBox Sync like any other write, so this
+    // also removes the corresponding document from Atlas once connected.
+    // Cascades to the chat's messages, mirroring backend/routers/chats.py's
+    // delete_chat.
+    svr.Delete(R"(/local/v1/chats/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id chatId = std::stoll(req.matches[1]);
+
+            auto chatBox = store->box<LocalChat>();
+            if (!chatBox.remove(chatId)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            auto messageBox = store->box<LocalChatMessage>();
+            auto query = messageBox.query(LocalChatMessage_::chatId.equals(chatId)).build();
+            for (const auto& m : query.find()) {
+                messageBox.remove(m.id);
+            }
+
+            res.status = 204;
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Delete(R"(/local/v1/chats/(\d+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id chatId = std::stoll(req.matches[1]);
+            obx_id messageId = std::stoll(req.matches[2]);
+
+            auto messageBox = store->box<LocalChatMessage>();
+            auto existing = messageBox.get(messageId);
+            if (!existing || existing->chatId != chatId) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
+                return;
+            }
+
+            messageBox.remove(messageId);
+            res.status = 204;
         } catch (const std::exception& e) {
             res.status = 500;
             res.set_content(json{{"error", e.what()}}.dump(), "application/json");
