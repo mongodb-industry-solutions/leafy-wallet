@@ -30,11 +30,9 @@ export const ENV = {
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
   // Browser-facing login page, on the frontend host (a different host from the API).
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,
-  // Local-dev only: a corp SSO session cookie so server-side calls pass the Istio/Envoy gate that
-  // fronts the deployed PSP. Inert in production (deployed on Mongo infra, server-to-server isn't
-  // gated). See PSP_DEV_COOKIE in .env.local.
-  pspDevCookie: () => (process.env.NODE_ENV === 'production' ? '' : envVar('PSP_DEV_COOKIE') ?? ''),
-  // Blind-index key for contact/request lookup digests. Separate from SESSION_SECRET so rotating
-  // one doesn't invalidate the other — rotating this orphans every stored digest.
+  // Corp SSO session cookie: lets server-side calls through the gate fronting the
+  // staging PSP. Set only in .env.local; unset when deployed inside the corp network.
+  pspDevCookie: () => envVar('PSP_DEV_COOKIE') ?? '',
+  // Blind-index key for contact/request lookup digests. Rotating it orphans every stored digest.
   lookupDigestKey: () => envVar('LOOKUP_DIGEST_KEY') ?? '',
 }

@@ -7,6 +7,7 @@ import {
   getRequests,
   getTransactions,
   getTransferStatus,
+  markTransferSettled,
   replayPendingSends,
 } from '@/lib/wallet/actions'
 
@@ -98,8 +99,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
 
+  // `isLoading` drives the skeletons: true only when there's nothing to show yet.
   const load = useCallback(async (key) => {
-    setState((s) => ({ ...s, [key]: { ...s[key], isLoading: true, error: false } }))
+    setState((s) => ({ ...s, [key]: { ...s[key], isLoading: s[key].data === null, error: false } }))
     try {
       const data = await LOADERS[key](isOnlineRef.current)
       setState((s) => ({ ...s, [key]: { data, isLoading: false, error: false } }))
@@ -128,9 +130,12 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
         } catch {
           /* transient; keep polling */
         }
+        const isSettled = status === 'completed' || status === 'failed'
+        // Before the refresh, so it reads back the settled status.
+        if (isSettled) await markTransferSettled(reference, status)
         await refresh(['accounts', 'transactions'])
         polls += 1
-        if (status === 'completed' || status === 'failed' || polls >= SETTLE_MAX_POLLS) return
+        if (isSettled || polls >= SETTLE_MAX_POLLS) return
         setTimeout(tick, SETTLE_POLL_MS)
       }
       setTimeout(tick, SETTLE_POLL_MS)
@@ -155,11 +160,14 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     wasOnline.current = isOnline
 
     async function resync() {
-      if (isReconnect) await replayPendingSends().catch(() => {})
+      if (isReconnect) {
+        const res = await replayPendingSends().catch(() => null)
+        res?.references?.forEach(watchTransfer)
+      }
       refresh()
     }
     resync()
-  }, [isOnline, refresh])
+  }, [isOnline, refresh, watchTransfer])
 
   // Load the persisted "notifications seen" marker for this user.
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Peep } from '@/components/common/Peep/Peep'
 import { useRequestActions } from './useRequestActions'
@@ -71,7 +72,8 @@ function RequestRow({ notification, isBusy, onPay, onDecline }) {
  */
 export function NotificationsPanel({ onClose }) {
   const { notifications, markNotificationsSeen } = useWalletData()
-  const { busyId, error, handlePay, handleDecline } = useRequestActions()
+  const { pending, busyId, error, notice, askToPay, cancelPay, confirmPay, handleDecline } =
+    useRequestActions()
 
   return (
     <BottomSheet onClose={onClose} onEntered={markNotificationsSeen}>
@@ -86,6 +88,7 @@ export function NotificationsPanel({ onClose }) {
       ) : (
         <>
           {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+          {notice && <p className="mb-3 text-sm text-warning">{notice}</p>}
           <div className="no-scrollbar flex max-h-[60vh] flex-col divide-y divide-border overflow-y-auto">
             {notifications.map((n) => (
               <div key={`${n.kind}-${n.id}`} className="flex items-center gap-3 py-3">
@@ -94,7 +97,7 @@ export function NotificationsPanel({ onClose }) {
                   <RequestRow
                     notification={n}
                     isBusy={busyId === n.id}
-                    onPay={() => handlePay(n.id)}
+                    onPay={() => askToPay(n)}
                     onDecline={() => handleDecline(n.id)}
                   />
                 ) : (
@@ -104,6 +107,20 @@ export function NotificationsPanel({ onClose }) {
             ))}
           </div>
         </>
+      )}
+
+      {pending && (
+        <ConfirmDialog
+          title={`Pay €${Math.abs(pending.amount).toFixed(2)}?`}
+          message={`${pending.name} requested this${pending.note && pending.note !== 'No note' ? ` for "${pending.note}"` : ''}. The money is sent immediately.`}
+          error={error}
+          confirmLabel={`Pay €${Math.abs(pending.amount).toFixed(2)}`}
+          busyLabel="Paying…"
+          isBusy={busyId === pending.id}
+          isDestructive={false}
+          onCancel={cancelPay}
+          onConfirm={confirmPay}
+        />
       )}
     </BottomSheet>
   )

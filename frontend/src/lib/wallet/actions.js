@@ -20,6 +20,7 @@ import {
   listOutgoingRequests,
   listTransactionEnrichment,
   resolveRequestDoc,
+  updateTransactionEnrichment,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
@@ -259,6 +260,9 @@ const DEFAULT_REMITTANCE = 'P2P transfer via beneficiary portal'
 const LOCAL_PENDING = 'local_pending'
 const LOCAL_REFERENCE_PREFIX = 'local-'
 
+// `walletTransactions.leafyPayStatus` for a transfer Leafy Pay reports as `completed`.
+const SETTLED_STATUS = 'settled'
+
 /** Shape one transaction row for the UI, from either source. */
 function toTransactionRow({ reference, counterpartyRef, contact, isReceived, magnitude, currency, note, createdAt, status, isPending }) {
   return {
@@ -289,6 +293,7 @@ async function localTransactions(owner) {
     .filter((t) => !owner || t.ownerPartyRef === owner)
     .map((t) => {
       const createdAt = t.createdAt ? new Date(t.createdAt).toISOString() : null
+      const status = t.leafyPayStatus === SETTLED_STATUS ? 'completed' : t.leafyPayStatus
       return toTransactionRow({
         reference: t.leafyPayTransferReference,
         counterpartyRef: t.counterpartyArrangementReference,
@@ -298,8 +303,8 @@ async function localTransactions(owner) {
         currency: t.currency,
         note: t.note,
         createdAt,
-        status: t.leafyPayStatus,
-        isPending: t.leafyPayStatus !== 'completed',
+        status,
+        isPending: status !== 'completed',
       })
     })
   rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
@@ -322,6 +327,22 @@ export async function getTransactions(isOnline = true) {
   ])
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
+
+  // Leafy Pay owns settlement, so any enrichment still marked pending against a completed transfer
+  // is stale — settling can outlast the send flow's watcher.
+  await Promise.all(
+    transactions
+      .filter((t) => {
+        const enrich = enrichByRef.get(t.reference)
+        return t.status === 'completed' && enrich?.id && enrich.leafyPayStatus !== SETTLED_STATUS
+      })
+      .map((t) =>
+        updateTransactionEnrichment(enrichByRef.get(t.reference).id, {
+          leafyPayStatus: SETTLED_STATUS,
+          settledAt: t.createdAt ?? new Date().toISOString(),
+        }).catch(() => {}),
+      ),
+  )
 
   const rows = transactions.map((t) => {
     const enrich = enrichByRef.get(t.reference)
@@ -405,7 +426,7 @@ export async function sendMoney({
         currency: 'EUR',
         note: note || null,
         direction: 'sent',
-        leafyPayStatus: transfer.status === 'completed' ? 'settled' : 'pending',
+        leafyPayStatus: transfer.status === 'completed' ? SETTLED_STATUS : 'pending',
       })
     } catch {
       return { ok: false, error: 'Payment sent, but saving it failed — is the backend running?' }
@@ -432,10 +453,31 @@ export async function getTransferStatus(reference) {
 }
 
 /**
+ * Record a transfer's settlement in Atlas; Leafy Pay is the only source of settlement status.
+ * @param {string} reference - The `leafyPayTransferReference`.
+ * @param {'completed'|'failed'} status
+ */
+export async function markTransferSettled(reference, status) {
+  const owner = await ownerRef()
+  if (!owner || !reference) return
+  try {
+    const docs = await listTransactionEnrichment(owner)
+    const match = (docs ?? []).find((d) => d.leafyPayTransferReference === reference)
+    if (!match?.id) return
+    await updateTransactionEnrichment(match.id, {
+      leafyPayStatus: status === 'completed' ? SETTLED_STATUS : 'failed',
+      settledAt: new Date().toISOString(),
+    })
+  } catch {
+    // Non-fatal: Leafy Pay still has the status, and a later poll retries.
+  }
+}
+
+/**
  * Send each `local_pending` transaction for real, then drop the local record — its deletion
  * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
- * record for the next reconnect.
- * @returns {Promise<{replayed: number, failed: number}>}
+ * record for the next reconnect. Returns the new references, which the caller watches to settlement.
+ * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
  */
 export async function replayPendingSends() {
   const owner = await ownerRef()
@@ -446,6 +488,7 @@ export async function replayPendingSends() {
 
   let replayed = 0
   let failed = 0
+  const references = []
   for (const t of pending) {
     const sent = await sendMoney({
       counterpartyArrangementReference: t.counterpartyArrangementReference,
@@ -456,6 +499,7 @@ export async function replayPendingSends() {
       failed += 1
       continue
     }
+    if (sent.reference) references.push(sent.reference)
     try {
       await deleteLocalTransaction(t.id)
       replayed += 1
@@ -464,7 +508,7 @@ export async function replayPendingSends() {
       failed += 1
     }
   }
-  return { replayed, failed }
+  return { replayed, failed, references }
 }
 
 /**
@@ -597,11 +641,16 @@ export async function payRequest(reference, fromAccountReference) {
   })
   if (!sent.ok) return sent
 
+  // The money has moved: never report failure, or the caller retries and pays twice.
   try {
     await resolveRequestDoc(request.id, { status: 'paid', leafyPayTransferReference: sent.reference })
   } catch {
-    // The money moved; leaving the request pending is recoverable, so don't report a failed payment.
-    return { ok: true, reference: sent.reference, status: sent.status }
+    return {
+      ok: true,
+      reference: sent.reference,
+      status: sent.status,
+      warning: 'Payment sent, but the request could not be marked paid. Do not pay it again.',
+    }
   }
   return { ok: true, reference: sent.reference, status: sent.status }
 }
