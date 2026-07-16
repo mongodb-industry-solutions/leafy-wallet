@@ -6,6 +6,7 @@ from db.client import get_db
 from db.mdb import MongoDBConnector
 from db.utils import parse_object_id, with_str_id
 from schemas.wallet_contacts import WalletContactCreate, WalletContactOut, WalletContactUpdate
+from services.contacts import list_contacts as list_contacts_service
 
 COLLECTION = "walletContacts"
 
@@ -21,9 +22,10 @@ async def create_contact(payload: WalletContactCreate, db: MongoDBConnector = De
 
 
 @router.get("", response_model=list[WalletContactOut])
-async def list_contacts(ownerPartyRef: str | None = None, db: MongoDBConnector = Depends(get_db)):
-    query = {"ownerPartyRef": ownerPartyRef} if ownerPartyRef else {}
-    return [with_str_id(doc) for doc in db.find(COLLECTION, query)]
+async def list_contacts(
+    ownerPartyRef: str | None = None, q: str | None = None, db: MongoDBConnector = Depends(get_db)
+):
+    return list_contacts_service(db, ownerPartyRef, q)
 
 
 @router.get("/{contact_id}", response_model=WalletContactOut)

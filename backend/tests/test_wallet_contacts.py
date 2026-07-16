@@ -45,6 +45,30 @@ def test_contact_crud_lifecycle(client):
     assert missing.status_code == 404
 
 
+def test_list_contacts_q_filter_matches_label_case_insensitively(client):
+    other_payload = {
+        **CONTACT_PAYLOAD,
+        "counterpartyArrangementReference": "33333333-3333-3333-3333-333333333333",
+        "counterpartyLabel": "Bob Smith",
+    }
+    jane = client.post(f"{BASE}", json=CONTACT_PAYLOAD)
+    bob = client.post(f"{BASE}", json=other_payload)
+    assert jane.status_code == 201
+    assert bob.status_code == 201
+
+    try:
+        listed = client.get(
+            f"{BASE}", params={"ownerPartyRef": CONTACT_PAYLOAD["ownerPartyRef"], "q": "jane"}
+        )
+        assert listed.status_code == 200
+        labels = {c["counterpartyLabel"] for c in listed.json()}
+        assert "Jane Doe" in labels
+        assert "Bob Smith" not in labels
+    finally:
+        client.delete(f"{BASE}/{jane.json()['_id']}")
+        client.delete(f"{BASE}/{bob.json()['_id']}")
+
+
 def test_get_contact_invalid_id_returns_404(client):
     response = client.get(f"{BASE}/not-a-valid-object-id")
     assert response.status_code == 404

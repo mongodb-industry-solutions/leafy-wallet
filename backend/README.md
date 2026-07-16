@@ -11,6 +11,7 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
   - [Environment Variables](#environment-variables)
 - [Running the Application](#running-the-application)
 - [API Documentation](#api-documentation)
+- [MCP Server](#mcp-server)
 - [Data Schemas](#data-schemas)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
@@ -23,6 +24,7 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
 - MongoDB Atlas persistence via `pymongo`, with a shared connection injected through FastAPI dependencies.
 - Automatic semantic-search embedding generation for transaction notes via a local Ollama model, without blocking writes if Ollama is unavailable.
 - Semantic search over transaction notes via Atlas Vector Search (`GET /api/v1/wallet-transactions/search`).
+- An [MCP server](#mcp-server) (`/mcp`) exposing `search_transactions` and `get_contacts` as LLM-callable tools, backed by the same query logic as the REST routes above.
 - Dependency management with uv ([more info](https://docs.astral.sh/uv/)).
 
 ## Prerequisites
@@ -106,6 +108,34 @@ The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g
 | `GET` | `/api/v1/chat-messages` | List messages (optional `chatId` filter) |
 | `GET` | `/api/v1/chat-messages/{id}` | Get a message by id |
 | `DELETE` | `/api/v1/chat-messages/{id}` | Delete a message |
+
+## MCP Server
+
+Mounted at `/mcp` inside this same FastAPI app (via the [`mcp`](https://pypi.org/project/mcp/)
+Python SDK's `FastMCP`, `app.mount("/mcp", mcp.streamable_http_app())` in `main.py`) — one
+backend process, not a second service. Exposes two tools an LLM agent can call:
+
+| Tool | Inputs | Backed by |
+|---|---|---|
+| `search_transactions` | `q` (required), `owner_party_ref` (required), `limit` (default 10) | `services/transactions.py` — same Atlas Vector Search pipeline as `GET /wallet-transactions/search` |
+| `get_contacts` | `owner_party_ref` (required), `q` (optional) | `services/contacts.py` — same `walletContacts` query as `GET /wallet-contacts`, plus a new optional case-insensitive `q` filter on `counterpartyLabel` (also available on the REST route now) |
+
+
+**Deliberately not here**: `get_balance` and `send_money`. Those are Leafy-Pay-backed, and this
+backend *never* calls Leafy Pay — the frontend is the only component with the Leafy Pay OAuth
+session (same separation described in [How it fits with this backend](#how-it-fits-with-this-backend)
+for the ObjectBox sync). Per the project's architecture, an agent calls those two directly via
+the frontend's existing `PspClient.js`, not through this MCP server at all. `owner_party_ref` is
+a required tool input here (not something the server infers) — how a calling agent supplies it
+automatically from a session is a frontend-integration concern, out of scope for this
+backend-only server.
+
+
+**Testing**: `tests/test_mcp_server.py` connects a real `mcp.ClientSession` directly to the
+`FastMCP` instance over in-memory streams (`mcp.shared.memory.create_connected_server_and_client_session`),
+not a real HTTP server — this exercises the actual MCP protocol (tool discovery, JSON schemas,
+tool dispatch) without the lifespan/mounting complexity above, and runs as part of the normal
+`uv run pytest` suite (real Atlas, skips cleanly if unreachable, same as every other test file).
 
 ## Data Schemas
 
@@ -220,7 +250,7 @@ on documents this FastAPI backend writes directly:
 
 ```
 backend/
-├── main.py                 # FastAPI app, CORS, router mounting
+├── main.py                 # FastAPI app, CORS, router mounting, /mcp mount + lifespan
 ├── config/                 # Static app config (config.json + loader)
 ├── db/
 │   ├── mdb.py               # MongoDBConnector: thin wrapper around pymongo
@@ -233,12 +263,16 @@ backend/
 │   ├── chat_messages.py      # Chat message schemas (no Update — immutable)
 │   └── registry.py          # collection name -> canonical schema map
 ├── services/
-│   └── ollama.py             # Embedding client for noteEmbedding
+│   ├── ollama.py             # Embedding client for noteEmbedding
+│   ├── contacts.py           # list_contacts() — shared by the REST route and the MCP tool
+│   └── transactions.py       # search_transactions() — shared by the REST route and the MCP tool
 ├── routers/
 │   ├── wallet_contacts.py    # CRUD endpoints
 │   ├── wallet_transactions.py  # CRUD + semantic search
 │   ├── chats.py               # CRUD, cascade-deletes a chat's messages
 │   └── chat_messages.py       # Create / list / get / delete (no PATCH)
+├── mcp_server/
+│   └── server.py             # FastMCP instance + search_transactions/get_contacts tools
 ├── scripts/
 │   └── create_vector_index.py  # Provisions the Atlas Vector Search index (run once per cluster)
 └── tests/                    # pytest integration tests (run against Atlas)
@@ -254,6 +288,10 @@ uv run pytest -v
 Tests run as integration tests directly against MongoDB Atlas using the credentials in `.env`. If Atlas isn't reachable (e.g. no database user configured yet), the whole suite skips cleanly instead of failing. Each test cleans up the documents it creates.
 
 Tests in `test_wallet_transactions_search.py` additionally skip if the vector search index hasn't been provisioned (see `scripts/create_vector_index.py` above), and poll for up to ~60s per assertion since Atlas Search indexes newly written documents asynchronously.
+
+`test_mcp_server.py` tests the MCP server (see [MCP Server](#mcp-server) above) — part of the
+normal `uv run pytest` run, real Atlas, skips cleanly if unreachable. Its `search_transactions`
+test shares the same vector-index/Ollama skip conditions as `test_wallet_transactions_search.py`.
 
 `test_leafy_local_store*.py` (four files: the base one plus `_chats`/`_accounts`/`_sync`) are
 **local-only, not part of CI** — they need `leafy-local-store` actually running (see
