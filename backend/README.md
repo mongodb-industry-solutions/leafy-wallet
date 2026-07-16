@@ -142,9 +142,9 @@ tool dispatch) without the lifespan/mounting complexity above, and runs as part 
 Two independent write paths can populate the same Atlas collections: this FastAPI backend
 (writes directly), and `leafy-local-store` via the ObjectBox↔MongoDB Sync Server bridge (see
 [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below). Documents that arrived through
-the sync bridge carry a couple of extra bookkeeping fields (`syncClock`, and — on `chats`
-only — `localId`) that documents this backend writes directly never have. See
-[Sync-related fields](#sync-related-fields) below for what those mean.
+the sync bridge carry one extra bookkeeping field that documents this backend writes directly
+never have — `localId` on `chats`. See [Sync-related fields](#sync-related-fields) below for
+what that means.
 
 ### Atlas collections
 
@@ -189,8 +189,7 @@ flattened to match rather than have two shapes coexist in one collection.
 | `_id` | ObjectId | |
 | `title` | string | |
 | `createdAt` / `updatedAt` | date | |
-| `syncClock` | long | only on documents synced from ObjectBox |
-| `localId` | long | only on documents synced from ObjectBox |
+| `localId` | long | only on documents synced from ObjectBox — see [Sync-related fields](#sync-related-fields) |
 
 **`chatMessages`** — a single message within a `chats` conversation. A separate collection
 rather than a nested array on `chats`, because ObjectBox has no nested/array attributes and
@@ -203,14 +202,12 @@ both write paths need to produce the same shape.
 | `role` | `"user"` \| `"assistant"` | |
 | `text` | string | |
 | `createdAt` | date | |
-| `syncClock` | long | only on documents synced from ObjectBox |
 
 ### ObjectBox entities (`leafy-local-store/local_store_service.cpp`)
 
 Local mirrors of the four Atlas collections above, defined programmatically against the
 ObjectBox C API (no `.fbs`/codegen file — see `create_obx_model()`). Every entity has an
-internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages, plus a plain
-`syncClock` `Long` field of unconfirmed purpose — see [Sync-related fields](#sync-related-fields).
+internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages.
 
 **`LocalChat`**
 
@@ -219,7 +216,6 @@ internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages
 | `id` | Long (PK) | ObjectBox-internal; does **not** survive into Atlas — see below |
 | `title` | String | |
 | `createdAt` / `updatedAt` | Date | epoch millis in C++, real `ISODate` once synced |
-| `syncClock` | Long | |
 | `localId` | Long | mirrors `id`; this is the field that *does* survive into Atlas — see below |
 
 **`LocalChatMessage`**
@@ -231,33 +227,18 @@ internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages
 | `role` | String | `"user"` or `"assistant"` |
 | `text` | String | |
 | `createdAt` | Date | |
-| `syncClock` | Long | |
 
 **`LocalContact`** / **`LocalTransaction`**: see the struct definitions in
 `local_store_service.cpp` — field names and types match `walletContacts`/`walletTransactions`
 above 1:1 (that's the whole point of the flattened schema). Neither has a `localId`-style
-field, since neither is referenced by another synced entity the way `chatMessages`
-references `chats`.
+field, since neither is referenced by another synced entity the way `chatMessages` references
+`chats`.
 
 ### Sync-related fields
 
-Two fields only ever appear on documents that arrived via the ObjectBox → Atlas bridge, never
+Fields that only ever appear on documents that arrived via the ObjectBox → Atlas bridge, never
 on documents this FastAPI backend writes directly:
 
-- **`syncClock`** — present on every entity here, always `0` in every document we've observed
-  so far. ObjectBox Sync does have a genuine, documented "Sync Clock" feature (a hybrid
-  logical clock used for conflict resolution — deciding which concurrent offline write wins),
-  but per ObjectBox's docs that's opt-in via an explicit `@SyncClock()`-style annotation/flag
-  on the property — our C++ model declares `syncClock` as a plain `Long` with no such flag
-  (unlike `id`, which does get the dedicated `OBXPropertyFlags_ID` flag). So this field is
-  **not confirmed to be wired into that mechanism, or required by the sync bridge at all** —
-  it reads as an inherited convention (this pattern was already in place before `chats`/
-  `chatMessages` were added, mirroring a reference implementation per the code comments), not
-  something verified to be load-bearing. The Sync Server's actual "where did I leave off"
-  bookkeeping for the MongoDB bridge lives in its own `__ObjectBox_Metadata` collection in
-  MongoDB, not in a per-document field, per ObjectBox's FAQ. Whether it's safe to remove
-  hasn't been tested either way — treat it as unverified in both directions, not as
-  something known to be required.
 - **`localId`** (`chats` only) — added specifically because the Sync Server's bridge drops
   an entity's own primary-key field (`id`) when writing to Mongo; Mongo just assigns its own
   `_id` instead (see "A synced entity's own primary-key..." below). Without a second, non-PK
@@ -312,13 +293,25 @@ Tests in `test_wallet_transactions_search.py` additionally skip if the vector se
 normal `uv run pytest` run, real Atlas, skips cleanly if unreachable. Its `search_transactions`
 test shares the same vector-index/Ollama skip conditions as `test_wallet_transactions_search.py`.
 
-`test_leafy_local_store.py` is **local-only, not part of CI** — it needs `leafy-local-store`
-actually running (see [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and
-deploying that whole stack in CI wasn't judged worth it for this PoC. It skips cleanly if the
-service isn't reachable, same pattern as the Atlas/Ollama skips above. It creates records that
-sync into the real `walletTransactions`/`walletContacts` Atlas collections, so every test
-cleans up via `DELETE /local/v1/.../{id}` (which propagates the deletion through Sync back to
-Atlas too) rather than leaving test data behind.
+`test_leafy_local_store*.py` (four files: the base one plus `_chats`/`_accounts`/`_sync`) are
+**local-only, not part of CI** — they need `leafy-local-store` actually running (see
+[ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and deploying that whole stack
+in CI wasn't judged worth it for this PoC. They skip cleanly if the service isn't reachable,
+same pattern as the Atlas/Ollama skips above. Most of them create records that sync into the
+real Atlas collections, so every test cleans up via `DELETE /local/v1/.../{id}` (which
+propagates the deletion through Sync back to Atlas too) rather than leaving test data behind.
+
+`test_leafy_local_store_sync.py` specifically is the one file that verifies the Sync Server
+bridge itself is actually moving data — every other file only exercises the local HTTP surface
+in isolation (write via `leafy-local-store`, read back via `leafy-local-store`), which would
+stay green even if the bridge were completely broken. This one writes via `leafy-local-store`
+and reads back directly from Atlas via `pymongo`, and the other direction too (writes directly
+to Atlas, reads back via `leafy-local-store`), for every synced entity
+(`walletContacts`/`walletTransactions`/`chats`/`chatMessages`), plus a regression check that
+`LocalAccountBalance` never shows up in Atlas. Since sync is asynchronous in both directions,
+every assertion polls with a timeout (20s, picked empirically) instead of checking immediately
+— a timeout here means the bridge didn't do its job in time, which is exactly the failure mode
+this file exists to catch.
 
 ## ObjectBox Offline Sync (PoC)
 
@@ -658,9 +651,9 @@ the previous value alone.
   genuine BSON `ISODate`; `Long` maps to a plain `Int64`. We initially used `Long` for
   `createdAt`/`settledAt` and only caught it by inspecting the raw Atlas document — the FastAPI
   backend's Pydantic layer silently "fixed" the display (it coerces large ints into datetimes),
-  masking that the actual stored type was wrong. `syncClock` stays `Long` regardless — it's
-  never held a timestamp-shaped value in anything we've observed, whatever its actual purpose
-  turns out to be (see [Sync-related fields](#sync-related-fields)).
+  masking that the actual stored type was wrong. `syncClock` (before its removal) stayed
+  `Long` regardless — it never held a timestamp-shaped value in anything observed (see
+  [Sync-related fields](#sync-related-fields)).
 - **ObjectBox's vector search `score` is a distance, not a similarity.** `findWithScores()`
   returns lower-is-better, already sorted nearest-first — opposite of Atlas's `$vectorSearch`
   score (higher-is-better). Easy to misread a result set as "backwards" if you forget which
@@ -673,3 +666,16 @@ the previous value alone.
   it has no idea the code changed. Fix: `docker compose down leafy-local-store && docker
   volume rm leafy-wallet_leafy_local_store_data` for a clean slate (safe — it's disposable
   local dev/demo data, nothing tracked in git or Atlas).
+- **Removing an ObjectBox property: leave a gap, don't renumber, don't reuse the uid.** When
+  `syncClock` was dropped (first from `LocalChat`/`LocalChatMessage`, then from
+  `LocalContact`/`LocalTransaction` once that held up), the fix was to delete its
+  `obx_model_property(...)` line entirely but *keep* `obx_model_entity_last_property_id(...)`
+  pointing at its old id/uid rather than lowering it back down — that call's job is to record
+  the highest property id/uid *ever* issued for the entity, not just the ones currently active,
+  so a future property never accidentally reuses a retired number. Mirrored the same idea in
+  `objectbox-sync-server/objectbox-model.json` by adding all four retired uids to
+  `retiredPropertyUids` instead of just deleting them silently. Didn't find (or need) an explicit
+  C-API "retire this property" call for the local model — deleting the registration line while
+  keeping the last-property-id call was sufficient, verified by rebuilding, wiping the local
+  volume (same reason as above — the uid's meaning had changed), and re-running
+  `test_leafy_local_store_sync.py` end-to-end.
