@@ -115,7 +115,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"ownerPartyRef\": \"party-postman-test\",\n  \"counterpartyArrangementReference\": \"arr-contact-postman\",\n  \"counterpartyLabel\": \"Test Contact\",\n  \"counterpartyLookupType\": \"email\",\n  \"counterpartyLookupHint\": \"t***@example.com\"\n}",
+          "raw": "{\n  \"ownerPartyRef\": \"party-postman-test\",\n  \"counterpartyArrangementReference\": \"arr-contact-postman\",\n  \"counterpartyLabel\": \"Test Contact delete\",\n  \"counterpartyLookupType\": \"email\",\n  \"counterpartyLookupHint\": \"t***@example.com\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -190,6 +190,34 @@
             "v1",
             "contacts",
             "13"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create a chat",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Splitting dinner with Maria\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/chats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "chats"
           ]
         }
       },
