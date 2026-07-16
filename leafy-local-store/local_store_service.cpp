@@ -25,8 +25,7 @@ using json = nlohmann::json;
 
 // ─── Entity ──────────────────────────────────────────────────────────────
 // Mirrors backend/schemas/wallet_transactions.py's WalletTransactionCreate/Out,
-// flattened for ObjectBox (no nested `amount` sub-document — see the plan's
-// "known open question" on how this bridges to Atlas's nested shape).
+// flattened for ObjectBox (no nested `amount` sub-document).
 
 struct LocalTransaction {
     int64_t id = 0;
@@ -42,7 +41,6 @@ struct LocalTransaction {
     std::string localSyncStatus;
     int64_t createdAt = 0;                // epoch millis
     int64_t settledAt = 0;                // 0 = absent
-    int64_t syncClock = 0;                // set by the Sync Server
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 1; }
@@ -75,7 +73,6 @@ struct LocalTransaction {
             fbb.AddOffset(24, offsetLocalSyncStatus);            // 11: localSyncStatus
             fbb.AddElement(26, object.createdAt);                // 12: createdAt
             fbb.AddElement(28, object.settledAt);                // 13: settledAt
-            fbb.AddElement(30, object.syncClock);                // 14: syncClock
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -107,7 +104,6 @@ struct LocalTransaction {
             readString(24, out.localSyncStatus);
             out.createdAt = table->GetField<int64_t>(26, 0);
             out.settledAt = table->GetField<int64_t>(28, 0);
-            out.syncClock = table->GetField<int64_t>(30, 0);
         }
 
         static LocalTransaction fromFlatBuffer(const void* data, size_t size) {
@@ -137,7 +133,6 @@ struct LocalContact {
     std::string counterpartyLookupHint;
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
-    int64_t syncClock = 0;   // set by the Sync Server
     // Blind index of the contact's email; empty for contacts saved by phone.
     std::string counterpartyLookupDigest;
 
@@ -164,7 +159,6 @@ struct LocalContact {
             fbb.AddOffset(14, offsetLookupHint);            // 6: counterpartyLookupHint
             fbb.AddElement(16, object.createdAt);           // 7: createdAt
             fbb.AddElement(18, object.updatedAt);           // 8: updatedAt
-            fbb.AddElement(20, object.syncClock);           // 9: syncClock
             fbb.AddOffset(22, offsetLookupDigest);          // 10: counterpartyLookupDigest
 
             flatbuffers::Offset<flatbuffers::Table> offset;
@@ -189,7 +183,6 @@ struct LocalContact {
             readString(14, out.counterpartyLookupHint);
             out.createdAt = table->GetField<int64_t>(16, 0);
             out.updatedAt = table->GetField<int64_t>(18, 0);
-            out.syncClock = table->GetField<int64_t>(20, 0);
             readString(22, out.counterpartyLookupDigest);
         }
 
@@ -215,7 +208,6 @@ struct LocalChat {
     std::string title;
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
-    int64_t syncClock = 0;   // set by the Sync Server
     // Mirrors `id` once it's assigned, but as a *non-PK* field. ObjectBox's
     // Sync Server drops the PK `id` when bridging to Mongo (Mongo assigns its
     // own `_id` instead), so without this, LocalChatMessage.chatId (which
@@ -237,7 +229,6 @@ struct LocalChat {
             fbb.AddOffset(6, offsetTitle);                  // 2: title
             fbb.AddElement(8, object.createdAt);            // 3: createdAt
             fbb.AddElement(10, object.updatedAt);           // 4: updatedAt
-            fbb.AddElement(12, object.syncClock);           // 5: syncClock
             fbb.AddElement(14, object.localId);             // 6: localId
 
             flatbuffers::Offset<flatbuffers::Table> offset;
@@ -258,7 +249,6 @@ struct LocalChat {
             readString(6, out.title);
             out.createdAt = table->GetField<int64_t>(8, 0);
             out.updatedAt = table->GetField<int64_t>(10, 0);
-            out.syncClock = table->GetField<int64_t>(12, 0);
             out.localId = table->GetField<int64_t>(14, 0);
         }
 
@@ -285,7 +275,6 @@ struct LocalChatMessage {
     std::string role;
     std::string text;
     int64_t createdAt = 0;   // epoch millis
-    int64_t syncClock = 0;   // set by the Sync Server
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 4; }
@@ -303,7 +292,6 @@ struct LocalChatMessage {
             fbb.AddOffset(8, offsetRole);                   // 3: role
             fbb.AddOffset(10, offsetText);                  // 4: text
             fbb.AddElement(12, object.createdAt);           // 5: createdAt
-            fbb.AddElement(14, object.syncClock);           // 6: syncClock
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -324,7 +312,6 @@ struct LocalChatMessage {
             readString(8, out.role);
             readString(10, out.text);
             out.createdAt = table->GetField<int64_t>(12, 0);
-            out.syncClock = table->GetField<int64_t>(14, 0);
         }
 
         static LocalChatMessage fromFlatBuffer(const void* data, size_t size) {
@@ -440,7 +427,6 @@ struct LocalRequest {
     std::string leafyPayTransferReference;   // empty = absent (set when paid)
     int64_t createdAt = 0;                   // epoch millis
     int64_t resolvedAt = 0;                  // 0 = absent
-    int64_t syncClock = 0;                   // set by the Sync Server
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 6; }
@@ -473,7 +459,6 @@ struct LocalRequest {
             fbb.AddOffset(24, offsetTransferRef);           // 11: leafyPayTransferReference
             fbb.AddElement(26, object.createdAt);           // 12: createdAt
             fbb.AddElement(28, object.resolvedAt);          // 13: resolvedAt
-            fbb.AddElement(30, object.syncClock);           // 14: syncClock
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -502,7 +487,6 @@ struct LocalRequest {
             readString(24, out.leafyPayTransferReference);
             out.createdAt = table->GetField<int64_t>(26, 0);
             out.resolvedAt = table->GetField<int64_t>(28, 0);
-            out.syncClock = table->GetField<int64_t>(30, 0);
         }
 
         static LocalRequest fromFlatBuffer(const void* data, size_t size) {
@@ -530,7 +514,6 @@ struct LocalContact_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalContact, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalContact, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalContact, OBXPropertyType_Long> syncClock;
     static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupDigest;
 };
 
@@ -542,7 +525,6 @@ const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counter
 const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupHint(6);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::createdAt(7);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::updatedAt(8);
-const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::syncClock(9);
 const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupDigest(10);
 
 struct LocalTransaction_ {
@@ -561,7 +543,6 @@ struct LocalTransaction_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalTransaction, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalTransaction, OBXPropertyType_Date> settledAt;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Long> syncClock;
 };
 
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::id(1);
@@ -577,14 +558,12 @@ const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_:
 const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::localSyncStatus(11);
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::createdAt(12);
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
-const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
 struct LocalChat_ {
     static const obx::Property<LocalChat, OBXPropertyType_Long> id;
     static const obx::Property<LocalChat, OBXPropertyType_String> title;
     static const obx::Property<LocalChat, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalChat, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalChat, OBXPropertyType_Long> syncClock;
     static const obx::Property<LocalChat, OBXPropertyType_Long> localId;
 };
 
@@ -592,7 +571,6 @@ const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::id(1);
 const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::title(2);
 const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::createdAt(3);
 const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::updatedAt(4);
-const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::syncClock(5);
 const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::localId(6);
 
 struct LocalChatMessage_ {
@@ -601,7 +579,6 @@ struct LocalChatMessage_ {
     static const obx::Property<LocalChatMessage, OBXPropertyType_String> role;
     static const obx::Property<LocalChatMessage, OBXPropertyType_String> text;
     static const obx::Property<LocalChatMessage, OBXPropertyType_Date> createdAt;
-    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> syncClock;
 };
 
 const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::id(1);
@@ -609,7 +586,6 @@ const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::c
 const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::role(3);
 const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::text(4);
 const obx::Property<LocalChatMessage, OBXPropertyType_Date> LocalChatMessage_::createdAt(5);
-const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::syncClock(6);
 
 struct LocalAccountBalance_ {
     static const obx::Property<LocalAccountBalance, OBXPropertyType_Long> id;
@@ -649,7 +625,6 @@ struct LocalRequest_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalRequest, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalRequest, OBXPropertyType_Date> resolvedAt;
-    static const obx::Property<LocalRequest, OBXPropertyType_Long> syncClock;
 };
 
 const obx::Property<LocalRequest, OBXPropertyType_Long> LocalRequest_::id(1);
@@ -665,7 +640,6 @@ const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::status(
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::leafyPayTransferReference(11);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt(12);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
-const obx::Property<LocalRequest, OBXPropertyType_Long> LocalRequest_::syncClock(14);
 
 // ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
 
@@ -701,7 +675,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "localSyncStatus", OBXPropertyType_String, 11, 7001000000000011ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7001000000000012ULL);
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 14, 7001000000000014ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
     // Entity 2: walletContacts — entity name is the target MongoDB collection
@@ -719,7 +692,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupHint", OBXPropertyType_String, 6, 7002000000000006ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 7, 7002000000000007ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
     obx_model_property(model, "counterpartyLookupDigest", OBXPropertyType_String, 10, 7002000000000010ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
@@ -734,7 +706,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "title", OBXPropertyType_String, 2, 7003000000000002ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 3, 7003000000000003ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 4, 7003000000000004ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 5, 7003000000000005ULL);
     obx_model_property(model, "localId", OBXPropertyType_Long, 6, 7003000000000006ULL);
     obx_model_entity_last_property_id(model, 6, 7003000000000006ULL);
 
@@ -750,7 +721,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "role", OBXPropertyType_String, 3, 7004000000000003ULL);
     obx_model_property(model, "text", OBXPropertyType_String, 4, 7004000000000004ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 5, 7004000000000005ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 6, 7004000000000006ULL);
     obx_model_entity_last_property_id(model, 6, 7004000000000006ULL);
 
     // Entity 5: LocalAccountBalance — purely local, deliberately no
@@ -793,7 +763,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "leafyPayTransferReference", OBXPropertyType_String, 11, 7006000000000011ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7006000000000012ULL);
     obx_model_property(model, "resolvedAt", OBXPropertyType_Date, 13, 7006000000000013ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 14, 7006000000000014ULL);
     obx_model_entity_last_property_id(model, 14, 7006000000000014ULL);
 
     obx_model_last_entity_id(model, 6, 7006000000000000ULL);
