@@ -274,13 +274,25 @@ Tests run as integration tests directly against MongoDB Atlas using the credenti
 
 Tests in `test_wallet_transactions_search.py` additionally skip if the vector search index hasn't been provisioned (see `scripts/create_vector_index.py` above), and poll for up to ~60s per assertion since Atlas Search indexes newly written documents asynchronously.
 
-`test_leafy_local_store.py` is **local-only, not part of CI** — it needs `leafy-local-store`
-actually running (see [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and
-deploying that whole stack in CI wasn't judged worth it for this PoC. It skips cleanly if the
-service isn't reachable, same pattern as the Atlas/Ollama skips above. It creates records that
-sync into the real `walletTransactions`/`walletContacts` Atlas collections, so every test
-cleans up via `DELETE /local/v1/.../{id}` (which propagates the deletion through Sync back to
-Atlas too) rather than leaving test data behind.
+`test_leafy_local_store*.py` (four files: the base one plus `_chats`/`_accounts`/`_sync`) are
+**local-only, not part of CI** — they need `leafy-local-store` actually running (see
+[ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and deploying that whole stack
+in CI wasn't judged worth it for this PoC. They skip cleanly if the service isn't reachable,
+same pattern as the Atlas/Ollama skips above. Most of them create records that sync into the
+real Atlas collections, so every test cleans up via `DELETE /local/v1/.../{id}` (which
+propagates the deletion through Sync back to Atlas too) rather than leaving test data behind.
+
+`test_leafy_local_store_sync.py` specifically is the one file that verifies the Sync Server
+bridge itself is actually moving data — every other file only exercises the local HTTP surface
+in isolation (write via `leafy-local-store`, read back via `leafy-local-store`), which would
+stay green even if the bridge were completely broken. This one writes via `leafy-local-store`
+and reads back directly from Atlas via `pymongo`, and the other direction too (writes directly
+to Atlas, reads back via `leafy-local-store`), for every synced entity
+(`walletContacts`/`walletTransactions`/`chats`/`chatMessages`), plus a regression check that
+`LocalAccountBalance` never shows up in Atlas. Since sync is asynchronous in both directions,
+every assertion polls with a timeout (20s, picked empirically) instead of checking immediately
+— a timeout here means the bridge didn't do its job in time, which is exactly the failure mode
+this file exists to catch.
 
 ## ObjectBox Offline Sync (PoC)
 
