@@ -202,6 +202,222 @@ struct LocalContact {
     };
 };
 
+// A conversation. Messages live in the separate LocalChatMessage entity
+// (ObjectBox has no nested/array attributes), linked by chatId.
+
+struct LocalChat {
+    int64_t id = 0;
+    std::string title;
+    int64_t createdAt = 0;   // epoch millis
+    int64_t updatedAt = 0;   // epoch millis
+    int64_t syncClock = 0;   // set by the Sync Server
+    // Mirrors `id` once it's assigned, but as a *non-PK* field. ObjectBox's
+    // Sync Server drops the PK `id` when bridging to Mongo (Mongo assigns its
+    // own `_id` instead), so without this, LocalChatMessage.chatId (which
+    // does sync through as a plain field) has nothing to join against once
+    // synced. Set right after `id` is assigned by the first `put()`.
+    int64_t localId = 0;
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 3; }
+
+        static void setObjectId(LocalChat& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalChat& object) {
+            fbb.Clear();
+            auto offsetTitle = fbb.CreateString(object.title);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                  // 1: id
+            fbb.AddOffset(6, offsetTitle);                  // 2: title
+            fbb.AddElement(8, object.createdAt);            // 3: createdAt
+            fbb.AddElement(10, object.updatedAt);           // 4: updatedAt
+            fbb.AddElement(12, object.syncClock);           // 5: syncClock
+            fbb.AddElement(14, object.localId);             // 6: localId
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalChat& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.title);
+            out.createdAt = table->GetField<int64_t>(8, 0);
+            out.updatedAt = table->GetField<int64_t>(10, 0);
+            out.syncClock = table->GetField<int64_t>(12, 0);
+            out.localId = table->GetField<int64_t>(14, 0);
+        }
+
+        static LocalChat fromFlatBuffer(const void* data, size_t size) {
+            LocalChat object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalChat> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalChat>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
+// A single message within a LocalChat conversation. `role` mirrors the
+// frontend's message shape ("user" | "assistant").
+
+struct LocalChatMessage {
+    int64_t id = 0;
+    int64_t chatId = 0;
+    std::string role;
+    std::string text;
+    int64_t createdAt = 0;   // epoch millis
+    int64_t syncClock = 0;   // set by the Sync Server
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 4; }
+
+        static void setObjectId(LocalChatMessage& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalChatMessage& object) {
+            fbb.Clear();
+            auto offsetRole = fbb.CreateString(object.role);
+            auto offsetText = fbb.CreateString(object.text);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                  // 1: id
+            fbb.AddElement(6, object.chatId);               // 2: chatId
+            fbb.AddOffset(8, offsetRole);                   // 3: role
+            fbb.AddOffset(10, offsetText);                  // 4: text
+            fbb.AddElement(12, object.createdAt);           // 5: createdAt
+            fbb.AddElement(14, object.syncClock);           // 6: syncClock
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalChatMessage& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            out.chatId = table->GetField<int64_t>(6, 0);
+            readString(8, out.role);
+            readString(10, out.text);
+            out.createdAt = table->GetField<int64_t>(12, 0);
+            out.syncClock = table->GetField<int64_t>(14, 0);
+        }
+
+        static LocalChatMessage fromFlatBuffer(const void* data, size_t size) {
+            LocalChatMessage object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalChatMessage> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalChatMessage>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
+// Last-known balance per account, purely local — deliberately NOT
+// SYNC_ENABLED (see create_obx_model()). A balance is derived/non-authoritative
+// data (Leafy Pay owns the real value, re-fetched live whenever online), not a
+// source-of-truth record like a transaction or contact, so it doesn't get a
+// Sync Server / Atlas copy the way those do. One row per account (a user can
+// have more than one), upserted in place by accountReference rather than
+// accumulating like an event log.
+
+struct LocalAccountBalance {
+    int64_t id = 0;
+    std::string ownerPartyRef;
+    std::string accountReference;
+    std::string label;
+    std::string currency;
+    double balanceValue = 0;
+    std::string maskedIban;   // empty = absent
+    bool isDefault = false;
+    int64_t lastRefreshedAt = 0;   // epoch millis
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 5; }
+
+        static void setObjectId(LocalAccountBalance& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalAccountBalance& object) {
+            fbb.Clear();
+            auto offsetOwner = fbb.CreateString(object.ownerPartyRef);
+            auto offsetAccountRef = fbb.CreateString(object.accountReference);
+            auto offsetLabel = fbb.CreateString(object.label);
+            auto offsetCurrency = fbb.CreateString(object.currency);
+            auto offsetMaskedIban = fbb.CreateString(object.maskedIban);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                        // 1: id
+            fbb.AddOffset(6, offsetOwner);                        // 2: ownerPartyRef
+            fbb.AddOffset(8, offsetAccountRef);                   // 3: accountReference
+            fbb.AddOffset(10, offsetLabel);                       // 4: label
+            fbb.AddOffset(12, offsetCurrency);                    // 5: currency
+            fbb.AddElement(14, object.balanceValue);              // 6: balanceValue
+            fbb.AddOffset(16, offsetMaskedIban);                  // 7: maskedIban
+            fbb.AddElement<uint8_t>(18, object.isDefault, false); // 8: isDefault
+            fbb.AddElement(20, object.lastRefreshedAt);           // 9: lastRefreshedAt
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalAccountBalance& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.ownerPartyRef);
+            readString(8, out.accountReference);
+            readString(10, out.label);
+            readString(12, out.currency);
+            out.balanceValue = table->GetField<double>(14, 0);
+            readString(16, out.maskedIban);
+            out.isDefault = table->GetField<uint8_t>(18, 0) != 0;
+            out.lastRefreshedAt = table->GetField<int64_t>(20, 0);
+        }
+
+        static LocalAccountBalance fromFlatBuffer(const void* data, size_t size) {
+            LocalAccountBalance object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalAccountBalance> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalAccountBalance>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
 struct LocalContact_ {
     static const obx::Property<LocalContact, OBXPropertyType_Long> id;
     static const obx::Property<LocalContact, OBXPropertyType_String> ownerPartyRef;
@@ -260,6 +476,60 @@ const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::c
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
+struct LocalChat_ {
+    static const obx::Property<LocalChat, OBXPropertyType_Long> id;
+    static const obx::Property<LocalChat, OBXPropertyType_String> title;
+    static const obx::Property<LocalChat, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalChat, OBXPropertyType_Date> updatedAt;
+    static const obx::Property<LocalChat, OBXPropertyType_Long> syncClock;
+    static const obx::Property<LocalChat, OBXPropertyType_Long> localId;
+};
+
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::id(1);
+const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::title(2);
+const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::createdAt(3);
+const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::updatedAt(4);
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::syncClock(5);
+const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::localId(6);
+
+struct LocalChatMessage_ {
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> id;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> chatId;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_String> role;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_String> text;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> syncClock;
+};
+
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::id(1);
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::chatId(2);
+const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::role(3);
+const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::text(4);
+const obx::Property<LocalChatMessage, OBXPropertyType_Date> LocalChatMessage_::createdAt(5);
+const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::syncClock(6);
+
+struct LocalAccountBalance_ {
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Long> id;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> ownerPartyRef;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> accountReference;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> label;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> currency;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Double> balanceValue;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> maskedIban;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> isDefault;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Date> lastRefreshedAt;
+};
+
+const obx::Property<LocalAccountBalance, OBXPropertyType_Long> LocalAccountBalance_::id(1);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::ownerPartyRef(2);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::accountReference(3);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::label(4);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::currency(5);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Double> LocalAccountBalance_::balanceValue(6);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::maskedIban(7);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> LocalAccountBalance_::isDefault(8);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Date> LocalAccountBalance_::lastRefreshedAt(9);
+
 // ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
 
 constexpr int EMBEDDING_DIMENSIONS = 768;
@@ -315,7 +585,57 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
     obx_model_entity_last_property_id(model, 9, 7002000000000009ULL);
 
-    obx_model_last_entity_id(model, 2, 7002000000000000ULL);
+    // Entity 3: chats — a conversation. Entity name is the target MongoDB
+    // collection name, same rule as entities 1-2 above.
+    obx_model_entity(model, "chats", 3, 7003000000000000ULL);
+    obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7003000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "title", OBXPropertyType_String, 2, 7003000000000002ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 3, 7003000000000003ULL);
+    obx_model_property(model, "updatedAt", OBXPropertyType_Date, 4, 7003000000000004ULL);
+    obx_model_property(model, "syncClock", OBXPropertyType_Long, 5, 7003000000000005ULL);
+    obx_model_property(model, "localId", OBXPropertyType_Long, 6, 7003000000000006ULL);
+    obx_model_entity_last_property_id(model, 6, 7003000000000006ULL);
+
+    // Entity 4: chatMessages — a single message within a chats conversation,
+    // linked by chatId (ObjectBox has no nested/array attributes).
+    obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
+    obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7004000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "chatId", OBXPropertyType_Long, 2, 7004000000000002ULL);
+    obx_model_property(model, "role", OBXPropertyType_String, 3, 7004000000000003ULL);
+    obx_model_property(model, "text", OBXPropertyType_String, 4, 7004000000000004ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 5, 7004000000000005ULL);
+    obx_model_property(model, "syncClock", OBXPropertyType_Long, 6, 7004000000000006ULL);
+    obx_model_entity_last_property_id(model, 6, 7004000000000006ULL);
+
+    // Entity 5: LocalAccountBalance — purely local, deliberately no
+    // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
+    // objectbox-sync-server/objectbox-model.json (see the struct comment
+    // above). The entity name has no MongoDB-collection meaning here since
+    // it's never bridged.
+    obx_model_entity(model, "LocalAccountBalance", 5, 7005000000000000ULL);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7005000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "ownerPartyRef", OBXPropertyType_String, 2, 7005000000000002ULL);
+    obx_model_property(model, "accountReference", OBXPropertyType_String, 3, 7005000000000003ULL);
+    obx_model_property(model, "label", OBXPropertyType_String, 4, 7005000000000004ULL);
+    obx_model_property(model, "currency", OBXPropertyType_String, 5, 7005000000000005ULL);
+    obx_model_property(model, "balanceValue", OBXPropertyType_Double, 6, 7005000000000006ULL);
+    obx_model_property(model, "maskedIban", OBXPropertyType_String, 7, 7005000000000007ULL);
+    obx_model_property(model, "isDefault", OBXPropertyType_Bool, 8, 7005000000000008ULL);
+    obx_model_property(model, "lastRefreshedAt", OBXPropertyType_Date, 9, 7005000000000009ULL);
+    obx_model_entity_last_property_id(model, 9, 7005000000000009ULL);
+
+    obx_model_last_entity_id(model, 5, 7005000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
 
     return model;
@@ -372,7 +692,10 @@ bool init_objectbox(const std::string& db_path, const std::string& sync_url) {
         options.directory(db_path.c_str());
         store = std::make_shared<obx::Store>(options);
         std::cout << "Store opened (" << store->box<LocalTransaction>().count() << " transactions, "
-                   << store->box<LocalContact>().count() << " contacts)" << std::endl;
+                   << store->box<LocalContact>().count() << " contacts, "
+                   << store->box<LocalChat>().count() << " chats, "
+                   << store->box<LocalChatMessage>().count() << " chat messages, "
+                   << store->box<LocalAccountBalance>().count() << " cached accounts)" << std::endl;
 
         if (!sync_url.empty()) {
             if (obx_has_feature(OBXFeature_Sync)) {
@@ -431,6 +754,40 @@ json contact_to_json(const LocalContact& c) {
     };
 }
 
+json chat_to_json(const LocalChat& c) {
+    return {
+        {"id", c.id},
+        {"title", c.title},
+        {"createdAt", c.createdAt},
+        {"updatedAt", c.updatedAt},
+        {"localId", c.localId},
+    };
+}
+
+json chat_message_to_json(const LocalChatMessage& m) {
+    return {
+        {"id", m.id},
+        {"chatId", m.chatId},
+        {"role", m.role},
+        {"text", m.text},
+        {"createdAt", m.createdAt},
+    };
+}
+
+json account_balance_to_json(const LocalAccountBalance& a) {
+    return {
+        {"id", a.id},
+        {"ownerPartyRef", a.ownerPartyRef},
+        {"accountReference", a.accountReference},
+        {"label", a.label},
+        {"currency", a.currency},
+        {"balanceValue", a.balanceValue},
+        {"maskedIban", a.maskedIban.empty() ? json(nullptr) : json(a.maskedIban)},
+        {"isDefault", a.isDefault},
+        {"lastRefreshedAt", a.lastRefreshedAt},
+    };
+}
+
 int main(int argc, char* argv[]) {
     std::string db_path = argc > 1 ? argv[1] : "/app/local-store-db";
     std::string sync_url = argc > 2 ? argv[2] : env_or("SYNC_SERVER_URL", "ws://objectbox-sync-server:9999");
@@ -448,6 +805,9 @@ int main(int argc, char* argv[]) {
             response["status"] = "healthy";
             response["transaction_count"] = store->box<LocalTransaction>().count();
             response["contact_count"] = store->box<LocalContact>().count();
+            response["chat_count"] = store->box<LocalChat>().count();
+            response["chat_message_count"] = store->box<LocalChatMessage>().count();
+            response["account_count"] = store->box<LocalAccountBalance>().count();
             res.set_content(response.dump(), "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
@@ -661,6 +1021,179 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    svr.Get("/local/v1/chats", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            auto box = store->box<LocalChat>();
+            json results = json::array();
+            for (const auto& c : box.getAll()) {
+                results.push_back(chat_to_json(*c));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Post("/local/v1/chats", [](const httplib::Request& req, httplib::Response& res) {
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(), "application/json");
+            return;
+        }
+
+        try {
+            LocalChat c;
+            c.title = body.value("title", "New chat");
+            c.createdAt = now_epoch_millis();
+            c.updatedAt = c.createdAt;
+
+            auto box = store->box<LocalChat>();
+            box.put(c);       // assigns c.id
+            c.localId = c.id;
+            box.put(c);       // persist localId so it's carried into the Atlas sync
+
+            res.status = 201;
+            res.set_content(chat_to_json(c).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            int64_t chatId = std::stoll(req.matches[1]);
+            if (!store->box<LocalChat>().get(chatId)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            auto query = store->box<LocalChatMessage>().query(LocalChatMessage_::chatId.equals(chatId)).build();
+            json results = json::array();
+            for (const auto& m : query.find()) {
+                results.push_back(chat_message_to_json(m));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Bumps the parent LocalChat's updatedAt on every new message (two
+    // sequential puts, no explicit transaction — same simplicity level as
+    // the rest of this file).
+    svr.Post(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        int64_t chatId = std::stoll(req.matches[1]);
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"role", "text"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        std::string role = body.at("role").get<std::string>();
+        if (role != "user" && role != "assistant") {
+            bad_request("role must be \"user\" or \"assistant\"");
+            return;
+        }
+
+        try {
+            auto chatBox = store->box<LocalChat>();
+            auto chat = chatBox.get(chatId);
+            if (!chat) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            LocalChatMessage m;
+            m.chatId = chatId;
+            m.role = role;
+            m.text = body.at("text").get<std::string>();
+            m.createdAt = now_epoch_millis();
+
+            store->box<LocalChatMessage>().put(m);
+
+            chat->updatedAt = m.createdAt;
+            chatBox.put(*chat);
+
+            res.status = 201;
+            res.set_content(chat_message_to_json(m).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Deletes propagate through ObjectBox Sync like any other write, so this
+    // also removes the corresponding document from Atlas once connected.
+    // Cascades to the chat's messages, mirroring backend/routers/chats.py's
+    // delete_chat.
+    svr.Delete(R"(/local/v1/chats/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id chatId = std::stoll(req.matches[1]);
+
+            auto chatBox = store->box<LocalChat>();
+            if (!chatBox.remove(chatId)) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+                return;
+            }
+
+            auto messageBox = store->box<LocalChatMessage>();
+            auto query = messageBox.query(LocalChatMessage_::chatId.equals(chatId)).build();
+            for (const auto& m : query.find()) {
+                messageBox.remove(m.id);
+            }
+
+            res.status = 204;
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Delete(R"(/local/v1/chats/(\d+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            obx_id chatId = std::stoll(req.matches[1]);
+            obx_id messageId = std::stoll(req.matches[2]);
+
+            auto messageBox = store->box<LocalChatMessage>();
+            auto existing = messageBox.get(messageId);
+            if (!existing || existing->chatId != chatId) {
+                res.status = 404;
+                res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
+                return;
+            }
+
+            messageBox.remove(messageId);
+            res.status = 204;
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
     svr.Delete(R"(/local/v1/contacts/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
             obx_id id = std::stoll(req.matches[1]);
@@ -670,6 +1203,92 @@ int main(int argc, char* argv[]) {
                 res.set_content(json{{"error", "Contact not found"}}.dump(), "application/json");
                 return;
             }
+            res.status = 204;
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get("/local/v1/accounts", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            auto box = store->box<LocalAccountBalance>();
+            json results = json::array();
+            for (const auto& a : box.getAll()) {
+                results.push_back(account_balance_to_json(*a));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Upsert, not insert-only: a balance is a cache meant to be refreshed in
+    // place (e.g. every time the home tab loads while online), not an
+    // accumulating event log like /transactions/send or /contacts.
+    svr.Put(R"(/local/v1/accounts/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        std::string accountReference = req.matches[1];
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"ownerPartyRef", "label", "currency", "balanceValue"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        try {
+            auto box = store->box<LocalAccountBalance>();
+            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+            auto existing = query.find();
+
+            LocalAccountBalance a = existing.empty() ? LocalAccountBalance() : existing.front();
+            a.accountReference = accountReference;
+            a.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+            a.label = body.at("label").get<std::string>();
+            a.currency = body.at("currency").get<std::string>();
+            a.balanceValue = body.at("balanceValue").get<double>();
+            a.maskedIban = body.value("maskedIban", "");
+            a.isDefault = body.value("isDefault", false);
+            a.lastRefreshedAt = now_epoch_millis();
+
+            box.put(a);
+
+            res.status = existing.empty() ? 201 : 200;
+            res.set_content(account_balance_to_json(a).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Delete(R"(/local/v1/accounts/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string accountReference = req.matches[1];
+            auto box = store->box<LocalAccountBalance>();
+            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+            auto existing = query.find();
+
+            if (existing.empty()) {
+                res.status = 404;
+                res.set_content(json{{"error", "Account not found"}}.dump(), "application/json");
+                return;
+            }
+
+            box.remove(existing.front().id);
             res.status = 204;
         } catch (const std::exception& e) {
             res.status = 500;
