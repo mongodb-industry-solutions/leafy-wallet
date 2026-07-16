@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pymongo.errors import OperationFailure
 
 from db.client import get_db
 from db.mdb import MongoDBConnector
 from db.utils import parse_object_id, with_str_id
 from services.ollama import get_embedding
+from services.transactions import SemanticSearchUnavailable
+from services.transactions import search_transactions as search_transactions_service
 from schemas.wallet_transactions import (
     WalletTransactionCreate,
     WalletTransactionOut,
@@ -15,7 +16,6 @@ from schemas.wallet_transactions import (
 )
 
 COLLECTION = "walletTransactions"
-NOTE_EMBEDDING_INDEX = "noteEmbedding_vector_index"
 
 router = APIRouter(prefix="/wallet-transactions", tags=["wallet-transactions"])
 
@@ -64,34 +64,10 @@ async def search_transactions(
     Requires the `noteEmbedding_vector_index` index (see
     scripts/create_vector_index.py) to already exist on `walletTransactions`.
     """
-    query_vector = await get_embedding(q)
-    if query_vector is None:
-        raise HTTPException(status_code=503, detail="Semantic search is temporarily unavailable")
-
-    vector_search_stage = {
-        "index": NOTE_EMBEDDING_INDEX,
-        "path": "noteEmbedding",
-        "queryVector": query_vector,
-        "numCandidates": max(limit * 10, 100),
-        "limit": limit,
-    }
-    if ownerPartyRef:
-        vector_search_stage["filter"] = {"ownerPartyRef": ownerPartyRef}
-
-    pipeline = [
-        {"$vectorSearch": vector_search_stage},
-        {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
-        {"$project": {"noteEmbedding": 0}},
-    ]
     try:
-        docs = db.aggregate(COLLECTION, pipeline)
-    except OperationFailure as exc:
-        atlas_message = (exc.details or {}).get("errmsg") or str(exc)
-        raise HTTPException(
-            status_code=503,
-            detail=f"Semantic search is temporarily unavailable (Atlas error: {atlas_message})",
-        )
-    return [with_str_id(doc) for doc in docs]
+        return await search_transactions_service(db, q, ownerPartyRef, limit)
+    except SemanticSearchUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.get("/{transaction_id}", response_model=WalletTransactionOut)
