@@ -112,10 +112,9 @@ The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g
 Two independent write paths can populate the same Atlas collections: this FastAPI backend
 (writes directly), and `leafy-local-store` via the ObjectBox↔MongoDB Sync Server bridge (see
 [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below). Documents that arrived through
-the sync bridge can carry extra bookkeeping fields that documents this backend writes
-directly never have — `syncClock` on `walletContacts`/`walletTransactions`, and `localId` on
-`chats`. See [Sync-related fields](#sync-related-fields) below for what those mean, including
-why `chats`/`chatMessages` don't have `syncClock` even though the other two collections do.
+the sync bridge carry one extra bookkeeping field that documents this backend writes directly
+never have — `localId` on `chats`. See [Sync-related fields](#sync-related-fields) below for
+what that means.
 
 ### Atlas collections
 
@@ -130,7 +129,6 @@ why `chats`/`chatMessages` don't have `syncClock` even though the other two coll
 | `counterpartyLookupType` | `"phone"` \| `"email"` | |
 | `counterpartyLookupHint` | string | masked |
 | `createdAt` / `updatedAt` | date | |
-| `syncClock` | long | only on documents synced from ObjectBox — see [Sync-related fields](#sync-related-fields) |
 
 **`walletTransactions`** — enrichment layer (note + embedding) over Leafy Pay P2P transfers.
 `amount`/`currency` are **flat top-level fields**, not a nested `amount: {value, currency}`
@@ -153,7 +151,6 @@ flattened to match rather than have two shapes coexist in one collection.
 | `localSyncStatus` | `"local_pending"` \| `"synced"` | |
 | `createdAt` | date | |
 | `settledAt` | date \| null | |
-| `syncClock` | long | only on documents synced from ObjectBox — see [Sync-related fields](#sync-related-fields) |
 
 **`chats`** — a conversation in the AI assistant.
 
@@ -180,9 +177,7 @@ both write paths need to produce the same shape.
 
 Local mirrors of the four Atlas collections above, defined programmatically against the
 ObjectBox C API (no `.fbs`/codegen file — see `create_obx_model()`). Every entity has an
-internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages. `LocalContact`
-and `LocalTransaction` also still declare a plain `syncClock` `Long` field; `LocalChat` and
-`LocalChatMessage` do not (removed — see [Sync-related fields](#sync-related-fields)).
+internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages.
 
 **`LocalChat`**
 
@@ -205,35 +200,15 @@ and `LocalTransaction` also still declare a plain `syncClock` `Long` field; `Loc
 
 **`LocalContact`** / **`LocalTransaction`**: see the struct definitions in
 `local_store_service.cpp` — field names and types match `walletContacts`/`walletTransactions`
-above 1:1 (that's the whole point of the flattened schema), including still declaring
-`syncClock`. Neither has a `localId`-style field, since neither is referenced by another
-synced entity the way `chatMessages` references `chats`.
+above 1:1 (that's the whole point of the flattened schema). Neither has a `localId`-style
+field, since neither is referenced by another synced entity the way `chatMessages` references
+`chats`.
 
 ### Sync-related fields
 
 Fields that only ever appear on documents that arrived via the ObjectBox → Atlas bridge, never
 on documents this FastAPI backend writes directly:
 
-- **`syncClock`** (`walletContacts`/`walletTransactions` only — removed from `chats`/
-  `chatMessages`, see below) — always `0` in every document ever observed. ObjectBox Sync does
-  have a genuine, documented "Sync Clock" feature (a hybrid logical clock used for conflict
-  resolution — deciding which concurrent offline write wins), but per ObjectBox's docs that's
-  opt-in via an explicit `@SyncClock()`-style annotation/flag on the property — this model
-  declares `syncClock` as a plain `Long` with no such flag (unlike `id`, which does get the
-  dedicated `OBXPropertyFlags_ID` flag). So it was never confirmed to be wired into that
-  mechanism, or required by the sync bridge at all — it reads as an inherited convention
-  (mirroring a reference implementation per the code comments), not something ever verified to
-  be load-bearing. The Sync Server's actual "where did I leave off" bookkeeping for the MongoDB
-  bridge lives in its own `__ObjectBox_Metadata` collection in MongoDB, not in a per-document
-  field, per ObjectBox's FAQ.
-
-  **Removed from `LocalChat`/`LocalChatMessage` as a deliberate experiment**, and confirmed via
-  `test_leafy_local_store_sync.py` (which exercises the real bidirectional bridge, not just the
-  local HTTP surface) that both directions of sync still work correctly without it. Scoped to
-  just these two entities rather than all four — lower blast radius, since they're the newest
-  and least depended-upon. `LocalContact`/`LocalTransaction` still declare it, left untouched
-  pending a separate decision once there's been more time to build confidence. See "Removing an
-  ObjectBox property..." below for how the removal itself was done.
 - **`localId`** (`chats` only) — added specifically because the Sync Server's bridge drops
   an entity's own primary-key field (`id`) when writing to Mongo; Mongo just assigns its own
   `_id` instead (see "A synced entity's own primary-key..." below). Without a second, non-PK
@@ -638,9 +613,9 @@ the previous value alone.
   genuine BSON `ISODate`; `Long` maps to a plain `Int64`. We initially used `Long` for
   `createdAt`/`settledAt` and only caught it by inspecting the raw Atlas document — the FastAPI
   backend's Pydantic layer silently "fixed" the display (it coerces large ints into datetimes),
-  masking that the actual stored type was wrong. `syncClock` (on the two entities that still
-  have it) stays `Long` regardless — it never held a timestamp-shaped value in anything
-  observed (see [Sync-related fields](#sync-related-fields)).
+  masking that the actual stored type was wrong. `syncClock` (before its removal) stayed
+  `Long` regardless — it never held a timestamp-shaped value in anything observed (see
+  [Sync-related fields](#sync-related-fields)).
 - **ObjectBox's vector search `score` is a distance, not a similarity.** `findWithScores()`
   returns lower-is-better, already sorted nearest-first — opposite of Atlas's `$vectorSearch`
   score (higher-is-better). Easy to misread a result set as "backwards" if you forget which
@@ -654,13 +629,14 @@ the previous value alone.
   volume rm leafy-wallet_leafy_local_store_data` for a clean slate (safe — it's disposable
   local dev/demo data, nothing tracked in git or Atlas).
 - **Removing an ObjectBox property: leave a gap, don't renumber, don't reuse the uid.** When
-  `syncClock` was dropped from `LocalChat`/`LocalChatMessage`, the fix was to delete its
+  `syncClock` was dropped (first from `LocalChat`/`LocalChatMessage`, then from
+  `LocalContact`/`LocalTransaction` once that held up), the fix was to delete its
   `obx_model_property(...)` line entirely but *keep* `obx_model_entity_last_property_id(...)`
   pointing at its old id/uid rather than lowering it back down — that call's job is to record
   the highest property id/uid *ever* issued for the entity, not just the ones currently active,
   so a future property never accidentally reuses a retired number. Mirrored the same idea in
-  `objectbox-sync-server/objectbox-model.json` by adding the retired uid to
-  `retiredPropertyUids` instead of just deleting it silently. Didn't find (or need) an explicit
+  `objectbox-sync-server/objectbox-model.json` by adding all four retired uids to
+  `retiredPropertyUids` instead of just deleting them silently. Didn't find (or need) an explicit
   C-API "retire this property" call for the local model — deleting the registration line while
   keeping the last-property-id call was sufficient, verified by rebuilding, wiping the local
   volume (same reason as above — the uid's meaning had changed), and re-running

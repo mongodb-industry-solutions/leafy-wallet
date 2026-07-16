@@ -19,8 +19,7 @@
         { "id": "10:7001000000000010", "name": "leafyPayStatus", "type": 9 },
         { "id": "11:7001000000000011", "name": "localSyncStatus", "type": 9 },
         { "id": "12:7001000000000012", "name": "createdAt", "type": 10 },
-        { "id": "13:7001000000000013", "name": "settledAt", "type": 10 },
-        { "id": "14:7001000000000014", "name": "syncClock", "type": 6 }
+        { "id": "13:7001000000000013", "name": "settledAt", "type": 10 }
       ]
     },
     {
@@ -36,8 +35,7 @@
         { "id": "5:7002000000000005", "name": "counterpartyLookupType", "type": 9 },
         { "id": "6:7002000000000006", "name": "counterpartyLookupHint", "type": 9 },
         { "id": "7:7002000000000007", "name": "createdAt", "type": 10 },
-        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 },
-        { "id": "9:7002000000000009", "name": "syncClock", "type": 6 }
+        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 }
       ]
     },
     {
@@ -72,7 +70,7 @@
   "lastRelationId": "0:0",
   "retiredEntityUids": [],
   "retiredIndexUids": [],
-  "retiredPropertyUids": [7003000000000005, 7004000000000006],
+  "retiredPropertyUids": [7001000000000014, 7002000000000009, 7003000000000005, 7004000000000006],
   "retiredRelationUids": [],
   "version": 1
 }

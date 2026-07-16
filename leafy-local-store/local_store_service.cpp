@@ -42,7 +42,10 @@ struct LocalTransaction {
     std::string localSyncStatus;
     int64_t createdAt = 0;                // epoch millis
     int64_t settledAt = 0;                // 0 = absent
-    int64_t syncClock = 0;                // set by the Sync Server
+    // Property 14 (uid ...014) used to be `syncClock` here — removed as dead
+    // weight, same reasoning (and same experiment already run successfully on
+    // LocalChat/LocalChatMessage) as documented in backend/README.md's
+    // "Sync-related fields". Property id 14 intentionally left retired/unused.
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 1; }
@@ -75,7 +78,7 @@ struct LocalTransaction {
             fbb.AddOffset(24, offsetLocalSyncStatus);            // 11: localSyncStatus
             fbb.AddElement(26, object.createdAt);                // 12: createdAt
             fbb.AddElement(28, object.settledAt);                // 13: settledAt
-            fbb.AddElement(30, object.syncClock);                // 14: syncClock
+            // offset 30 (property 14, syncClock) intentionally left unused
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -107,7 +110,6 @@ struct LocalTransaction {
             readString(24, out.localSyncStatus);
             out.createdAt = table->GetField<int64_t>(26, 0);
             out.settledAt = table->GetField<int64_t>(28, 0);
-            out.syncClock = table->GetField<int64_t>(30, 0);
         }
 
         static LocalTransaction fromFlatBuffer(const void* data, size_t size) {
@@ -137,7 +139,10 @@ struct LocalContact {
     std::string counterpartyLookupHint;
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
-    int64_t syncClock = 0;   // set by the Sync Server
+    // Property 9 (uid ...009) used to be `syncClock` here — removed as dead
+    // weight, same reasoning (and same experiment already run successfully on
+    // LocalChat/LocalChatMessage) as documented in backend/README.md's
+    // "Sync-related fields". Property id 9 intentionally left retired/unused.
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 2; }
@@ -161,7 +166,7 @@ struct LocalContact {
             fbb.AddOffset(14, offsetLookupHint);            // 6: counterpartyLookupHint
             fbb.AddElement(16, object.createdAt);           // 7: createdAt
             fbb.AddElement(18, object.updatedAt);           // 8: updatedAt
-            fbb.AddElement(20, object.syncClock);           // 9: syncClock
+            // offset 20 (property 9, syncClock) intentionally left unused
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -185,7 +190,6 @@ struct LocalContact {
             readString(14, out.counterpartyLookupHint);
             out.createdAt = table->GetField<int64_t>(16, 0);
             out.updatedAt = table->GetField<int64_t>(18, 0);
-            out.syncClock = table->GetField<int64_t>(20, 0);
         }
 
         static LocalContact fromFlatBuffer(const void* data, size_t size) {
@@ -437,7 +441,7 @@ struct LocalContact_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalContact, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalContact, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalContact, OBXPropertyType_Long> syncClock;
+    // property 9 (syncClock) removed — see the struct comment
 };
 
 const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::id(1);
@@ -448,7 +452,6 @@ const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counter
 const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupHint(6);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::createdAt(7);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::updatedAt(8);
-const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::syncClock(9);
 
 struct LocalTransaction_ {
     static const obx::Property<LocalTransaction, OBXPropertyType_Long> id;
@@ -466,7 +469,7 @@ struct LocalTransaction_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalTransaction, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalTransaction, OBXPropertyType_Date> settledAt;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Long> syncClock;
+    // property 14 (syncClock) removed — see the struct comment
 };
 
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::id(1);
@@ -482,7 +485,6 @@ const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_:
 const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::localSyncStatus(11);
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::createdAt(12);
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
-const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
 struct LocalChat_ {
     static const obx::Property<LocalChat, OBXPropertyType_Long> id;
@@ -570,7 +572,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "localSyncStatus", OBXPropertyType_String, 11, 7001000000000011ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7001000000000012ULL);
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 14, 7001000000000014ULL);
+    // Property 14 (syncClock, uid ...014) removed — see the LocalTransaction
+    // struct comment. Not reused, same reasoning as chats/chatMessages.
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
     // Entity 2: walletContacts — entity name is the target MongoDB collection
@@ -588,7 +591,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupHint", OBXPropertyType_String, 6, 7002000000000006ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 7, 7002000000000007ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
-    obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
+    // Property 9 (syncClock, uid ...009) removed — see the LocalContact
+    // struct comment. Not reused, same reasoning as chats/chatMessages.
     obx_model_entity_last_property_id(model, 9, 7002000000000009ULL);
 
     // Entity 3: chats — a conversation. Entity name is the target MongoDB
