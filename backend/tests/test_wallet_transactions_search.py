@@ -5,7 +5,7 @@ import pytest
 from pymongo.errors import OperationFailure
 
 from db.client import get_db
-from routers.wallet_transactions import NOTE_EMBEDDING_INDEX
+from services.transactions import NOTE_EMBEDDING_INDEX
 from services.ollama import get_embedding
 
 BASE = "/api/v1/wallet-transactions"
