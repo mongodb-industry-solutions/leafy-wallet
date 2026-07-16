@@ -103,24 +103,30 @@ export function RecipientStep({
           Suggested
         </p>
         <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
-          {filtered.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => handleSelectRecipient(c)}
-              className="flex w-full items-center gap-3 py-3 text-left"
-            >
-              <Peep seed={c.seed} bg={c.bg} size={44} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{c.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
-              </div>
-              {recipient?.id === c.id && (
-                <span className="text-secondary">
-                  <Icon glyph="Checkmark" size={18} />
-                </span>
-              )}
-            </button>
-          ))}
+          {filtered.map((c) => {
+            const isUnavailable = isRequest && !c.canRequest
+            return (
+              <button
+                key={c.id}
+                onClick={() => handleSelectRecipient(c)}
+                disabled={isUnavailable}
+                className="flex w-full items-center gap-3 py-3 text-left disabled:opacity-40"
+              >
+                <Peep seed={c.seed} bg={c.bg} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{c.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {isUnavailable ? 'Added by phone — cannot be requested' : c.lookupHint}
+                  </p>
+                </div>
+                {recipient?.id === c.id && (
+                  <span className="text-secondary">
+                    <Icon glyph="Checkmark" size={18} />
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 

@@ -348,7 +348,7 @@ local state is cleared):
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/local/v1/health` | Store status + local transaction/contact/chat/message counts |
+| `GET` | `/local/v1/health` | Store status + local transaction/contact/chat/message/request counts |
 | `GET` | `/local/v1/transactions` | List locally-stored transactions |
 | `GET` | `/local/v1/transactions/search` | Semantic search over local transaction notes — entirely offline, via ObjectBox's own HNSW index (`q`, optional `ownerPartyRef`, `limit`) |
 | `POST` | `/local/v1/transactions/send` | Create a transaction locally (embeds `note` via Ollama, syncs to Atlas once connected) |
@@ -362,6 +362,10 @@ local state is cleared):
 | `POST` | `/local/v1/chats/{chatId}/messages` | Create a message locally, syncs to Atlas once connected |
 | `DELETE` | `/local/v1/chats/{chatId}/messages/{messageId}` | Delete a message locally, syncs to Atlas once connected |
 | `DELETE` | `/local/v1/contacts/{id}` | Delete a local contact by its ObjectBox id (propagates through Sync to Atlas too) |
+| `GET` | `/local/v1/requests` | List locally-stored payment requests (`targetDigest` for a target's inbox, `requesterPartyRef` for an outbox, optional `status`) |
+| `POST` | `/local/v1/requests` | Raise a payment request locally, syncs to Atlas once connected. Needs no reconciliation — Leafy Pay has no part in a request, so Sync *is* the delivery |
+| `PUT` | `/local/v1/requests/{id}` | Resolve a request (`status`, optional `leafyPayTransferReference`). One-shot: 409 if already resolved |
+| `DELETE` | `/local/v1/requests/{id}` | Delete a local request by its ObjectBox id (propagates through Sync to Atlas too) |
 | `GET` | `/local/v1/accounts` | List cached account balances — **local-only, never syncs** |
 | `PUT` | `/local/v1/accounts/{accountReference}` | Upsert the cached balance for an account (creates or updates in place) — **local-only** |
 | `DELETE` | `/local/v1/accounts/{accountReference}` | Remove a cached balance — **local-only** |
@@ -369,7 +373,7 @@ local state is cleared):
 **`GET /local/v1/health`**
 ```json
 // 200
-{"status": "healthy", "transaction_count": 3, "contact_count": 1, "chat_count": 2, "chat_message_count": 5, "account_count": 2}
+{"status": "healthy", "transaction_count": 3, "contact_count": 1, "chat_count": 2, "chat_message_count": 5, "account_count": 2, "request_count": 1}
 // 500
 {"status": "error", "error": "..."}
 ```

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { sendMoney } from '@/lib/wallet/actions'
+import { createRequest, sendMoney } from '@/lib/wallet/actions'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { formatMoney } from '@/lib/wallet/format'
 import { NumpadStep } from '@/components/wallet/send/NumpadStep/NumpadStep'
@@ -13,8 +13,8 @@ const EUR_SYMBOL = '€'
 
 /**
  * The multi-step send/request flow: amount entry, recipient picker, confirmation, and success. Send
- * executes a real Leafy Pay transfer (with the note written to Atlas); request and offline sends are
- * handled optimistically here (offline queueing is a later phase).
+ * executes a real Leafy Pay transfer (with the note written to Atlas); request writes an Atlas record
+ * the target can pay from their notifications. Offline sends are optimistic (queueing is a later phase).
  * @param {object} props
  * @param {object} [props.initialContact] - Pre-fills the recipient (skips the recipient step).
  * @param {'send'|'request'} [props.initialMode]
@@ -50,11 +50,27 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
     if (cents > 0) setStep(recipient ? 'confirm' : 'recipient')
   }
 
+  async function handleRequest() {
+    setIsSubmitting(true)
+    const res = await createRequest({
+      counterpartyArrangementReference: recipient.reference,
+      amount: euros,
+      note,
+      isOnline,
+    })
+    setIsSubmitting(false)
+    if (res.ok) {
+      refresh(['requests'])
+      setStep('success')
+    } else {
+      setError(res.error || 'Could not send the request. Please try again.')
+    }
+  }
+
   async function handleSubmit() {
     setError('')
-    // Requests and offline sends don't hit Leafy Pay here; offline queueing is a later phase.
-    if (isRequest || !isOnline) {
-      setStep('success')
+    if (isRequest) {
+      await handleRequest()
       return
     }
     if (insufficient) {
@@ -62,22 +78,24 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
       return
     }
     setIsSubmitting(true)
+    // Offline this buffers the send on the device; the provider replays it on reconnect.
     const res = await sendMoney({
       counterpartyArrangementReference: recipient.reference,
       fromAccountReference: fromAccount?.reference,
       amount: euros,
       note,
+      isOnline,
     })
     setIsSubmitting(false)
-    if (res.ok) {
-      setSentReference(res.reference)
-      // Show the new (pending) transaction now, then let the provider poll it to settlement.
-      refresh(['accounts', 'transactions'])
-      watchTransfer(res.reference)
-      setStep('success')
-    } else {
+    if (!res.ok) {
       setError(res.error || 'Could not send. Please try again.')
+      return
     }
+    setSentReference(res.reference)
+    refresh(['accounts', 'transactions'])
+    // Only a real transfer settles; a queued one has no Leafy Pay reference to watch yet.
+    if (isOnline) watchTransfer(res.reference)
+    setStep('success')
   }
 
   if (step === 'numpad') {
@@ -87,6 +105,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
         cents={cents}
         currency={currency}
         recipient={recipient}
+        canRequest={!recipient || recipient.canRequest}
         setCents={setCents}
         onClose={onClose}
         onPick={handlePickMode}
@@ -112,6 +131,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
       <ConfirmStep
         {...shared}
         note={note}
+        setNote={setNote}
         fromAccount={fromAccount}
         accounts={accounts}
         canPickAccount={accounts.length > 1}

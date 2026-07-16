@@ -66,6 +66,12 @@ coverage/
 jest/
 *.tgz
 
+#-------------------------------------------------------- Secrets --------------------------------------------------------
+# Never bake credentials into an image. Compose injects these at runtime via `env_file:`, which also
+# lets `environment:` override the host-specific URLs (localhost -> service names) deterministically.
+backend/.env
+frontend/.env.local
+
 #-------------------------------------------------------- Backend --------------------------------------------------------
 # Byte-compiled files
 backend/__pycache__

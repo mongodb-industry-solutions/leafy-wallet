@@ -1,30 +1,47 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { getAccounts, getContacts, getTransactions, getTransferStatus } from '@/lib/wallet/actions'
+import {
+  getAccounts,
+  getContacts,
+  getRequests,
+  getTransactions,
+  getTransferStatus,
+  replayPendingSends,
+} from '@/lib/wallet/actions'
 
 const SETTLE_POLL_MS = 2500
 const SETTLE_MAX_POLLS = 8
 
 // Each wallet dataset maps to the Server Action that loads it. The read itself runs on the server
 // (session + Bearer never leave it); this provider caches the result on the client and shares it
-// across tabs so switching screens never re-hits Leafy Pay.
-const LOADERS = { accounts: getAccounts, contacts: getContacts, transactions: getTransactions }
+// across tabs so switching screens never re-hits Leafy Pay. Each loader takes the connection state,
+// which picks the source: Leafy Pay + Atlas online, the on-device store offline.
+const LOADERS = {
+  accounts: getAccounts,
+  contacts: getContacts,
+  transactions: getTransactions,
+  requests: getRequests,
+}
 const ALL_KEYS = Object.keys(LOADERS)
 const INITIAL = { data: null, isLoading: true, error: false }
 
 const seenStorageKey = (ownerKey) => `leafy:notif-seen:${ownerKey || 'anon'}`
 
+const isNewerThan = (createdAt, seenAt) =>
+  !seenAt || (createdAt ? new Date(createdAt).getTime() > seenAt : false)
+
 /**
- * Derive the notifications feed from the transaction list: each received transfer is a notification,
- * "unread" when it's newer than the last time the bell was opened (the PSP has no received-money
- * notification, so we surface the inbound transfers themselves).
+ * Derive the notifications feed: received transfers (the PSP has no received-money notification, so
+ * we surface the inbound transfers themselves) plus pending payment requests addressed to the user.
+ * Unread when newer than the last time the bell was opened.
  */
-function deriveNotifications(transactions, lastSeen) {
+function deriveNotifications(transactions, requests, lastSeen) {
   const seenAt = lastSeen ? new Date(lastSeen).getTime() : 0
-  return (transactions ?? [])
+  const received = (transactions ?? [])
     .filter((t) => t.amount > 0)
     .map((t) => ({
+      kind: 'received',
       id: t.id,
       name: t.name,
       amount: t.amount,
@@ -34,30 +51,57 @@ function deriveNotifications(transactions, lastSeen) {
       isPending: t.isPending,
       seed: t.seed,
       bg: t.bg,
-      isUnread: !seenAt || (t.createdAt ? new Date(t.createdAt).getTime() > seenAt : false),
+      isUnread: isNewerThan(t.createdAt, seenAt),
     }))
+  const incoming = (requests?.incoming ?? []).map((r) => ({
+    kind: 'request',
+    id: r.id,
+    name: r.name,
+    amount: r.amount,
+    note: r.note,
+    date: r.date,
+    createdAt: r.createdAt,
+    isPending: false,
+    seed: r.seed,
+    bg: r.bg,
+    isUnread: isNewerThan(r.createdAt, seenAt),
+  }))
+  return [...received, ...incoming].sort(
+    (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
+  )
 }
 
 const WalletDataContext = createContext(null)
 
 /**
- * Client cache for the wallet's read data (accounts, contacts, transactions). Fetches each dataset
- * once per login and shares it across tabs. Revalidation is event-driven, never on tab switch:
- * `refresh(keys)` after a transaction, and an automatic refresh when the connection is restored. Also
- * derives the notifications feed (received transfers) with a persisted per-user "seen" marker.
+ * Client cache for the wallet's read data (accounts, contacts, transactions, requests). Fetches each
+ * dataset once per login and shares it across tabs. Revalidation is event-driven, never on tab switch:
+ * `refresh(keys)` after a transaction, and an automatic refresh when the connection changes. Also
+ * derives the notifications feed (received transfers + incoming requests) with a persisted per-user
+ * "seen" marker.
  * @param {object} props
- * @param {boolean} [props.isOnline] - When it flips false→true (reconnect), the data is refreshed.
+ * @param {boolean} [props.isOnline] - Picks the data source; on reconnect, also replays queued sends.
  * @param {string} [props.ownerKey] - Namespaces the persisted notifications-seen marker (the user's sub).
  * @param {React.ReactNode} props.children
  */
 export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
-  const [state, setState] = useState({ accounts: INITIAL, contacts: INITIAL, transactions: INITIAL })
+  const [state, setState] = useState({
+    accounts: INITIAL,
+    contacts: INITIAL,
+    transactions: INITIAL,
+    requests: INITIAL,
+  })
   const [lastSeen, setLastSeen] = useState(null)
+
+  // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
+  // consumer's callbacks on each toggle.
+  const isOnlineRef = useRef(isOnline)
+  isOnlineRef.current = isOnline
 
   const load = useCallback(async (key) => {
     setState((s) => ({ ...s, [key]: { ...s[key], isLoading: true, error: false } }))
     try {
-      const data = await LOADERS[key]()
+      const data = await LOADERS[key](isOnlineRef.current)
       setState((s) => ({ ...s, [key]: { data, isLoading: false, error: false } }))
     } catch {
       setState((s) => ({ ...s, [key]: { data: null, isLoading: false, error: true } }))
@@ -102,11 +146,19 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     refresh()
   }, [refresh])
 
-  // On reconnect, the balance/history may have moved while offline — pull fresh data.
+  // Both directions re-read, since the source changes. Reconnecting also replays queued sends —
+  // Sync moves records, not money.
   const wasOnline = useRef(isOnline)
   useEffect(() => {
-    if (isOnline && !wasOnline.current) refresh()
+    if (isOnline === wasOnline.current) return
+    const isReconnect = isOnline && !wasOnline.current
     wasOnline.current = isOnline
+
+    async function resync() {
+      if (isReconnect) await replayPendingSends().catch(() => {})
+      refresh()
+    }
+    resync()
   }, [isOnline, refresh])
 
   // Load the persisted "notifications seen" marker for this user.
@@ -122,10 +174,18 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     if (typeof window !== 'undefined') window.localStorage.setItem(seenStorageKey(ownerKey), now)
   }, [ownerKey])
 
-  const notifications = deriveNotifications(state.transactions.data, lastSeen)
+  const notifications = deriveNotifications(state.transactions.data, state.requests.data, lastSeen)
   const unreadCount = notifications.reduce((n, x) => n + (x.isUnread ? 1 : 0), 0)
 
-  const value = { ...state, refresh, watchTransfer, notifications, unreadCount, markNotificationsSeen }
+  const value = {
+    ...state,
+    isOnline,
+    refresh,
+    watchTransfer,
+    notifications,
+    unreadCount,
+    markNotificationsSeen,
+  }
   return <WalletDataContext.Provider value={value}>{children}</WalletDataContext.Provider>
 }
 

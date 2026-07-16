@@ -24,6 +24,7 @@ function Row({ label, value }) {
  * @param {boolean} props.isRequest
  * @param {object} props.recipient
  * @param {string} props.note
+ * @param {(note: string) => void} props.setNote
  * @param {object} [props.fromAccount] - The selected source account.
  * @param {object[]} [props.accounts] - All accounts (for the picker).
  * @param {boolean} [props.canPickAccount] - Whether there's more than one account to choose from.
@@ -41,6 +42,7 @@ export function ConfirmStep({
   isRequest,
   recipient,
   note,
+  setNote,
   fromAccount,
   accounts = [],
   canPickAccount,
@@ -89,7 +91,16 @@ export function ConfirmStep({
         </div>
 
         <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-          {note && <Row label="For" value={note} />}
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Note</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={140}
+              placeholder="Add a note"
+              className="min-w-0 flex-1 bg-transparent text-right text-sm font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground"
+            />
+          </div>
           {isRequest ? (
             <Row label="You'll receive" value={`${symbol}${display}`} />
           ) : (

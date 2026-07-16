@@ -33,27 +33,46 @@ through.
 *not* minimal by design: offline the local record must stand alone.
 
 - `walletContacts`: `{ ownerPartyRef, counterpartyArrangementReference, counterpartyLabel,
-  counterpartyLookupType, counterpartyLookupHint, _id, createdAt, updatedAt }`
+  counterpartyLookupType, counterpartyLookupHint, counterpartyLookupDigest, _id, createdAt, updatedAt }`
 - `walletTransactions`: `{ ownerPartyRef, leafyPayTransferReference, counterpartyArrangementReference,
   amount (flat float), currency, note, noteEmbedding, direction, leafyPayStatus, localSyncStatus, _id,
   createdAt, settledAt }` — vector index on `noteEmbedding`.
+- `walletRequests`: `{ requestReference, requesterPartyRef, requesterName, requesterDigest, targetDigest,
+  amount, currency, note, status (pending|paid|declined|cancelled), leafyPayTransferReference, _id,
+  createdAt, resolvedAt }` — Leafy Pay has no concept of a request; see §4.
 
-**Only `note` + `counterpartyArrangementReference` are read back from Atlas**; everything else is read
-live from Leafy Pay. A P2P transaction from Leafy Pay carries **no** `beneficiaryName` and no counterparty
-ref, so the enrichment's `counterpartyArrangementReference` is the only link from a sent tx to its saved
-contact (alias + avatar).
+**Name resolution lives in Atlas.** `walletContacts` is the **alias directory** — the name source of
+truth (user-owned, offline-available, chat-searchable). Leafy Pay supplies only the obscured data (refs,
+masked hints, amounts, status); its beneficiaries are **backfilled into `walletContacts` on read** so the
+directory stays complete. From `walletTransactions` we read back the `note` + `counterpartyArrangementReference`
+(a P2P transaction from Leafy Pay carries no counterparty ref or name of its own, so that link is the only
+way to resolve a *sent* tx's contact).
+
+**`*Digest` is a blind index** — a keyed HMAC of the normalized email (`LOOKUP_DIGEST_KEY`), mirroring the
+PSP's own `partyMobilePhoneNumberDigest`. It exists because Leafy Pay gives a user no usable identifier for
+anyone else: `counterpartyPartyReference` is withheld by design and arrangement refs are minted per-owner,
+so A's reference for B means nothing to B. But A typed B's email to add them and B's session carries the
+same email, so its digest is the one value both derive. We store the digest, never the address. Phone
+contacts have none (no phone claim to match), so they can't be sent requests.
+
+**Received transfers show "Leafy Pay user".** The sender *is* known to the PSP (`initiatorPartyReference`),
+and it already resolves an `initiatorName` for exactly this purpose — but only on a session-gated endpoint;
+the OAuth `/transactions` list simply omits it. A serializer change on their side, not a design limit.
 
 **Leafy Pay (source of truth):** `GET /accounts` (payoutAccountArrangement), `/beneficiaries`
 (counterpartyArrangement), `/transactions` (paymentExecution; the note comes back as `concept`).
 
 ## 3. API contracts
 **Frontend Server Actions** (`src/lib/wallet/actions.js`): `getAccounts`/`getContacts`/`getTransactions`,
-`addContact`/`removeContact`, `sendMoney`, `getTransferStatus`. Auth in `src/lib/auth/actions.js`.
+`addContact`/`removeContact`, `sendMoney`, `getTransferStatus`, `createRequest`/`getRequests`/
+`payRequest`/`resolveRequest`. Auth in `src/lib/auth/actions.js`.
 
 **Backend (FastAPI, scoped by `ownerPartyRef`):**
 - `GET/POST /api/v1/wallet-contacts` (+ `/{id}` GET/PATCH/DELETE)
 - `GET/POST /api/v1/wallet-transactions` (+ `/{id}` GET/PATCH/DELETE)
 - `GET /api/v1/wallet-transactions/search?q=&ownerPartyRef=` (vector search)
+- `GET/POST /api/v1/wallet-requests` (+ `/{id}` GET/PATCH/DELETE) — listed by `targetDigest` (inbox) or
+  `requesterPartyRef` (outbox); PATCH to a terminal status is one-shot (409 on replay).
 
 **`leafy-local-store`:** `/local/v1/{health, wallet, contacts, transactions, sync/flush}`.
 
@@ -62,13 +81,25 @@ contact (alias + avatar).
 tx list — the `/gateway/transfers/{ref}/status` endpoint is session-only (not OAuth).
 
 ## 4. Key flows
-- **Read (online):** transactions merge **Leafy Pay ∥ Atlas** in parallel (`Promise.all`, by
-  `leafyPayTransferReference`); accounts + contacts are Leafy Pay only.
-- **Add contact:** PspClient `POST /beneficiaries` ∥ backend `POST /wallet-contacts`.
+- **Read (online):** `Promise.all` of Leafy Pay + Atlas. **Names resolve from Atlas `walletContacts`**
+  (aliases, backfilled from Leafy Pay beneficiaries); Leafy Pay supplies refs/masks/amounts/status.
+  Transactions merge by `leafyPayTransferReference`. Received transfers → "Leafy Pay user".
+- **Add contact:** PspClient `POST /beneficiaries` ∥ backend `POST /wallet-contacts` (alias required).
+  An email lookup is the only moment we hold the address — the digest is derived here, the address dropped.
 - **Send (online):** PspClient `POST /beneficiaries/{ref}/transfer` ∥ backend `POST /wallet-transactions`
   (note embedded by Ollama, non-fatal). Settlement polled via the tx list until `completed`.
+- **Request:** Atlas-only — Leafy Pay is never called, because nothing moves until it's paid. The
+  requester writes a `walletRequests` doc addressed to the contact's `counterpartyLookupDigest`; the
+  target finds it by digesting their own session email, and it surfaces in the existing bell. **Paying
+  is an ordinary send:** match `requesterDigest` against the payer's own contacts → arrangement ref →
+  `sendMoney` → mark the request `paid`. The requester must already be a contact of the payer — Leafy
+  Pay only accepts a transfer against an arrangement the sender owns, and creating one needs their
+  email, which is the anti-enumeration rule working as intended.
 - **Offline:** reads + writes hit ObjectBox (the only local store); a queued send is a `LocalTransaction`
-  with `local_pending` + a temp ref.
+  with `local_pending` + a temp ref. The connection state is passed into each Server Action, which is
+  what picks the source. Balances are the exception: their cache entity is local-only, so the online
+  read writes them through to the device. **A request needs no replay** — Leafy Pay has no part in one,
+  so Sync carrying it to Atlas *is* the delivery. Paying does need the network.
 - **Reconnect — two independent syncs:** (1) ObjectBox ⇄ Atlas via the Sync Server (data replica,
   automatic); (2) the app replays ObjectBox's `local_pending` sends to Leafy Pay via PspClient (money
   movement), then rewrites each record's `leafyPayTransferReference` to the real one.
@@ -82,10 +113,22 @@ in `LEAFY_PAY_TEST_USERS.md`).
 
 **Done (branch `feat/send-flow-completion`):** source-account picker (`fromAccountRef`); settlement status
 (poll tx list, Pending → Completed); insufficient-funds guard; received-money notifications (bell derived
-from inbound transfers, per-user "seen" marker).
+from inbound transfers, per-user "seen" marker); **name resolution moved to Atlas `walletContacts`**
+(backfilled from Leafy Pay) with required aliases and non-empty name/note on every row; enrichment writes
+are now required (surface an error if the backend is down, no silent best-effort); **payment requests**
+(`walletRequests` + blind index, real create/pay/decline — no longer mocked).
+
+**Done (branch, offline):** `walletRequests` entity in ObjectBox + the local store (entity 6) and
+`counterpartyLookupDigest` on `walletContacts` (without it a contact syncing down from Atlas loses its
+digest and can't be sent a request); `/local/v1/requests` CRUD; offline reads for accounts/contacts/
+transactions/requests; offline send buffering + reconnect replay; offline request raise/decline.
 
 **Still mocked** (`wallet-data.js`): AI chat only.
 
-**Next:** 1) AI chat over the real actions + vector search — light routing first, LangGraph later (gated
-on the teammate's save-chats backend). 2) Offline: `leafy-local-store` + ObjectBox sync + reconnect
-replay.
+**Waiting on Leafy Pay (no PR from us):** `initiatorName` + `beneficiaryArrangementReference` missing from
+the OAuth `/transactions` rows (would fix inbound sender names and drop our Atlas join for sent rows).
+
+**Next:** 1) AI chat — add `walletContacts` alias embedding + a `/wallet-contacts/search` endpoint so
+names resolve semantically ("send to my sister"); then `useAiChat` over the real actions + vector search
+(light routing first, LangGraph later; gated on the teammate's save-chats backend). 2) Offline:
+`leafy-local-store` + ObjectBox sync + reconnect replay.
