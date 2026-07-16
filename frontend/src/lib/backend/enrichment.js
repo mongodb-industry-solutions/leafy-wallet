@@ -2,10 +2,14 @@ import 'server-only'
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8000'
 
+/** Mongo returns the primary key as `_id`; expose it as `id`, matching the local store. */
+const withId = (doc) => (doc?._id ? { ...doc, id: doc._id } : doc)
+
 async function backendGet(path) {
   const res = await fetch(`${BACKEND_URL}${path}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`backend request failed: ${res.status}`)
-  return res.json()
+  const data = await res.json()
+  return Array.isArray(data) ? data.map(withId) : withId(data)
 }
 
 async function backendPost(path, body) {
@@ -16,7 +20,7 @@ async function backendPost(path, body) {
     cache: 'no-store',
   })
   if (!res.ok) throw new Error(`backend request failed: ${res.status}`)
-  return res.json()
+  return withId(await res.json())
 }
 
 async function backendPatch(path, body) {
@@ -49,6 +53,16 @@ export async function listTransactionEnrichment(owner) {
  * Write the enrichment doc for a completed transfer. The backend embeds the note via Ollama.
  * @param {object} doc - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, note, direction, leafyPayStatus }`.
  */
+/**
+ * Update an enrichment doc — used to record settlement, which Leafy Pay knows about and Atlas
+ * otherwise never hears.
+ * @param {string} id - The Atlas id.
+ * @param {object} patch - e.g. `{ leafyPayStatus, settledAt }`.
+ */
+export async function updateTransactionEnrichment(id, patch) {
+  return backendPatch(`/api/v1/wallet-transactions/${encodeURIComponent(id)}`, patch)
+}
+
 export async function createTransactionEnrichment(doc) {
   return backendPost('/api/v1/wallet-transactions', doc)
 }

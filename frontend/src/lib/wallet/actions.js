@@ -20,6 +20,7 @@ import {
   listOutgoingRequests,
   listTransactionEnrichment,
   resolveRequestDoc,
+  updateTransactionEnrichment,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
@@ -432,10 +433,32 @@ export async function getTransferStatus(reference) {
 }
 
 /**
+ * Record a transfer's settlement in Atlas. Only Leafy Pay knows a transfer settled, so without this
+ * the enrichment doc — and the device copy Sync derives from it — stays `pending` forever.
+ * @param {string} reference - The `leafyPayTransferReference`.
+ * @param {'completed'|'failed'} status
+ */
+export async function markTransferSettled(reference, status) {
+  const owner = await ownerRef()
+  if (!owner || !reference) return
+  try {
+    const docs = await listTransactionEnrichment(owner)
+    const match = (docs ?? []).find((d) => d.leafyPayTransferReference === reference)
+    if (!match?.id) return
+    await updateTransactionEnrichment(match.id, {
+      leafyPayStatus: status === 'completed' ? 'settled' : 'failed',
+      settledAt: new Date().toISOString(),
+    })
+  } catch {
+    // Leafy Pay stays the source of truth for status; the next settle attempt can retry.
+  }
+}
+
+/**
  * Send each `local_pending` transaction for real, then drop the local record — its deletion
  * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
- * record for the next reconnect.
- * @returns {Promise<{replayed: number, failed: number}>}
+ * record for the next reconnect. Returns the new references so the caller can watch them settle.
+ * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
  */
 export async function replayPendingSends() {
   const owner = await ownerRef()
@@ -446,6 +469,7 @@ export async function replayPendingSends() {
 
   let replayed = 0
   let failed = 0
+  const references = []
   for (const t of pending) {
     const sent = await sendMoney({
       counterpartyArrangementReference: t.counterpartyArrangementReference,
@@ -456,6 +480,7 @@ export async function replayPendingSends() {
       failed += 1
       continue
     }
+    if (sent.reference) references.push(sent.reference)
     try {
       await deleteLocalTransaction(t.id)
       replayed += 1
@@ -464,7 +489,7 @@ export async function replayPendingSends() {
       failed += 1
     }
   }
-  return { replayed, failed }
+  return { replayed, failed, references }
 }
 
 /**
@@ -597,11 +622,17 @@ export async function payRequest(reference, fromAccountReference) {
   })
   if (!sent.ok) return sent
 
+  // The money has moved, so this never reports a failed payment — but an unresolved request stays
+  // payable, so surface it rather than letting it be paid twice.
   try {
     await resolveRequestDoc(request.id, { status: 'paid', leafyPayTransferReference: sent.reference })
   } catch {
-    // The money moved; leaving the request pending is recoverable, so don't report a failed payment.
-    return { ok: true, reference: sent.reference, status: sent.status }
+    return {
+      ok: true,
+      reference: sent.reference,
+      status: sent.status,
+      warning: 'Payment sent, but the request could not be marked paid. Do not pay it again.',
+    }
   }
   return { ok: true, reference: sent.reference, status: sent.status }
 }
