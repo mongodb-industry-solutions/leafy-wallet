@@ -433,8 +433,7 @@ export async function getTransferStatus(reference) {
 }
 
 /**
- * Record a transfer's settlement in Atlas. Only Leafy Pay knows a transfer settled, so without this
- * the enrichment doc — and the device copy Sync derives from it — stays `pending` forever.
+ * Record a transfer's settlement in Atlas; Leafy Pay is the only source of settlement status.
  * @param {string} reference - The `leafyPayTransferReference`.
  * @param {'completed'|'failed'} status
  */
@@ -450,14 +449,14 @@ export async function markTransferSettled(reference, status) {
       settledAt: new Date().toISOString(),
     })
   } catch {
-    // Leafy Pay stays the source of truth for status; the next settle attempt can retry.
+    // Non-fatal: Leafy Pay still has the status, and a later poll retries.
   }
 }
 
 /**
  * Send each `local_pending` transaction for real, then drop the local record — its deletion
  * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
- * record for the next reconnect. Returns the new references so the caller can watch them settle.
+ * record for the next reconnect. Returns the new references, which the caller watches to settlement.
  * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
  */
 export async function replayPendingSends() {
@@ -622,8 +621,7 @@ export async function payRequest(reference, fromAccountReference) {
   })
   if (!sent.ok) return sent
 
-  // The money has moved, so this never reports a failed payment — but an unresolved request stays
-  // payable, so surface it rather than letting it be paid twice.
+  // The money has moved: never report failure, or the caller retries and pays twice.
   try {
     await resolveRequestDoc(request.id, { status: 'paid', leafyPayTransferReference: sent.reference })
   } catch {

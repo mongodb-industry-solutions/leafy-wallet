@@ -99,8 +99,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
 
-  // `isLoading` drives the skeletons, so it's only true when there's nothing to show yet —
-  // a revalidation keeps the current data on screen and swaps it in place.
+  // `isLoading` drives the skeletons: true only when there's nothing to show yet.
   const load = useCallback(async (key) => {
     setState((s) => ({ ...s, [key]: { ...s[key], isLoading: s[key].data === null, error: false } }))
     try {
@@ -132,8 +131,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
           /* transient; keep polling */
         }
         const isSettled = status === 'completed' || status === 'failed'
-        // Leafy Pay is the only place settlement is known; record it before re-reading so the
-        // refresh picks up the settled status and Sync carries it to the device.
+        // Before the refresh, so it reads back the settled status.
         if (isSettled) await markTransferSettled(reference, status)
         await refresh(['accounts', 'transactions'])
         polls += 1
@@ -162,8 +160,6 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     wasOnline.current = isOnline
 
     async function resync() {
-      // Replayed sends are new transfers with fresh references — watch each to settlement, or they
-      // sit at Pending until something else refreshes.
       if (isReconnect) {
         const res = await replayPendingSends().catch(() => null)
         res?.references?.forEach(watchTransfer)

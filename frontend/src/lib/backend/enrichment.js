@@ -54,8 +54,7 @@ export async function listTransactionEnrichment(owner) {
  * @param {object} doc - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, note, direction, leafyPayStatus }`.
  */
 /**
- * Update an enrichment doc — used to record settlement, which Leafy Pay knows about and Atlas
- * otherwise never hears.
+ * Update an enrichment doc.
  * @param {string} id - The Atlas id.
  * @param {object} patch - e.g. `{ leafyPayStatus, settledAt }`.
  */
