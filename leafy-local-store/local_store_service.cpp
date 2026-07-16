@@ -202,6 +202,88 @@ struct LocalContact {
     };
 };
 
+// Last-known balance per account, purely local — deliberately NOT
+// SYNC_ENABLED (see create_obx_model()). A balance is derived/non-authoritative
+// data (Leafy Pay owns the real value, re-fetched live whenever online), not a
+// source-of-truth record like a transaction or contact, so it doesn't get a
+// Sync Server / Atlas copy the way those do. One row per account (a user can
+// have more than one), upserted in place by accountReference rather than
+// accumulating like an event log.
+
+struct LocalAccountBalance {
+    int64_t id = 0;
+    std::string ownerPartyRef;
+    std::string accountReference;
+    std::string label;
+    std::string currency;
+    double balanceValue = 0;
+    std::string maskedIban;   // empty = absent
+    bool isDefault = false;
+    int64_t lastRefreshedAt = 0;   // epoch millis
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 3; }
+
+        static void setObjectId(LocalAccountBalance& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalAccountBalance& object) {
+            fbb.Clear();
+            auto offsetOwner = fbb.CreateString(object.ownerPartyRef);
+            auto offsetAccountRef = fbb.CreateString(object.accountReference);
+            auto offsetLabel = fbb.CreateString(object.label);
+            auto offsetCurrency = fbb.CreateString(object.currency);
+            auto offsetMaskedIban = fbb.CreateString(object.maskedIban);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);                        // 1: id
+            fbb.AddOffset(6, offsetOwner);                        // 2: ownerPartyRef
+            fbb.AddOffset(8, offsetAccountRef);                   // 3: accountReference
+            fbb.AddOffset(10, offsetLabel);                       // 4: label
+            fbb.AddOffset(12, offsetCurrency);                    // 5: currency
+            fbb.AddElement(14, object.balanceValue);              // 6: balanceValue
+            fbb.AddOffset(16, offsetMaskedIban);                  // 7: maskedIban
+            fbb.AddElement<uint8_t>(18, object.isDefault, false); // 8: isDefault
+            fbb.AddElement(20, object.lastRefreshedAt);           // 9: lastRefreshedAt
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalAccountBalance& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.ownerPartyRef);
+            readString(8, out.accountReference);
+            readString(10, out.label);
+            readString(12, out.currency);
+            out.balanceValue = table->GetField<double>(14, 0);
+            readString(16, out.maskedIban);
+            out.isDefault = table->GetField<uint8_t>(18, 0) != 0;
+            out.lastRefreshedAt = table->GetField<int64_t>(20, 0);
+        }
+
+        static LocalAccountBalance fromFlatBuffer(const void* data, size_t size) {
+            LocalAccountBalance object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalAccountBalance> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalAccountBalance>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
 struct LocalContact_ {
     static const obx::Property<LocalContact, OBXPropertyType_Long> id;
     static const obx::Property<LocalContact, OBXPropertyType_String> ownerPartyRef;
@@ -260,6 +342,28 @@ const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::c
 const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
 const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::syncClock(14);
 
+struct LocalAccountBalance_ {
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Long> id;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> ownerPartyRef;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> accountReference;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> label;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> currency;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Double> balanceValue;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> maskedIban;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> isDefault;
+    static const obx::Property<LocalAccountBalance, OBXPropertyType_Date> lastRefreshedAt;
+};
+
+const obx::Property<LocalAccountBalance, OBXPropertyType_Long> LocalAccountBalance_::id(1);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::ownerPartyRef(2);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::accountReference(3);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::label(4);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::currency(5);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Double> LocalAccountBalance_::balanceValue(6);
+const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::maskedIban(7);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> LocalAccountBalance_::isDefault(8);
+const obx::Property<LocalAccountBalance, OBXPropertyType_Date> LocalAccountBalance_::lastRefreshedAt(9);
+
 // ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
 
 constexpr int EMBEDDING_DIMENSIONS = 768;
@@ -315,7 +419,27 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "syncClock", OBXPropertyType_Long, 9, 7002000000000009ULL);
     obx_model_entity_last_property_id(model, 9, 7002000000000009ULL);
 
-    obx_model_last_entity_id(model, 2, 7002000000000000ULL);
+    // Entity 3: LocalAccountBalance — purely local, deliberately no
+    // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
+    // objectbox-sync-server/objectbox-model.json (see the struct comment
+    // above). The entity name has no MongoDB-collection meaning here since
+    // it's never bridged.
+    obx_model_entity(model, "LocalAccountBalance", 3, 7003000000000000ULL);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7003000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "ownerPartyRef", OBXPropertyType_String, 2, 7003000000000002ULL);
+    obx_model_property(model, "accountReference", OBXPropertyType_String, 3, 7003000000000003ULL);
+    obx_model_property(model, "label", OBXPropertyType_String, 4, 7003000000000004ULL);
+    obx_model_property(model, "currency", OBXPropertyType_String, 5, 7003000000000005ULL);
+    obx_model_property(model, "balanceValue", OBXPropertyType_Double, 6, 7003000000000006ULL);
+    obx_model_property(model, "maskedIban", OBXPropertyType_String, 7, 7003000000000007ULL);
+    obx_model_property(model, "isDefault", OBXPropertyType_Bool, 8, 7003000000000008ULL);
+    obx_model_property(model, "lastRefreshedAt", OBXPropertyType_Date, 9, 7003000000000009ULL);
+    obx_model_entity_last_property_id(model, 9, 7003000000000009ULL);
+
+    obx_model_last_entity_id(model, 3, 7003000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
 
     return model;
@@ -431,6 +555,20 @@ json contact_to_json(const LocalContact& c) {
     };
 }
 
+json account_balance_to_json(const LocalAccountBalance& a) {
+    return {
+        {"id", a.id},
+        {"ownerPartyRef", a.ownerPartyRef},
+        {"accountReference", a.accountReference},
+        {"label", a.label},
+        {"currency", a.currency},
+        {"balanceValue", a.balanceValue},
+        {"maskedIban", a.maskedIban.empty() ? json(nullptr) : json(a.maskedIban)},
+        {"isDefault", a.isDefault},
+        {"lastRefreshedAt", a.lastRefreshedAt},
+    };
+}
+
 int main(int argc, char* argv[]) {
     std::string db_path = argc > 1 ? argv[1] : "/app/local-store-db";
     std::string sync_url = argc > 2 ? argv[2] : env_or("SYNC_SERVER_URL", "ws://objectbox-sync-server:9999");
@@ -448,6 +586,7 @@ int main(int argc, char* argv[]) {
             response["status"] = "healthy";
             response["transaction_count"] = store->box<LocalTransaction>().count();
             response["contact_count"] = store->box<LocalContact>().count();
+            response["account_count"] = store->box<LocalAccountBalance>().count();
             res.set_content(response.dump(), "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
@@ -670,6 +809,92 @@ int main(int argc, char* argv[]) {
                 res.set_content(json{{"error", "Contact not found"}}.dump(), "application/json");
                 return;
             }
+            res.status = 204;
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Get("/local/v1/accounts", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            auto box = store->box<LocalAccountBalance>();
+            json results = json::array();
+            for (const auto& a : box.getAll()) {
+                results.push_back(account_balance_to_json(*a));
+            }
+            res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Upsert, not insert-only: a balance is a cache meant to be refreshed in
+    // place (e.g. every time the home tab loads while online), not an
+    // accumulating event log like /transactions/send or /contacts.
+    svr.Put(R"(/local/v1/accounts/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        std::string accountReference = req.matches[1];
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"ownerPartyRef", "label", "currency", "balanceValue"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        try {
+            auto box = store->box<LocalAccountBalance>();
+            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+            auto existing = query.find();
+
+            LocalAccountBalance a = existing.empty() ? LocalAccountBalance() : existing.front();
+            a.accountReference = accountReference;
+            a.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+            a.label = body.at("label").get<std::string>();
+            a.currency = body.at("currency").get<std::string>();
+            a.balanceValue = body.at("balanceValue").get<double>();
+            a.maskedIban = body.value("maskedIban", "");
+            a.isDefault = body.value("isDefault", false);
+            a.lastRefreshedAt = now_epoch_millis();
+
+            box.put(a);
+
+            res.status = existing.empty() ? 201 : 200;
+            res.set_content(account_balance_to_json(a).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    svr.Delete(R"(/local/v1/accounts/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string accountReference = req.matches[1];
+            auto box = store->box<LocalAccountBalance>();
+            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+            auto existing = query.find();
+
+            if (existing.empty()) {
+                res.status = 404;
+                res.set_content(json{{"error", "Account not found"}}.dump(), "application/json");
+                return;
+            }
+
+            box.remove(existing.front().id);
             res.status = 204;
         } catch (const std::exception& e) {
             res.status = 500;

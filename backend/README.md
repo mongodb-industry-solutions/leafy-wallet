@@ -176,6 +176,15 @@ fields described in [Data Model Notes](#data-model-notes): the ObjectBox↔Mongo
 generic and can't produce nested documents, so the schema was flattened to match rather than
 have two shapes coexist in one collection.
 
+Not every entity here is meant for Atlas, though: `LocalAccountBalance` (last-known account
+balance, cached for offline display) is deliberately **local-only** — no
+`OBXEntityFlags_SYNC_ENABLED`, no entry in `objectbox-sync-server/objectbox-model.json`, never
+reaches Atlas. A balance is derived, non-authoritative data (Leafy Pay owns the real value, and
+the frontend re-fetches it live on every online read), unlike a contact or a transaction note,
+so there's no clear benefit to a central Atlas copy — see the struct comment in
+`local_store_service.cpp` for the full reasoning. Sync-enabling is opt-in per entity, so this
+just means skipping the flag rather than anything unusual.
+
 ### Running it locally
 
 ```bash
@@ -212,11 +221,14 @@ local state is cleared):
 | `GET` | `/local/v1/contacts` | List locally-stored contacts |
 | `POST` | `/local/v1/contacts` | Queue a contact add locally (reconciled with Leafy Pay on reconnect), syncs to Atlas once connected |
 | `DELETE` | `/local/v1/contacts/{id}` | Delete a local contact by its ObjectBox id (propagates through Sync to Atlas too) |
+| `GET` | `/local/v1/accounts` | List cached account balances — **local-only, never syncs** |
+| `PUT` | `/local/v1/accounts/{accountReference}` | Upsert the cached balance for an account (creates or updates in place) — **local-only** |
+| `DELETE` | `/local/v1/accounts/{accountReference}` | Remove a cached balance — **local-only** |
 
 **`GET /local/v1/health`**
 ```json
 // 200
-{"status": "healthy", "transaction_count": 3, "contact_count": 1}
+{"status": "healthy", "transaction_count": 3, "contact_count": 1, "account_count": 2}
 // 500
 {"status": "error", "error": "..."}
 ```
@@ -341,6 +353,52 @@ Pydantic model restricts it.
 // 500 — genuine server-side failure: {"error": "..."}
 ```
 
+**`GET /local/v1/accounts`**: no request body; returns an array of the same object shape as
+the `PUT` response below (`200`), or `{"error": "..."}` (`500`). Never touches Atlas.
+
+**`PUT /local/v1/accounts/{accountReference}`**: **upsert**, unlike every other write endpoint
+above — `{accountReference}` is Leafy Pay's own account reference (a string, not our internal
+numeric id), and calling this again with the same reference updates the existing row in place
+rather than creating a second one. Required: `ownerPartyRef`, `label`, `currency`,
+`balanceValue`. Optional: `maskedIban`, `isDefault` (defaults `false`). Every field you send
+fully replaces the stored value — this is a real `PUT` (full replacement), not a partial
+`PATCH`, so omitting `maskedIban` on a later call clears it back to `null` rather than leaving
+the previous value alone.
+```json
+// Request
+{
+  "ownerPartyRef": "string",
+  "label": "Main account",
+  "currency": "EUR",
+  "balanceValue": 120.50,
+  "maskedIban": "**** 1234",
+  "isDefault": true
+}
+// 201 (first time for this accountReference) or 200 (updated in place) — server-assigned:
+// id (stable across updates), lastRefreshedAt (bumped on every call)
+{
+  "id": 1,
+  "ownerPartyRef": "string",
+  "accountReference": "string",
+  "label": "Main account",
+  "currency": "EUR",
+  "balanceValue": 120.50,
+  "maskedIban": "**** 1234",
+  "isDefault": true,
+  "lastRefreshedAt": 1784191723874
+}
+// 400 — invalid JSON or missing required field: {"error": "..."}
+// 500 — genuine server-side failure: {"error": "..."}
+```
+
+**`DELETE /local/v1/accounts/{accountReference}`**: keyed by the same string reference as
+`PUT`, not a numeric id.
+```json
+// 204 — no body
+// 404 — {"error": "Account not found"}
+// 500 — genuine server-side failure: {"error": "..."}
+```
+
 ### Non-obvious things learned building this (empirically, not from docs)
 
 - **The ObjectBox entity's registered name is the target MongoDB collection name. Not the
@@ -367,3 +425,11 @@ Pydantic model restricts it.
   returns lower-is-better, already sorted nearest-first — opposite of Atlas's `$vectorSearch`
   score (higher-is-better). Easy to misread a result set as "backwards" if you forget which
   convention applies to which endpoint.
+- **The local ObjectBox data volume doesn't know about your model changes.** ObjectBox refuses
+  to open a store whose on-disk model has a *higher* last-entity-id than the model you're
+  opening it with (`Can not open store: DB's last entity ID N is higher than M from model`).
+  This bites you switching between local branches with different entity counts, since
+  `leafy_local_store_data` is a regular Docker volume that persists across `git checkout` —
+  it has no idea the code changed. Fix: `docker compose down leafy-local-store && docker
+  volume rm leafy-wallet_leafy_local_store_data` for a clean slate (safe — it's disposable
+  local dev/demo data, nothing tracked in git or Atlas).
