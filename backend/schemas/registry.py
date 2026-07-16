@@ -1,3 +1,5 @@
+from schemas.chat_messages import ChatMessageOut
+from schemas.chats import ChatOut
 from schemas.wallet_contacts import WalletContactOut
 from schemas.wallet_transactions import WalletTransactionOut
 
@@ -6,6 +8,8 @@ from schemas.wallet_transactions import WalletTransactionOut
 SCHEMA_REGISTRY: dict[str, type] = {
     "walletContacts": WalletContactOut,
     "walletTransactions": WalletTransactionOut,
+    "chats": ChatOut,
+    "chatMessages": ChatMessageOut,
 }
 
 

@@ -39,9 +39,37 @@
         { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 },
         { "id": "9:7002000000000009", "name": "syncClock", "type": 6 }
       ]
+    },
+    {
+      "id": "3:7003000000000000",
+      "name": "chats",
+      "flags": 2,
+      "lastPropertyId": "6:7003000000000006",
+      "properties": [
+        { "id": "1:7003000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7003000000000002", "name": "title", "type": 9 },
+        { "id": "3:7003000000000003", "name": "createdAt", "type": 10 },
+        { "id": "4:7003000000000004", "name": "updatedAt", "type": 10 },
+        { "id": "5:7003000000000005", "name": "syncClock", "type": 6 },
+        { "id": "6:7003000000000006", "name": "localId", "type": 6 }
+      ]
+    },
+    {
+      "id": "4:7004000000000000",
+      "name": "chatMessages",
+      "flags": 2,
+      "lastPropertyId": "6:7004000000000006",
+      "properties": [
+        { "id": "1:7004000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7004000000000002", "name": "chatId", "type": 6 },
+        { "id": "3:7004000000000003", "name": "role", "type": 9 },
+        { "id": "4:7004000000000004", "name": "text", "type": 9 },
+        { "id": "5:7004000000000005", "name": "createdAt", "type": 10 },
+        { "id": "6:7004000000000006", "name": "syncClock", "type": 6 }
+      ]
     }
   ],
-  "lastEntityId": "2:7002000000000000",
+  "lastEntityId": "4:7004000000000000",
   "lastIndexId": "1:7001000000000100",
   "lastRelationId": "0:0",
   "retiredEntityUids": [],

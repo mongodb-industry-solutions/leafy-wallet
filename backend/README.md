@@ -1,6 +1,6 @@
 # Leafy Wallet API
 
-Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.com/) and MongoDB Atlas. It stores a display cache of Leafy Pay beneficiaries (`walletContacts`) and an enrichment layer over Leafy Pay P2P transfers (`walletTransactions`), including semantic-search embeddings generated locally via [Ollama](https://ollama.com/). Dependency management is handled by [uv](https://docs.astral.sh/uv/).
+Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.com/) and MongoDB Atlas. It stores a display cache of Leafy Pay beneficiaries (`walletContacts`), an enrichment layer over Leafy Pay P2P transfers (`walletTransactions`) including semantic-search embeddings generated locally via [Ollama](https://ollama.com/), and the AI assistant's chat history (`chats`/`chatMessages`). Dependency management is handled by [uv](https://docs.astral.sh/uv/).
 
 ## Table of Contents
 
@@ -11,7 +11,7 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
   - [Environment Variables](#environment-variables)
 - [Running the Application](#running-the-application)
 - [API Documentation](#api-documentation)
-- [Data Model Notes](#data-model-notes)
+- [Data Schemas](#data-schemas)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
 - [ObjectBox Offline Sync (PoC)](#objectbox-offline-sync-poc)
@@ -19,6 +19,7 @@ Python backend for Leafy Wallet, built with [FastAPI](https://fastapi.tiangolo.c
 ## Features
 
 - RESTful CRUD API for `walletContacts` and `walletTransactions`, powered by FastAPI + Pydantic schemas.
+- RESTful API for `chats`/`chatMessages` (the AI assistant's conversations), including cascade-delete of a chat's messages.
 - MongoDB Atlas persistence via `pymongo`, with a shared connection injected through FastAPI dependencies.
 - Automatic semantic-search embedding generation for transaction notes via a local Ollama model, without blocking writes if Ollama is unavailable.
 - Semantic search over transaction notes via Atlas Vector Search (`GET /api/v1/wallet-transactions/search`).
@@ -96,16 +97,143 @@ The API is then available at `http://localhost:8000`. If port 8000 is taken (e.g
 | `GET` | `/api/v1/wallet-transactions/{id}` | Get a transaction by id |
 | `PATCH` | `/api/v1/wallet-transactions/{id}` | Partially update a transaction (status, settlement, embedding) |
 | `DELETE` | `/api/v1/wallet-transactions/{id}` | Delete a transaction |
+| `POST` | `/api/v1/chats` | Create a chat conversation |
+| `GET` | `/api/v1/chats` | List all chats |
+| `GET` | `/api/v1/chats/{id}` | Get a chat by id |
+| `PATCH` | `/api/v1/chats/{id}` | Rename a chat |
+| `DELETE` | `/api/v1/chats/{id}` | Delete a chat (cascades to its messages) |
+| `POST` | `/api/v1/chat-messages` | Create a message (404 if `chatId` doesn't reference an existing chat) |
+| `GET` | `/api/v1/chat-messages` | List messages (optional `chatId` filter) |
+| `GET` | `/api/v1/chat-messages/{id}` | Get a message by id |
+| `DELETE` | `/api/v1/chat-messages/{id}` | Delete a message |
 
-## Data Model Notes
+## Data Schemas
 
-`walletTransactions.amount` and `walletTransactions.currency` are **flat top-level fields**
-(`{"amount": 20.0, "currency": "EUR", ...}`), not a nested `amount: {value, currency}`
-sub-document. This is deliberate: transactions can also originate offline via
-`leafy-local-store` (see [ObjectBox Offline Sync](#objectbox-offline-sync-poc) below), and
-that write path goes through a generic, no-code MongoDB bridge that can only produce flat
-fields. Rather than have two different document shapes in the same collection depending on
-which path wrote a given transaction, the canonical schema was flattened to match.
+Two independent write paths can populate the same Atlas collections: this FastAPI backend
+(writes directly), and `leafy-local-store` via the ObjectBox↔MongoDB Sync Server bridge (see
+[ObjectBox Offline Sync](#objectbox-offline-sync-poc) below). Documents that arrived through
+the sync bridge carry a couple of extra bookkeeping fields (`syncClock`, and — on `chats`
+only — `localId`) that documents this backend writes directly never have. See
+[Sync-related fields](#sync-related-fields) below for what those mean.
+
+### Atlas collections
+
+**`walletContacts`** — a display cache of Leafy Pay beneficiaries, keyed by owner.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `ownerPartyRef` | string | Leafy Pay OAuth `sub` |
+| `counterpartyArrangementReference` | string | Leafy Pay beneficiary reference |
+| `counterpartyLabel` | string | |
+| `counterpartyLookupType` | `"phone"` \| `"email"` | |
+| `counterpartyLookupHint` | string | masked |
+| `createdAt` / `updatedAt` | date | |
+
+**`walletTransactions`** — enrichment layer (note + embedding) over Leafy Pay P2P transfers.
+`amount`/`currency` are **flat top-level fields**, not a nested `amount: {value, currency}`
+sub-document — deliberate, since the ObjectBox↔Mongo bridge can only write flat fields (see
+[ObjectBox Offline Sync](#objectbox-offline-sync-poc)), and the canonical schema was
+flattened to match rather than have two shapes coexist in one collection.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `leafyPayTransferReference` | string | Leafy Pay transfer reference |
+| `ownerPartyRef` | string | |
+| `counterpartyArrangementReference` | string | |
+| `amount` | float | flat, not `{value, currency}` |
+| `currency` | string | flat |
+| `note` | string \| null | max 140 chars |
+| `noteEmbedding` | float[768] \| null | generated via Ollama (`nomic-embed-text`) |
+| `direction` | `"sent"` \| `"received"` | |
+| `leafyPayStatus` | `"pending"` \| `"settled"` \| `"failed"` \| `"exception"` | |
+| `localSyncStatus` | `"local_pending"` \| `"synced"` | |
+| `createdAt` | date | |
+| `settledAt` | date \| null | |
+
+**`chats`** — a conversation in the AI assistant.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `title` | string | |
+| `createdAt` / `updatedAt` | date | |
+| `syncClock` | long | only on documents synced from ObjectBox |
+| `localId` | long | only on documents synced from ObjectBox |
+
+**`chatMessages`** — a single message within a `chats` conversation. A separate collection
+rather than a nested array on `chats`, because ObjectBox has no nested/array attributes and
+both write paths need to produce the same shape.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `chatId` | string (FastAPI path) or number (ObjectBox path) | references a `chats` document — see below |
+| `role` | `"user"` \| `"assistant"` | |
+| `text` | string | |
+| `createdAt` | date | |
+| `syncClock` | long | only on documents synced from ObjectBox |
+
+### ObjectBox entities (`leafy-local-store/local_store_service.cpp`)
+
+Local mirrors of the four Atlas collections above, defined programmatically against the
+ObjectBox C API (no `.fbs`/codegen file — see `create_obx_model()`). Every entity has an
+internal `id` (`Long`, `OBXPropertyFlags_ID`) that ObjectBox assigns and manages, plus a plain
+`syncClock` `Long` field of unconfirmed purpose — see [Sync-related fields](#sync-related-fields).
+
+**`LocalChat`**
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | Long (PK) | ObjectBox-internal; does **not** survive into Atlas — see below |
+| `title` | String | |
+| `createdAt` / `updatedAt` | Date | epoch millis in C++, real `ISODate` once synced |
+| `syncClock` | Long | |
+| `localId` | Long | mirrors `id`; this is the field that *does* survive into Atlas — see below |
+
+**`LocalChatMessage`**
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | Long (PK) | |
+| `chatId` | Long | matches the parent `LocalChat.localId` (and, once synced, `chats.localId`) |
+| `role` | String | `"user"` or `"assistant"` |
+| `text` | String | |
+| `createdAt` | Date | |
+| `syncClock` | Long | |
+
+**`LocalContact`** / **`LocalTransaction`**: see the struct definitions in
+`local_store_service.cpp` — field names and types match `walletContacts`/`walletTransactions`
+above 1:1 (that's the whole point of the flattened schema). Neither has a `localId`-style
+field, since neither is referenced by another synced entity the way `chatMessages`
+references `chats`.
+
+### Sync-related fields
+
+Two fields only ever appear on documents that arrived via the ObjectBox → Atlas bridge, never
+on documents this FastAPI backend writes directly:
+
+- **`syncClock`** — present on every entity here, always `0` in every document we've observed
+  so far. ObjectBox Sync does have a genuine, documented "Sync Clock" feature (a hybrid
+  logical clock used for conflict resolution — deciding which concurrent offline write wins),
+  but per ObjectBox's docs that's opt-in via an explicit `@SyncClock()`-style annotation/flag
+  on the property — our C++ model declares `syncClock` as a plain `Long` with no such flag
+  (unlike `id`, which does get the dedicated `OBXPropertyFlags_ID` flag). So this field is
+  **not confirmed to be wired into that mechanism, or required by the sync bridge at all** —
+  it reads as an inherited convention (this pattern was already in place before `chats`/
+  `chatMessages` were added, mirroring a reference implementation per the code comments), not
+  something verified to be load-bearing. The Sync Server's actual "where did I leave off"
+  bookkeeping for the MongoDB bridge lives in its own `__ObjectBox_Metadata` collection in
+  MongoDB, not in a per-document field, per ObjectBox's FAQ. Whether it's safe to remove
+  hasn't been tested either way — treat it as unverified in both directions, not as
+  something known to be required.
+- **`localId`** (`chats` only) — added specifically because the Sync Server's bridge drops
+  an entity's own primary-key field (`id`) when writing to Mongo; Mongo just assigns its own
+  `_id` instead (see "A synced entity's own primary-key..." below). Without a second, non-PK
+  field mirroring `id`, there'd be no way to join `chatMessages.chatId` back to its parent
+  `chats` document once both had synced to Atlas — `localId` is that mirror, set right after
+  ObjectBox assigns the real `id` on creation.
 
 ## Project Structure
 
@@ -120,12 +248,16 @@ backend/
 ├── schemas/
 │   ├── wallet_contacts.py   # Create / Update / Out Pydantic models
 │   ├── wallet_transactions.py
+│   ├── chats.py              # Chat conversation schemas
+│   ├── chat_messages.py      # Chat message schemas (no Update — immutable)
 │   └── registry.py          # collection name -> canonical schema map
 ├── services/
 │   └── ollama.py             # Embedding client for noteEmbedding
 ├── routers/
 │   ├── wallet_contacts.py    # CRUD endpoints
-│   └── wallet_transactions.py  # CRUD + semantic search
+│   ├── wallet_transactions.py  # CRUD + semantic search
+│   ├── chats.py               # CRUD, cascade-deletes a chat's messages
+│   └── chat_messages.py       # Create / list / get / delete (no PATCH)
 ├── scripts/
 │   └── create_vector_index.py  # Provisions the Atlas Vector Search index (run once per cluster)
 └── tests/                    # pytest integration tests (run against Atlas)
@@ -169,12 +301,15 @@ a different stack (C++) with its own build/runtime:
 
 ### How it fits with this backend
 
-Both `leafy-local-store` and this FastAPI backend write into the **same** `walletTransactions`
-and `walletContacts` Atlas collections, one online write path (this API), one offline-capable
-write path (`leafy-local-store`). That's the reasoning behind the flat `amount`/`currency`
-fields described in [Data Model Notes](#data-model-notes): the ObjectBox↔Mongo bridge is
-generic and can't produce nested documents, so the schema was flattened to match rather than
-have two shapes coexist in one collection.
+Both `leafy-local-store` and this FastAPI backend can write into the **same**
+`walletTransactions`, `walletContacts`, `chats`, and `chatMessages` Atlas collections — one
+online write path (this API), one offline-capable write path (`leafy-local-store`). For
+`walletTransactions`, that's the reasoning behind the flat `amount`/`currency` fields
+described in [Data Schemas](#data-schemas): the ObjectBox↔Mongo bridge is generic and can't
+produce nested documents, so the schema was flattened to match rather than have two shapes
+coexist in one collection. The two paths are otherwise independent — nothing reconciles a
+document written by one path against the other, and which path a caller uses for chats is a
+frontend decision, not something resolved here.
 
 ### Running it locally
 
@@ -204,19 +339,25 @@ local state is cleared):
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/local/v1/health` | Store status + local transaction/contact counts |
+| `GET` | `/local/v1/health` | Store status + local transaction/contact/chat/message counts |
 | `GET` | `/local/v1/transactions` | List locally-stored transactions |
 | `GET` | `/local/v1/transactions/search` | Semantic search over local transaction notes — entirely offline, via ObjectBox's own HNSW index (`q`, optional `ownerPartyRef`, `limit`) |
 | `POST` | `/local/v1/transactions/send` | Create a transaction locally (embeds `note` via Ollama, syncs to Atlas once connected) |
 | `DELETE` | `/local/v1/transactions/{id}` | Delete a local transaction by its ObjectBox id (propagates through Sync to Atlas too) |
 | `GET` | `/local/v1/contacts` | List locally-stored contacts |
 | `POST` | `/local/v1/contacts` | Queue a contact add locally (reconciled with Leafy Pay on reconnect), syncs to Atlas once connected |
+| `GET` | `/local/v1/chats` | List locally-stored chats |
+| `POST` | `/local/v1/chats` | Create a chat locally, syncs to Atlas once connected |
+| `DELETE` | `/local/v1/chats/{chatId}` | Delete a chat locally (cascades to its messages), syncs to Atlas once connected |
+| `GET` | `/local/v1/chats/{chatId}/messages` | List a chat's locally-stored messages |
+| `POST` | `/local/v1/chats/{chatId}/messages` | Create a message locally, syncs to Atlas once connected |
+| `DELETE` | `/local/v1/chats/{chatId}/messages/{messageId}` | Delete a message locally, syncs to Atlas once connected |
 | `DELETE` | `/local/v1/contacts/{id}` | Delete a local contact by its ObjectBox id (propagates through Sync to Atlas too) |
 
 **`GET /local/v1/health`**
 ```json
 // 200
-{"status": "healthy", "transaction_count": 3, "contact_count": 1}
+{"status": "healthy", "transaction_count": 3, "contact_count": 1, "chat_count": 2, "chat_message_count": 5}
 // 500
 {"status": "error", "error": "..."}
 ```
@@ -334,6 +475,59 @@ Pydantic model restricts it.
 // 500 — genuine server-side failure (e.g. store write): {"error": "..."}
 ```
 
+**`GET /local/v1/chats`**: no request body; returns an array of the same object shape as the
+`POST` response below (`200`), or `{"error": "..."}` (`500`).
+
+**`POST /local/v1/chats`**: optional `title` (defaults to `"New chat"` if omitted).
+```json
+// Request
+{"title": "Splitting dinner with Maria"}
+// 201 — server-assigned: id, createdAt, updatedAt (both = now on create), localId (= id)
+{
+  "id": 1,
+  "title": "Splitting dinner with Maria",
+  "createdAt": 1784133527692,
+  "updatedAt": 1784133527692,
+  "localId": 1
+}
+// 400 — invalid JSON: {"error": "..."}
+// 500 — genuine server-side failure: {"error": "..."}
+```
+
+**`DELETE /local/v1/chats/{chatId}`**: also removes every message under that chat.
+```
+// 204 — no body
+// 404 — chatId doesn't exist: {"error": "Chat not found"}
+```
+
+**`GET /local/v1/chats/{chatId}/messages`**: no request body; returns an array of the same
+object shape as the `POST` response below (`200`), 404 if `chatId` doesn't exist, or
+`{"error": "..."}` (`500`).
+
+**`POST /local/v1/chats/{chatId}/messages`**: required: `role` (must be `"user"` or
+`"assistant"`), `text`. Also bumps the parent chat's `updatedAt`.
+```json
+// Request
+{"role": "user", "text": "Split the dinner bill with Maria"}
+// 201 — server-assigned: id, createdAt
+{
+  "id": 1,
+  "chatId": 1,
+  "role": "user",
+  "text": "Split the dinner bill with Maria",
+  "createdAt": 1784133527881
+}
+// 400 — invalid JSON, missing required field, or role isn't "user"/"assistant": {"error": "..."}
+// 404 — chatId doesn't exist: {"error": "Chat not found"}
+// 500 — genuine server-side failure: {"error": "..."}
+```
+
+**`DELETE /local/v1/chats/{chatId}/messages/{messageId}`**
+```
+// 204 — no body
+// 404 — messageId doesn't exist, or doesn't belong to chatId: {"error": "Chat message not found"}
+```
+
 **`DELETE /local/v1/contacts/{id}`**: same semantics as the transaction delete above.
 ```json
 // 204 — no body
@@ -355,12 +549,22 @@ Pydantic model restricts it.
 - **Mongo's `_id` is untouched by ObjectBox's own `int64` id**: the bridge lets MongoDB
   generate a fresh `ObjectId` as usual; there's no collision or id-scheme conflict to worry
   about.
+- **A synced entity's own primary-key `id` doesn't carry over as a field — only a regular
+  (non-PK) property does.** Only bites you when two synced entities need to reference each
+  other, like `chats` → `chatMessages`: `chatMessages.chatId` syncs through fine (it's a
+  plain `Long`, not a PK), but `LocalChat.id` (the PK) gets dropped when writing to Mongo, so
+  there was nothing left in the synced `chats` document to match it against. Fixed by adding
+  `LocalChat.localId`, a second, non-PK field that mirrors `id` right after ObjectBox assigns
+  it on creation — see [Sync-related fields](#sync-related-fields).
 - **After clearing/recreating the sync server's local state, "Full Import" must be re-run.**
   It's tracked per local state, not per Atlas collection.
 - **Use `OBXPropertyType_Date`, not `Long`, for real timestamps.** The bridge maps `Date` to a
   genuine BSON `ISODate`; `Long` maps to a plain `Int64`. We initially used `Long` for
   `createdAt`/`settledAt` and only caught it by inspecting the raw Atlas document — the FastAPI
   backend's Pydantic layer silently "fixed" the display (it coerces large ints into datetimes),
+  masking that the actual stored type was wrong. `syncClock` stays `Long` regardless — it's
+  never held a timestamp-shaped value in anything we've observed, whatever its actual purpose
+  turns out to be (see [Sync-related fields](#sync-related-fields)).
   masking that the actual stored type was wrong. `syncClock` correctly stays `Long` — it's an
   internal counter, not a real timestamp.
 - **ObjectBox's vector search `score` is a distance, not a similarity.** `findWithScores()`
