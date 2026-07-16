@@ -1,5 +1,6 @@
 'use server'
 
+import { randomUUID } from 'crypto'
 import { getSession } from '@/lib/auth/session'
 import {
   createBeneficiary,
@@ -11,11 +12,27 @@ import {
 } from '@/lib/psp/PspClient'
 import {
   createContactEnrichment,
+  createRequestDoc,
   createTransactionEnrichment,
   deleteContactEnrichment,
   listContactEnrichment,
+  listIncomingRequests,
+  listOutgoingRequests,
   listTransactionEnrichment,
+  resolveRequestDoc,
 } from '@/lib/backend/enrichment'
+import {
+  cacheAccount,
+  createLocalRequest,
+  deleteLocalTransaction,
+  listLocalAccounts,
+  listLocalContacts,
+  listLocalRequests,
+  listLocalTransactions,
+  queueLocalSend,
+  resolveLocalRequest,
+} from '@/lib/local/LocalStoreClient'
+import { lookupDigest } from './digest'
 import { avatarFor, formatDate, formatMoney } from './format'
 
 async function ownerRef() {
@@ -29,10 +46,9 @@ function last4Of(maskedIban) {
   return digits.slice(-4) || '••••'
 }
 
-/** The user's accounts (balance, masked IBAN, currency), UI-ready. */
-export async function getAccounts() {
-  const accounts = await listAccounts()
-  return accounts.map((a) => ({
+/** Shape an account into the UI view, from either source. */
+function toAccountView(a) {
+  return {
     reference: a.reference,
     label: a.label,
     currency: a.currency,
@@ -41,10 +57,51 @@ export async function getAccounts() {
     amount: formatMoney(a.balanceValue),
     balanceValue: a.balanceValue,
     isDefault: a.isDefault,
-  }))
+  }
 }
 
-/** Shape a Leafy Pay beneficiary into the UI contact used across the app. */
+/**
+ * The user's accounts (balance, masked IBAN, currency), UI-ready. The online read writes balances
+ * through to the device cache, which never syncs and is the only offline source.
+ * @param {boolean} [isOnline]
+ */
+export async function getAccounts(isOnline = true) {
+  if (!isOnline) {
+    const cached = await listLocalAccounts().catch(() => [])
+    return (cached ?? []).map((a) =>
+      toAccountView({
+        reference: a.accountReference,
+        label: a.label,
+        currency: a.currency,
+        maskedIban: a.maskedIban ?? '',
+        balanceValue: a.balanceValue,
+        isDefault: a.isDefault,
+      }),
+    )
+  }
+
+  const owner = await ownerRef()
+  const accounts = await listAccounts()
+  await Promise.all(
+    accounts.map((a) =>
+      cacheAccount({
+        reference: a.reference,
+        ownerPartyRef: owner ?? '',
+        label: a.label,
+        currency: a.currency,
+        balanceValue: a.balanceValue,
+        maskedIban: a.maskedIban ?? '',
+        isDefault: Boolean(a.isDefault),
+      }).catch(() => {}),
+    ),
+  )
+  return accounts.map(toAccountView)
+}
+
+/**
+ * Shape a Leafy Pay beneficiary into the UI contact used across the app. `canRequest` is false
+ * without a digest: phone contacts, and contacts backfilled from Leafy Pay whose email we never saw.
+ */
 function toContactView(b) {
   return {
     id: b.reference,
@@ -52,20 +109,83 @@ function toContactView(b) {
     name: b.label,
     lookupType: b.lookupType,
     lookupHint: b.lookupHint,
+    canRequest: Boolean(b.lookupDigest),
     ...avatarFor(b.reference ?? b.label),
   }
 }
 
-/** The user's contacts (Leafy Pay beneficiaries), UI-ready. */
-export async function getContacts() {
-  const beneficiaries = await listBeneficiaries()
-  return beneficiaries.map(toContactView)
+/**
+ * Resolve the user's contacts: Leafy Pay supplies the active set, Atlas supplies the alias. A
+ * beneficiary missing from Atlas is backfilled; the Leafy Pay label is only a seed.
+ */
+async function resolveContacts(owner, { backfill = false } = {}) {
+  const [beneficiaries, enrichment] = await Promise.all([
+    listBeneficiaries().catch(() => []),
+    owner ? listContactEnrichment(owner).catch(() => []) : [],
+  ])
+  const atlasByRef = new Map((enrichment ?? []).map((e) => [e.counterpartyArrangementReference, e]))
+
+  if (backfill && owner) {
+    const missing = beneficiaries.filter((b) => !atlasByRef.has(b.reference))
+    await Promise.all(
+      missing.map((b) =>
+        createContactEnrichment({
+          ownerPartyRef: owner,
+          counterpartyArrangementReference: b.reference,
+          counterpartyLabel: b.label,
+          counterpartyLookupType: b.lookupType,
+          counterpartyLookupHint: b.lookupHint,
+        })
+          .then((doc) => atlasByRef.set(b.reference, doc))
+          .catch(() => {}),
+      ),
+    )
+  }
+
+  return beneficiaries.map((b) => {
+    const atlas = atlasByRef.get(b.reference)
+    return {
+      reference: b.reference,
+      label: atlas?.counterpartyLabel || b.label,
+      lookupType: atlas?.counterpartyLookupType || b.lookupType,
+      lookupHint: atlas?.counterpartyLookupHint || b.lookupHint,
+      lookupDigest: atlas?.counterpartyLookupDigest ?? null,
+    }
+  })
+}
+
+/** Contacts held on the device, synced down from Atlas. The only source when offline. */
+async function localContacts(owner) {
+  const contacts = await listLocalContacts().catch(() => [])
+  return (contacts ?? [])
+    .filter((c) => !owner || c.ownerPartyRef === owner)
+    .map((c) => ({
+      reference: c.counterpartyArrangementReference,
+      label: c.counterpartyLabel,
+      lookupType: c.counterpartyLookupType,
+      lookupHint: c.counterpartyLookupHint,
+      lookupDigest: c.counterpartyLookupDigest ?? null,
+    }))
+}
+
+/**
+ * The user's contacts, UI-ready. Names resolve from Atlas; Leafy Pay supplies refs + masks.
+ * @param {boolean} [isOnline]
+ */
+export async function getContacts(isOnline = true) {
+  const owner = await ownerRef()
+  const contacts = isOnline
+    ? await resolveContacts(owner, { backfill: true })
+    : await localContacts(owner)
+  return contacts.map(toContactView)
 }
 
 /**
  * Add a contact: resolve a registered Leafy Pay email/phone into a saved beneficiary (source of truth),
- * then mirror it to the Atlas walletContacts replica (best-effort). Fails cleanly if no registered
- * user/merchant matches the given email/phone.
+ * then mirror it to the Atlas walletContacts replica. Fails cleanly if no registered user/merchant
+ * matches the given email/phone.
+ *
+ * The only moment we hold the address, so the blind index is derived here and the address discarded.
  * @param {{lookupType: 'email'|'phone', lookupValue: string, label?: string}} input
  * @returns {Promise<{ok: boolean, contact?: object, error?: string}>}
  */
@@ -84,19 +204,25 @@ export async function addContact({ lookupType, lookupValue, label = '' } = {}) {
     return { ok: false, error: `No Leafy Pay user is registered with that ${kind}.` }
   }
   const beneficiary = result.beneficiary
+  const digest = lookupType === 'email' ? lookupDigest(value) : null
 
   const owner = await ownerRef()
   if (owner) {
-    await createContactEnrichment({
-      ownerPartyRef: owner,
-      counterpartyArrangementReference: beneficiary.reference,
-      counterpartyLabel: beneficiary.label,
-      counterpartyLookupType: beneficiary.lookupType,
-      counterpartyLookupHint: beneficiary.lookupHint,
-    }).catch(() => {})
+    try {
+      await createContactEnrichment({
+        ownerPartyRef: owner,
+        counterpartyArrangementReference: beneficiary.reference,
+        counterpartyLabel: beneficiary.label,
+        counterpartyLookupType: beneficiary.lookupType,
+        counterpartyLookupHint: beneficiary.lookupHint,
+        counterpartyLookupDigest: digest,
+      })
+    } catch {
+      return { ok: false, error: 'Could not save the contact — is the backend running?' }
+    }
   }
 
-  return { ok: true, contact: toContactView(beneficiary) }
+  return { ok: true, contact: toContactView({ ...beneficiary, lookupDigest: digest }) }
 }
 
 /**
@@ -126,40 +252,93 @@ export async function removeContact(reference) {
   return { ok: true }
 }
 
+// Leafy Pay stamps this on a P2P transfer that was sent without a note; treated here as "no note".
+const DEFAULT_REMITTANCE = 'P2P transfer via beneficiary portal'
+
+// A send buffered on the device, carrying a stand-in reference until the replay swaps in the real one.
+const LOCAL_PENDING = 'local_pending'
+const LOCAL_REFERENCE_PREFIX = 'local-'
+
+/** Shape one transaction row for the UI, from either source. */
+function toTransactionRow({ reference, counterpartyRef, contact, isReceived, magnitude, currency, note, createdAt, status, isPending }) {
+  return {
+    id: reference,
+    reference,
+    name: contact?.label || 'Leafy Pay user',
+    lookupHint: contact?.lookupHint || '',
+    note: note || 'No note',
+    amount: isReceived ? magnitude : -magnitude,
+    currency,
+    date: formatDate(createdAt),
+    createdAt,
+    status,
+    isPending,
+    ...avatarFor(counterpartyRef ?? reference),
+  }
+}
+
+/** Transactions held on the device: synced down from Atlas, plus any send queued while offline. */
+async function localTransactions(owner) {
+  const [transactions, contacts] = await Promise.all([
+    listLocalTransactions().catch(() => []),
+    localContacts(owner),
+  ])
+  const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
+
+  const rows = (transactions ?? [])
+    .filter((t) => !owner || t.ownerPartyRef === owner)
+    .map((t) => {
+      const createdAt = t.createdAt ? new Date(t.createdAt).toISOString() : null
+      return toTransactionRow({
+        reference: t.leafyPayTransferReference,
+        counterpartyRef: t.counterpartyArrangementReference,
+        contact: contactByRef.get(t.counterpartyArrangementReference),
+        isReceived: t.direction === 'received',
+        magnitude: Math.abs(t.amount),
+        currency: t.currency,
+        note: t.note,
+        createdAt,
+        status: t.leafyPayStatus,
+        isPending: t.leafyPayStatus !== 'completed',
+      })
+    })
+  rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+  return rows
+}
+
 /**
  * The user's transactions: Leafy Pay (base transfer, source of truth) read in parallel with the Atlas
- * enrichment (note + embedding), merged by `leafyPayTransferReference`. Counterparty name resolved from
- * the beneficiary list. Sorted newest first.
+ * enrichment (note) and the resolved contacts (Atlas aliases), merged by `leafyPayTransferReference`.
+ * Every row gets a non-empty name and note. Sorted newest first.
+ * @param {boolean} [isOnline]
  */
-export async function getTransactions() {
+export async function getTransactions(isOnline = true) {
   const owner = await ownerRef()
-  const [transactions, beneficiaries, enrichment] = await Promise.all([
+  if (!isOnline) return localTransactions(owner)
+  const [transactions, contacts, enrichment] = await Promise.all([
     listTransactions(),
-    listBeneficiaries().catch(() => []),
+    resolveContacts(owner),
     owner ? listTransactionEnrichment(owner).catch(() => []) : [],
   ])
-  const contactByRef = new Map(beneficiaries.map((b) => [b.reference, b]))
+  const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
 
   const rows = transactions.map((t) => {
-    const contact = contactByRef.get(t.counterpartyReference)
     const enrich = enrichByRef.get(t.reference)
-    const magnitude = Math.abs(t.value)
-    return {
-      id: t.reference,
+    const counterpartyRef = t.counterpartyReference ?? enrich?.counterpartyArrangementReference ?? null
+    const enteredNote = enrich?.note || (t.note && t.note !== DEFAULT_REMITTANCE ? t.note : '')
+    return toTransactionRow({
       reference: t.reference,
-      name: contact?.label ?? t.beneficiaryName ?? t.destinationMasked ?? 'Payment',
-      lookupHint: contact?.lookupHint ?? t.destinationMasked ?? '',
-      // Note lives in the Atlas enrichment layer; fall back to Leafy Pay's remittance if none.
-      note: enrich?.note ?? t.note ?? '',
-      amount: t.direction === 'received' ? magnitude : -magnitude,
+      counterpartyRef,
+      contact: contactByRef.get(counterpartyRef),
+      isReceived: t.direction === 'received',
+      magnitude: Math.abs(t.value),
       currency: t.currency,
-      date: formatDate(t.createdAt),
+      note: enteredNote,
       createdAt: t.createdAt,
       status: t.status,
       isPending: t.status !== 'completed',
-      ...avatarFor(t.counterpartyReference ?? t.reference),
-    }
+    })
   })
 
   rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
@@ -168,34 +347,295 @@ export async function getTransactions() {
 
 /**
  * Send a P2P transfer: Leafy Pay moves the money (base), then the note is written to Atlas in parallel
- * so it gets embedded for search. The Atlas write is best-effort (money already moved).
- * @param {{counterpartyArrangementReference: string, amount: number, note?: string}} input
+ * so it gets embedded for search. The Atlas write is best-effort (money already moved). `fromAccountReference`
+ * picks the source account; omit it to let Leafy Pay use the default. Offline the send is buffered on
+ * the device and replayed on reconnect (see `replayPendingSends`).
+ * @param {{counterpartyArrangementReference: string, fromAccountReference?: string, amount: number, note?: string, isOnline?: boolean}} input
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
-export async function sendMoney({ counterpartyArrangementReference, amount, note = '' }) {
+export async function sendMoney({
+  counterpartyArrangementReference,
+  fromAccountReference,
+  amount,
+  note = '',
+  isOnline = true,
+}) {
   if (!counterpartyArrangementReference || !(amount > 0)) {
     return { ok: false, error: 'A recipient and an amount are required' }
   }
+
+  if (!isOnline) {
+    const owner = await ownerRef()
+    const reference = `${LOCAL_REFERENCE_PREFIX}${randomUUID()}`
+    try {
+      await queueLocalSend({
+        leafyPayTransferReference: reference,
+        ownerPartyRef: owner ?? '',
+        counterpartyArrangementReference,
+        amount,
+        currency: 'EUR',
+        direction: 'sent',
+        note: note || '',
+      })
+      return { ok: true, reference, status: LOCAL_PENDING }
+    } catch {
+      return { ok: false, error: 'Could not queue the payment on this device.' }
+    }
+  }
+
   let transfer
   try {
-    transfer = await sendToBeneficiary(counterpartyArrangementReference, { amount, note })
+    transfer = await sendToBeneficiary(counterpartyArrangementReference, {
+      amount,
+      note,
+      fromAccountRef: fromAccountReference,
+    })
   } catch (e) {
     return { ok: false, error: e?.body || 'Transfer failed. Please try again.' }
   }
 
   const owner = await ownerRef()
   if (transfer.reference && owner) {
-    // Best-effort: the money has moved regardless of whether the note gets embedded.
-    await createTransactionEnrichment({
-      leafyPayTransferReference: transfer.reference,
-      ownerPartyRef: owner,
-      counterpartyArrangementReference,
-      amount: { value: amount, currency: 'EUR' },
-      note: note || null,
-      direction: 'sent',
-      leafyPayStatus: transfer.status === 'completed' ? 'settled' : 'pending',
-    }).catch(() => {})
+    try {
+      await createTransactionEnrichment({
+        leafyPayTransferReference: transfer.reference,
+        ownerPartyRef: owner,
+        counterpartyArrangementReference,
+        amount,
+        currency: 'EUR',
+        note: note || null,
+        direction: 'sent',
+        leafyPayStatus: transfer.status === 'completed' ? 'settled' : 'pending',
+      })
+    } catch {
+      return { ok: false, error: 'Payment sent, but saving it failed — is the backend running?' }
+    }
   }
 
   return { ok: true, reference: transfer.reference, status: transfer.status }
+}
+
+/**
+ * Settlement status of a sent transfer, read from the transaction list (the dedicated status endpoint is
+ * session-only, so we resolve it from the OAuth-visible transactions). `pending` while still settling.
+ * @param {string} reference - The transfer reference returned by `sendMoney`.
+ * @returns {Promise<{status: 'completed'|'pending'|'failed'|'unknown'}>}
+ */
+export async function getTransferStatus(reference) {
+  if (!reference) return { status: 'unknown' }
+  const transactions = await listTransactions()
+  const match = transactions.find((t) => t.reference === reference)
+  if (!match) return { status: 'pending' }
+  if (match.status === 'completed') return { status: 'completed' }
+  if (match.status === 'failed' || match.status === 'exception') return { status: 'failed' }
+  return { status: 'pending' }
+}
+
+/**
+ * Send each `local_pending` transaction for real, then drop the local record — its deletion
+ * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
+ * record for the next reconnect.
+ * @returns {Promise<{replayed: number, failed: number}>}
+ */
+export async function replayPendingSends() {
+  const owner = await ownerRef()
+  const transactions = await listLocalTransactions().catch(() => [])
+  const pending = (transactions ?? []).filter(
+    (t) => t.localSyncStatus === LOCAL_PENDING && (!owner || t.ownerPartyRef === owner),
+  )
+
+  let replayed = 0
+  let failed = 0
+  for (const t of pending) {
+    const sent = await sendMoney({
+      counterpartyArrangementReference: t.counterpartyArrangementReference,
+      amount: t.amount,
+      note: t.note || '',
+    })
+    if (!sent.ok) {
+      failed += 1
+      continue
+    }
+    try {
+      await deleteLocalTransaction(t.id)
+      replayed += 1
+    } catch {
+      // The transfer went through; a stale local copy beats risking a double send, so leave it.
+      failed += 1
+    }
+  }
+  return { replayed, failed }
+}
+
+/**
+ * Shape a stored request doc into the UI row used by the inbox and the bell. Keyed by
+ * `requestReference`: Atlas keys by `_id` and the device by an ObjectBox integer, so it's the only
+ * id that survives the connection dropping between reading a request and acting on it.
+ */
+function toRequestView(r) {
+  const createdAt = typeof r.createdAt === 'number' ? new Date(r.createdAt).toISOString() : r.createdAt
+  return {
+    id: r.requestReference,
+    reference: r.requestReference,
+    name: r.requesterName,
+    amount: r.amount,
+    currency: r.currency,
+    note: r.note || 'No note',
+    status: r.status,
+    date: formatDate(createdAt),
+    createdAt,
+    ...avatarFor(r.requesterDigest ?? r.requestReference),
+  }
+}
+
+/**
+ * Raise a payment request against a saved contact, addressed to its stored blind index. Leafy Pay
+ * is not involved until the target pays.
+ * @param {{counterpartyArrangementReference: string, amount: number, note?: string, isOnline?: boolean}} input
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function createRequest({ counterpartyArrangementReference, amount, note = '', isOnline = true }) {
+  if (!counterpartyArrangementReference || !(amount > 0)) {
+    return { ok: false, error: 'A contact and an amount are required' }
+  }
+  const session = await getSession()
+  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+
+  const contacts = isOnline ? await resolveContacts(session.sub) : await localContacts(session.sub)
+  const contact = contacts.find((c) => c.reference === counterpartyArrangementReference)
+  if (!contact) return { ok: false, error: 'Contact not found' }
+  if (!contact.lookupDigest) {
+    return { ok: false, error: `You can only request from contacts added by email.` }
+  }
+
+  const request = {
+    requesterPartyRef: session.sub,
+    requesterName: session.name || session.email,
+    requesterDigest: lookupDigest(session.email),
+    targetDigest: contact.lookupDigest,
+    amount,
+    currency: 'EUR',
+    note: note || null,
+  }
+
+  // No replay needed: Sync carrying the record to Atlas is the whole delivery.
+  if (!isOnline) {
+    try {
+      await createLocalRequest({ ...request, requestReference: randomUUID() })
+    } catch {
+      return { ok: false, error: 'Could not save the request on this device.' }
+    }
+    return { ok: true }
+  }
+
+  try {
+    await createRequestDoc(request)
+  } catch {
+    return { ok: false, error: 'Could not send the request — is the backend running?' }
+  }
+  return { ok: true }
+}
+
+/**
+ * The user's payment requests: `incoming` are addressed to them (matched by digesting their own
+ * session email), `outgoing` are ones they raised.
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{incoming: object[], outgoing: object[]}>}
+ */
+export async function getRequests(isOnline = true) {
+  const session = await getSession()
+  if (!session?.sub || !session?.email) return { incoming: [], outgoing: [] }
+  const digest = lookupDigest(session.email)
+
+  const [incoming, outgoing] = isOnline
+    ? await Promise.all([
+        listIncomingRequests(digest).catch(() => []),
+        listOutgoingRequests(session.sub).catch(() => []),
+      ])
+    : await Promise.all([
+        listLocalRequests({ targetDigest: digest, status: 'pending' }).catch(() => []),
+        listLocalRequests({ requesterPartyRef: session.sub }).catch(() => []),
+      ])
+
+  const sortNewestFirst = (rows) =>
+    rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+
+  return {
+    incoming: sortNewestFirst((incoming ?? []).map(toRequestView)),
+    outgoing: sortNewestFirst((outgoing ?? []).map(toRequestView)),
+  }
+}
+
+/**
+ * Pay a request addressed to the user: match the requester's blind index against the user's own
+ * contacts, send the transfer, then mark the request paid. Online only — the requester must already
+ * be a saved contact, since Leafy Pay only accepts transfers against an arrangement the sender owns.
+ * @param {string} reference - The `requestReference`.
+ * @param {string} [fromAccountReference] - Source account; omit for the default.
+ * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
+ */
+export async function payRequest(reference, fromAccountReference) {
+  if (!reference) return { ok: false, error: 'Missing request' }
+  const session = await getSession()
+  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+
+  const incoming = await listIncomingRequests(lookupDigest(session.email)).catch(() => [])
+  const request = (incoming ?? []).find((r) => r.requestReference === reference)
+  if (!request) return { ok: false, error: 'This request is no longer pending' }
+
+  const contacts = await resolveContacts(session.sub)
+  const contact = contacts.find((c) => c.lookupDigest && c.lookupDigest === request.requesterDigest)
+  if (!contact) {
+    return { ok: false, error: `Add ${request.requesterName} as a contact to pay this request.` }
+  }
+
+  const sent = await sendMoney({
+    counterpartyArrangementReference: contact.reference,
+    fromAccountReference,
+    amount: request.amount,
+    note: request.note || '',
+  })
+  if (!sent.ok) return sent
+
+  try {
+    await resolveRequestDoc(request.id, { status: 'paid', leafyPayTransferReference: sent.reference })
+  } catch {
+    // The money moved; leaving the request pending is recoverable, so don't report a failed payment.
+    return { ok: true, reference: sent.reference, status: sent.status }
+  }
+  return { ok: true, reference: sent.reference, status: sent.status }
+}
+
+/**
+ * Decline a request addressed to the user, or cancel one they raised.
+ * @param {string} reference - The `requestReference`.
+ * @param {'declined'|'cancelled'} status
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function resolveRequest(reference, status, isOnline = true) {
+  if (!reference) return { ok: false, error: 'Missing request' }
+  const session = await getSession()
+  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+
+  try {
+    if (isOnline) {
+      const digest = lookupDigest(session.email)
+      const [incoming, outgoing] = await Promise.all([
+        listIncomingRequests(digest),
+        listOutgoingRequests(session.sub),
+      ])
+      const match = [...(incoming ?? []), ...(outgoing ?? [])].find((r) => r.requestReference === reference)
+      if (!match) return { ok: false, error: 'This request is no longer pending' }
+      await resolveRequestDoc(match.id, { status })
+    } else {
+      const local = await listLocalRequests({})
+      const match = (local ?? []).find((r) => r.requestReference === reference)
+      if (!match) return { ok: false, error: 'This request is no longer pending' }
+      await resolveLocalRequest(match.id, { status })
+    }
+  } catch {
+    return { ok: false, error: 'Could not update the request. Please try again.' }
+  }
+  return { ok: true }
 }

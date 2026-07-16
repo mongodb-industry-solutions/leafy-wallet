@@ -26,7 +26,7 @@
       "id": "2:7002000000000000",
       "name": "walletContacts",
       "flags": 2,
-      "lastPropertyId": "9:7002000000000009",
+      "lastPropertyId": "10:7002000000000010",
       "properties": [
         { "id": "1:7002000000000001", "name": "id", "type": 6, "flags": 1 },
         { "id": "2:7002000000000002", "name": "ownerPartyRef", "type": 9 },
@@ -35,7 +35,8 @@
         { "id": "5:7002000000000005", "name": "counterpartyLookupType", "type": 9 },
         { "id": "6:7002000000000006", "name": "counterpartyLookupHint", "type": 9 },
         { "id": "7:7002000000000007", "name": "createdAt", "type": 10 },
-        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 }
+        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 },
+        { "id": "10:7002000000000010", "name": "counterpartyLookupDigest", "type": 9 }
       ]
     },
     {
@@ -63,14 +64,35 @@
         { "id": "4:7004000000000004", "name": "text", "type": 9 },
         { "id": "5:7004000000000005", "name": "createdAt", "type": 10 }
       ]
+    },
+    {
+      "id": "6:7006000000000000",
+      "name": "walletRequests",
+      "flags": 2,
+      "lastPropertyId": "14:7006000000000014",
+      "properties": [
+        { "id": "1:7006000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7006000000000002", "name": "requestReference", "type": 9 },
+        { "id": "3:7006000000000003", "name": "requesterPartyRef", "type": 9 },
+        { "id": "4:7006000000000004", "name": "requesterName", "type": 9 },
+        { "id": "5:7006000000000005", "name": "requesterDigest", "type": 9 },
+        { "id": "6:7006000000000006", "name": "targetDigest", "type": 9 },
+        { "id": "7:7006000000000007", "name": "amount", "type": 8 },
+        { "id": "8:7006000000000008", "name": "currency", "type": 9 },
+        { "id": "9:7006000000000009", "name": "note", "type": 9 },
+        { "id": "10:7006000000000010", "name": "status", "type": 9 },
+        { "id": "11:7006000000000011", "name": "leafyPayTransferReference", "type": 9 },
+        { "id": "12:7006000000000012", "name": "createdAt", "type": 10 },
+        { "id": "13:7006000000000013", "name": "resolvedAt", "type": 10 }
+      ]
     }
   ],
-  "lastEntityId": "4:7004000000000000",
+  "lastEntityId": "6:7006000000000000",
   "lastIndexId": "1:7001000000000100",
   "lastRelationId": "0:0",
   "retiredEntityUids": [],
   "retiredIndexUids": [],
-  "retiredPropertyUids": [7001000000000014, 7002000000000009, 7003000000000005, 7004000000000006],
+  "retiredPropertyUids": [7001000000000014, 7002000000000009, 7003000000000005, 7004000000000006, 7006000000000014],
   "retiredRelationUids": [],
   "version": 1
 }

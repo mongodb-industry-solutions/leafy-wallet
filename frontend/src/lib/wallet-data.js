@@ -1,7 +1,4 @@
-// Seed data
-// Contacts/users are identified by a masked email/phone hint (a Leafy Pay
-// beneficiary's `counterpartyLookupHint`), never a public $handle, matching
-// PLAN.md's anti-enumeration model.
+// Seed data (AI chat mock).
 export const APP_USERS = [
   { id: 'u1', name: 'Alex Chen', email: 'alex.chen@leafymail.com', seed: 'alex-lp', bg: '60a5fa' },
   { id: 'u2', name: 'Maria Garcia', email: 'maria.garcia@leafymail.com', seed: 'maria-lp', bg: 'a78bfa' },

@@ -19,6 +19,17 @@ async function backendPost(path, body) {
   return res.json()
 }
 
+async function backendPatch(path, body) {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`backend request failed: ${res.status}`)
+  return res.json()
+}
+
 async function backendDelete(path) {
   const res = await fetch(`${BACKEND_URL}${path}`, { method: 'DELETE', cache: 'no-store' })
   if (!res.ok) throw new Error(`backend request failed: ${res.status}`)
@@ -62,4 +73,40 @@ export async function createContactEnrichment(doc) {
 /** Remove a replica doc by its Atlas id. */
 export async function deleteContactEnrichment(id) {
   return backendDelete(`/api/v1/wallet-contacts/${encodeURIComponent(id)}`)
+}
+
+/**
+ * Pending payment requests addressed to a user. Leafy Pay has no concept of a request, so these
+ * live only in Atlas; the target finds their own by digesting their session email.
+ * @param {string} targetDigest - The blind index of the target's email (see lib/wallet/digest.js).
+ */
+export async function listIncomingRequests(targetDigest) {
+  const query = new URLSearchParams({ targetDigest, status: 'pending' }).toString()
+  return backendGet(`/api/v1/wallet-requests?${query}`)
+}
+
+/**
+ * Payment requests a user has raised, in any state (their outbox).
+ * @param {string} owner - The OAuth `sub` (requesterPartyRef).
+ */
+export async function listOutgoingRequests(owner) {
+  const query = new URLSearchParams({ requesterPartyRef: owner }).toString()
+  return backendGet(`/api/v1/wallet-requests?${query}`)
+}
+
+/**
+ * Raise a payment request.
+ * @param {object} doc - `{ requesterPartyRef, requesterName, requesterDigest, targetDigest, amount, currency, note }`.
+ */
+export async function createRequestDoc(doc) {
+  return backendPost('/api/v1/wallet-requests', doc)
+}
+
+/**
+ * Resolve a request. The backend rejects a second resolution, so a request can only settle once.
+ * @param {string} id - The Atlas id.
+ * @param {object} patch - `{ status, leafyPayTransferReference? }`.
+ */
+export async function resolveRequestDoc(id, patch) {
+  return backendPatch(`/api/v1/wallet-requests/${encodeURIComponent(id)}`, patch)
 }

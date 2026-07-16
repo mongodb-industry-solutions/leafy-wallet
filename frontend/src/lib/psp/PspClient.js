@@ -55,10 +55,6 @@ async function call(method, path, body) {
   return pspRequest(method, path, body, session.accessToken, session.refreshToken)
 }
 
-// Field names from docs/technical-spec.md §1.17 (BIAN SD-54/65/66). Alternate keys are kept as
-// defensive fallbacks where the OAuth-channel response may differ from the raw record.
-
-// payoutAccountArrangement (SD-66). The masked IBAN is plaintext in list views; the raw IBAN is stripped.
 function normalizeAccount(a) {
   const bal = a.payoutAccountBalance ?? {}
   return {
@@ -71,7 +67,6 @@ function normalizeAccount(a) {
   }
 }
 
-// counterpartyArrangement (SD-54). Raw phone/email is never returned, only the masked hint.
 function normalizeBeneficiary(b) {
   return {
     reference: b.counterpartyArrangementReference,
@@ -82,7 +77,6 @@ function normalizeBeneficiary(b) {
   }
 }
 
-// paymentExecutionProcedure (SD-65). The P2P note is `paymentExecutionRemittanceInformation`.
 function normalizeTransaction(t) {
   const gross = t.grossAmount ?? t.paymentExecutionAmount?.amount ?? 0
   return {
@@ -94,7 +88,7 @@ function normalizeTransaction(t) {
     value: typeof gross === 'number' ? gross : (gross?.amount ?? 0),
     currency: t.currency ?? 'EUR',
     status: t.paymentExecutionStatus ?? t.status ?? 'pending',
-    note: t.paymentExecutionRemittanceInformation ?? t.description ?? '',
+    note: t.concept ?? t.paymentExecutionRemittanceInformation ?? t.description ?? '',
     createdAt: t.completedAt ?? t.initiatedAt ?? t.scheduledAt ?? t.recordCreatedDateTime ?? null,
   }
 }
@@ -121,9 +115,6 @@ export async function listTransactions() {
 // ── Writes ───────────────────────────────────────────────────────────────────
 /**
  * Save a beneficiary by resolving a registered Leafy Pay email/phone (scope `write:beneficiaries`).
- * Leafy Pay is anti-enumeration: it returns `{ found: false }` (HTTP 200) both when no user matches and
- * when the beneficiary already exists. On success it returns the arrangement reference, label, and a
- * masked hint (never the raw value or the counterparty's identity).
  * @returns {Promise<{found: boolean, beneficiary?: object}>}
  */
 export async function createBeneficiary({ lookupType, lookupValue, label }) {
@@ -135,7 +126,7 @@ export async function createBeneficiary({ lookupType, lookupValue, label }) {
     beneficiary: {
       reference: data.counterpartyArrangementReference,
       label: data.counterpartyLabel,
-      lookupType, // the response omits the type; echo back what we sent
+      lookupType,
       lookupHint: data.counterpartyLookupHint ?? '••••',
       status: 'active',
     },
@@ -147,19 +138,21 @@ export async function removeBeneficiary(reference) {
   await call('DELETE', `/api/v1/beneficiaries/${encodeURIComponent(reference)}`)
 }
 
-/** Send a P2P transfer to a saved beneficiary (scope `write:transfers`). */
-export async function sendToBeneficiary(reference, { amount, currency = 'EUR', note }) {
-  const body = { amount, currency, ...(note ? { note } : {}) }
+/**
+ * Send a P2P transfer to a saved beneficiary (scope `write:transfers`). Omitting `fromAccountRef` lets
+ * Leafy Pay draw from the default account. Returns `submitted` while settling (async, T+N).
+ */
+export async function sendToBeneficiary(reference, { amount, currency = 'EUR', note, fromAccountRef }) {
+  const body = {
+    amount,
+    currency,
+    ...(note ? { note } : {}),
+    ...(fromAccountRef ? { fromAccountRef } : {}),
+  }
   const r = await call('POST', `/api/v1/beneficiaries/${encodeURIComponent(reference)}/transfer`, body)
   return {
     reference: r.transferReference ?? r.paymentExecutionInstanceReference ?? null,
     status: r.status ?? r.paymentExecutionStatus ?? 'pending',
     failureReason: r.failureReason ?? null,
   }
-}
-
-/** Poll a transfer's status (scope `read:transactions`). */
-export async function getTransferStatus(reference) {
-  const r = await call('GET', `/api/v1/gateway/transfers/${encodeURIComponent(reference)}/status`)
-  return { status: r.status ?? r.paymentExecutionStatus ?? 'pending' }
 }

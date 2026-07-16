@@ -90,7 +90,7 @@ export function AddContactSheet({ onClose }) {
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="Name (optional)"
+            placeholder="Name"
             className="h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground"
           />
 
@@ -98,7 +98,7 @@ export function AddContactSheet({ onClose }) {
 
           <button
             onClick={() => handleSubmit(close)}
-            disabled={!value.trim() || isSubmitting}
+            disabled={!value.trim() || !label.trim() || isSubmitting}
             className="mt-4 h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
           >
             {isSubmitting ? 'Adding…' : 'Add contact'}

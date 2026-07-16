@@ -12,6 +12,7 @@ import { TxDetail } from '@/components/wallet/transactions/TxDetail/TxDetail'
 import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
+import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel/NotificationsPanel'
 
 /**
  * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
@@ -30,6 +31,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   const [sendMode, setSendMode] = useState('send')
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAddContactOpen, setIsAddContactOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
   // aurora intro plays once per login, not on every return to the Home tab.
   const heroIntroPlayedRef = useRef(false)
@@ -65,7 +67,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   }, [])
 
   return (
-    <WalletDataProvider isOnline={isOnline}>
+    <WalletDataProvider isOnline={isOnline} ownerKey={user?.sub}>
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
         {!isSendOpen && (
           <>
@@ -80,6 +82,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
                     user={user}
                     onSignOut={onSignOut}
                     onProfile={() => setIsProfileOpen(true)}
+                    onOpenNotifications={() => setIsNotificationsOpen(true)}
                     onSetTab={setTab}
                     onDetail={setDetail}
                     onSend={() => handleOpenSend('send')}
@@ -112,6 +115,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
         )}
         {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
         {isAddContactOpen && <AddContactSheet onClose={() => setIsAddContactOpen(false)} />}
+        {isNotificationsOpen && <NotificationsPanel onClose={() => setIsNotificationsOpen(false)} />}
         {isProfileOpen && (
           <div className="absolute inset-0 z-40">
             <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />

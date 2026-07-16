@@ -62,34 +62,47 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - SYNC_SERVER_URL=ws://objectbox-sync-server:9999
     restart: always
-  demoname-backend:
+  backend:
     build:
       context: .
       no_cache: true
       dockerfile: Dockerfile.backend
-    image: imagename-backend:latest
+    image: leafy-wallet-backend:latest
     volumes:
       - ~/.aws/credentials:/root/.aws/credentials:ro
       - ~/.aws/config:/root/.aws/config:ro
       - ~/.aws/sso/cache:/root/.aws/sso/cache:rw  # Only make cache writable
     ports:
       - "8000:8000"
+    env_file:
+      - backend/.env
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       - ollama
     restart: always
-    container_name: demoname-backend
-  demoname-frontend:
+    container_name: leafy-wallet-backend
+  frontend:
     build:
       context: .
       no_cache: true
       dockerfile: Dockerfile.frontend
-    image: imagename-frontend:latest
+    image: leafy-wallet-frontend:latest
     ports:
       - "3000:3000"
+    env_file:
+      - frontend/.env.local
+    environment:
+      # Override the host-facing URLs from .env.local: inside the network, `localhost` is this
+      # container. APP_BASE_URL/REDIRECT_URI deliberately stay on localhost:3000 — those are
+      # browser-facing, so they must match what Leafy Pay has registered.
+      - BACKEND_URL=http://backend:8000
+      - LOCAL_STORE_URL=http://leafy-local-store:8090
+    depends_on:
+      - backend
+      - leafy-local-store
     restart: always
-    container_name: demoname-frontend
+    container_name: leafy-wallet-frontend
 
 volumes:
   ollama_data:

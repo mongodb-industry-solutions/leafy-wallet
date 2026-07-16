@@ -1,16 +1,22 @@
 'use client'
 
-import { LeafLogo } from '@/components/common/LeafLogo/LeafLogo'
+import Icon from '@leafygreen-ui/icon'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { ProfileMenu } from '@/components/wallet/shell/ProfileMenu/ProfileMenu'
 
+const MAX_BADGE = 9
+
 /**
- * The Home screen's gradient hero: an avatar/name pill and Leafy mark over a green wash, with a "welcome back" greeting.
+ * The Home screen's gradient hero: an avatar/name pill and a notifications bell over a green wash, with
+ * a "welcome back" greeting.
  * @param {object} props
  * @param {{name: string, email: string, seed: string, bg: string}} props.user
  * @param {() => void} props.onSignOut
  * @param {() => void} [props.onProfile] - Opens the Profile screen.
+ * @param {() => void} [props.onOpenNotifications] - Opens the notifications panel.
  */
-export function HomeHero({ user, onSignOut, onProfile }) {
+export function HomeHero({ user, onSignOut, onProfile, onOpenNotifications }) {
+  const { unreadCount } = useWalletData()
   const firstName = user.name.split(' ')[0]
 
   return (
@@ -20,7 +26,18 @@ export function HomeHero({ user, onSignOut, onProfile }) {
           <ProfileMenu user={user} onLogout={onSignOut} onProfile={onProfile} size={30} align="start" />
           <span className="text-sm font-medium tracking-tight">{user.name}</span>
         </div>
-        <LeafLogo size={38} color="white" />
+        <button
+          onClick={onOpenNotifications}
+          aria-label="Notifications"
+          className="relative grid size-9 place-items-center rounded-full bg-white/15 backdrop-blur-sm transition-colors hover:bg-white/25"
+        >
+          <Icon glyph="Bell" size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-destructive-foreground">
+              {unreadCount > MAX_BADGE ? `${MAX_BADGE}+` : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="mt-7">
