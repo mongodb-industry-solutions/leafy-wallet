@@ -33,9 +33,12 @@ function Typewriter({ text, animate, onDone }) {
 }
 
 /**
- * The "Chat" tab (Leafy AI): greeting empty-state, message thread, and mock history, with all state/logic in {@link useAiChat}.
+ * The "Chat" tab (Leafy AI): greeting empty-state, message thread, and saved history, with all
+ * state/logic in {@link useAiChat}.
+ * @param {object} props
+ * @param {{name: string}} props.user - The authenticated identity, for the greeting.
  */
-export function AiTab() {
+export function AiTab({ user }) {
   const c = useAiChat()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat)
   // never replays it.
@@ -103,7 +106,7 @@ export function AiTab() {
       <ChatHeader title={c.title} onBack={() => c.setView('history')} onNew={c.handleNewChat} />
 
       {showEmpty ? (
-        <EmptyState user={c.user} onSuggestion={c.handleSuggestion} />
+        <EmptyState user={user} onSuggestion={c.handleSuggestion} />
       ) : (
         <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-32">
           {c.msgs.map((m) => {

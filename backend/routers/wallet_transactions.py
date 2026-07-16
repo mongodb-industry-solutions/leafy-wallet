@@ -7,8 +7,11 @@ from db.mdb import MongoDBConnector
 from db.utils import parse_object_id, with_str_id
 from services.ollama import get_embedding
 from services.transactions import SemanticSearchUnavailable
+from services.transactions import list_transactions as list_transactions_service
 from services.transactions import search_transactions as search_transactions_service
+from services.transactions import spending_by_contact as spending_by_contact_service
 from schemas.wallet_transactions import (
+    SpendingByContact,
     WalletTransactionCreate,
     WalletTransactionOut,
     WalletTransactionSearchResult,
@@ -42,14 +45,7 @@ async def list_transactions(
     leafyPayStatus: str | None = None,
     db: MongoDBConnector = Depends(get_db),
 ):
-    query = {}
-    if ownerPartyRef:
-        query["ownerPartyRef"] = ownerPartyRef
-    if direction:
-        query["direction"] = direction
-    if leafyPayStatus:
-        query["leafyPayStatus"] = leafyPayStatus
-    return [with_str_id(doc) for doc in db.find(COLLECTION, query)]
+    return list_transactions_service(db, ownerPartyRef, direction, leafyPayStatus)
 
 
 @router.get("/search", response_model=list[WalletTransactionSearchResult])
@@ -68,6 +64,16 @@ async def search_transactions(
         return await search_transactions_service(db, q, ownerPartyRef, limit)
     except SemanticSearchUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/summary", response_model=list[SpendingByContact])
+async def spending_summary(
+    ownerPartyRef: str,
+    direction: str = Query(default="sent", pattern="^(sent|received)$"),
+    db: MongoDBConnector = Depends(get_db),
+):
+    """Total per counterparty, largest first — "where did my money go"."""
+    return spending_by_contact_service(db, ownerPartyRef, direction)
 
 
 @router.get("/{transaction_id}", response_model=WalletTransactionOut)

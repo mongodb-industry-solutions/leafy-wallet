@@ -53,6 +53,31 @@ export async function listLocalTransactions() {
 }
 
 /**
+ * Semantic search over the device's transaction notes — ObjectBox's own HNSW index, no network.
+ * @param {{q: string, ownerPartyRef?: string, limit?: number}} params
+ */
+export async function searchLocalTransactions({ q, ownerPartyRef, limit = 10 }) {
+  const query = new URLSearchParams({
+    q,
+    ...(ownerPartyRef ? { ownerPartyRef } : {}),
+    limit: String(limit),
+  }).toString()
+  return call('GET', `/transactions/search?${query}`)
+}
+
+/**
+ * Per-contact totals held on the device.
+ * @param {{ownerPartyRef?: string, direction?: 'sent'|'received'}} params
+ */
+export async function localSpendingByContact({ ownerPartyRef, direction = 'sent' }) {
+  const query = new URLSearchParams({
+    ...(ownerPartyRef ? { ownerPartyRef } : {}),
+    direction,
+  }).toString()
+  return call('GET', `/transactions/summary?${query}`)
+}
+
+/**
  * Queue a send while offline. The store stamps it `local_pending` and embeds the note; the caller
  * supplies the stand-in `leafyPayTransferReference`.
  * @param {object} send - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
@@ -64,6 +89,27 @@ export async function queueLocalSend(send) {
 /** Drop a local transaction. Propagates through Sync. */
 export async function deleteLocalTransaction(id) {
   return call('DELETE', `/transactions/${encodeURIComponent(id)}`)
+}
+
+/** Chats held on device. */
+export async function listLocalChats(ownerPartyRef) {
+  const query = ownerPartyRef ? `?${new URLSearchParams({ ownerPartyRef })}` : ''
+  return call('GET', `/chats${query}`)
+}
+
+/** Start a chat on device. The caller mints `chatReference` — there's no server here to do it. */
+export async function createLocalChat({ ownerPartyRef, chatReference, title }) {
+  return call('POST', '/chats', { ownerPartyRef, chatReference, title })
+}
+
+/** A chat's messages held on device, oldest first. */
+export async function listLocalChatMessages(chatReference) {
+  return call('GET', `/chats/${encodeURIComponent(chatReference)}/messages`)
+}
+
+/** Append a message on device. The store embeds the text via Ollama. */
+export async function createLocalChatMessage(chatReference, { role, text }) {
+  return call('POST', `/chats/${encodeURIComponent(chatReference)}/messages`, { role, text })
 }
 
 /** Payment requests held on device. Pass `targetDigest` for an inbox, `requesterPartyRef` for an outbox. */

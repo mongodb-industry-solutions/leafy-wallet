@@ -238,6 +238,7 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
     created = httpx.post(f"{LOCAL_BASE}/local/v1/chats", json={"title": title})
     assert created.status_code == 201
     local_id = created.json()["id"]
+    chat_reference = created.json()["chatReference"]
 
     try:
         # POST /local/v1/chats does two sequential ObjectBox puts (create,
@@ -253,8 +254,10 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
         # localId is the field that exists specifically so this row is
         # joinable from Atlas — see backend/README.md's "Sync-related fields".
         assert atlas_doc[0]["localId"] == local_id
+        # chatReference is what chatMessages join against, in either store.
+        assert atlas_doc[0]["chatReference"] == chat_reference
     finally:
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
         db.delete_many("chats", {"title": title})
 
 
@@ -282,7 +285,7 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
             (c for c in httpx.get(f"{LOCAL_BASE}/local/v1/chats").json() if c["title"] == title),
             None,
         ):
-            httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_doc['id']}")
+            httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_doc['chatReference']}")
 
 
 # ─── chatMessages ───────────────────────────────────────────────────────────
@@ -290,12 +293,15 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
 
 def test_chat_message_created_via_objectbox_syncs_to_atlas(db):
     chat_title = _unique("sync-chat-for-message-ob")
-    chat_id = httpx.post(f"{LOCAL_BASE}/local/v1/chats", json={"title": chat_title}).json()["id"]
+    chat_reference = httpx.post(
+        f"{LOCAL_BASE}/local/v1/chats", json={"title": chat_title}
+    ).json()["chatReference"]
     text = _unique("sync-message-ob")
 
     try:
         created = httpx.post(
-            f"{LOCAL_BASE}/local/v1/chats/{chat_id}/messages", json={"role": "user", "text": text}
+            f"{LOCAL_BASE}/local/v1/chats/{chat_reference}/messages",
+            json={"role": "user", "text": text},
         )
         assert created.status_code == 201
 
@@ -303,31 +309,33 @@ def test_chat_message_created_via_objectbox_syncs_to_atlas(db):
             lambda: db.find("chatMessages", {"text": text}),
             f"chatMessages document with text={text}",
         )
-        assert atlas_doc[0]["chatId"] == chat_id
+        assert atlas_doc[0]["chatReference"] == chat_reference
         assert atlas_doc[0]["role"] == "user"
     finally:
         # Cascades to the message locally; Atlas cleanup is still explicit
         # since the cascade's sync-back timing isn't something to depend on.
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
         db.delete_many("chatMessages", {"text": text})
         db.delete_many("chats", {"title": chat_title})
 
 
 def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
-    # Needs a real local chat first: GET /local/v1/chats/{chatId}/messages
-    # 404s for an unknown chatId, so the message can only be observed through
-    # a chatId that already exists in the local store (see
-    # local_store_service.cpp's GET .../messages handler).
-    chat_id = httpx.post(
+    """A message written Atlas-side is readable offline, joined by chatReference.
+
+    The Atlas and ObjectBox copies of a chat carry different primary keys, so
+    chatReference — the same string in both stores — is the only key that
+    makes a message written by one path visible to the other.
+    """
+    chat_reference = httpx.post(
         f"{LOCAL_BASE}/local/v1/chats", json={"title": _unique("sync-chat-for-message-atlas")}
-    ).json()["id"]
+    ).json()["chatReference"]
     text = _unique("sync-message-atlas")
 
     try:
         db.insert_one(
             "chatMessages",
             {
-                "chatId": chat_id,
+                "chatReference": chat_reference,
                 "role": "assistant",
                 "text": text,
                 "createdAt": datetime.now(timezone.utc),
@@ -338,7 +346,9 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
             lambda: next(
                 (
                     m
-                    for m in httpx.get(f"{LOCAL_BASE}/local/v1/chats/{chat_id}/messages").json()
+                    for m in httpx.get(
+                        f"{LOCAL_BASE}/local/v1/chats/{chat_reference}/messages"
+                    ).json()
                     if m["text"] == text
                 ),
                 None,
@@ -348,7 +358,7 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
         assert local_doc["role"] == "assistant"
     finally:
         db.delete_many("chatMessages", {"text": text})
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
 
 
 # ─── LocalAccountBalance (regression: must NEVER sync) ─────────────────────

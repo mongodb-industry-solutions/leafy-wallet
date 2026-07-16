@@ -88,6 +88,20 @@ class WalletTransactionOut(BaseModel):
     _validate_settled_at = field_validator("settledAt", mode="before")(_none_if_epoch_zero)
 
 
+class SpendingByContact(BaseModel):
+    """Outbound shape for GET /wallet-transactions/summary: one row per counterparty.
+
+    Carries the arrangement reference rather than a name — Atlas holds the alias, and the caller
+    already resolves those for every other view.
+    """
+
+    counterpartyArrangementReference: str
+    total: float
+    count: int
+    currency: str
+    lastAt: datetime | None = None
+
+
 class WalletTransactionSearchResult(BaseModel):
     """Outbound shape for GET /wallet-transactions/search.
 

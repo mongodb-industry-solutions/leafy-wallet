@@ -18,20 +18,32 @@ import {
   listContactEnrichment,
   listIncomingRequests,
   listOutgoingRequests,
+  createChatDoc,
+  createChatMessageDoc,
+  listChatDocs,
+  listChatMessageDocs,
   listTransactionEnrichment,
   resolveRequestDoc,
+  searchTransactionEnrichment,
+  spendingByContactEnrichment,
   updateTransactionEnrichment,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
+  createLocalChat,
+  createLocalChatMessage,
   createLocalRequest,
   deleteLocalTransaction,
   listLocalAccounts,
+  listLocalChatMessages,
+  listLocalChats,
   listLocalContacts,
   listLocalRequests,
   listLocalTransactions,
+  localSpendingByContact,
   queueLocalSend,
   resolveLocalRequest,
+  searchLocalTransactions,
 } from '@/lib/local/LocalStoreClient'
 import { lookupDigest } from './digest'
 import { avatarFor, formatDate, formatMoney } from './format'
@@ -512,6 +524,70 @@ export async function replayPendingSends() {
 }
 
 /**
+ * Semantic search over the user's transaction notes, for the assistant.
+ * @param {string} q - Natural language, matched by meaning against the note.
+ * @param {boolean} [isOnline]
+ * @param {number} [limit]
+ * @returns {Promise<object[]>} Rows shaped like the Activity list.
+ */
+export async function searchTransactions(q, isOnline = true, limit = 10) {
+  const owner = await ownerRef()
+  if (!q?.trim() || !owner) return []
+
+  const [hits, contacts] = await Promise.all([
+    (isOnline
+      ? searchTransactionEnrichment({ q, owner, limit })
+      : searchLocalTransactions({ q, ownerPartyRef: owner, limit })
+    ).catch(() => []),
+    isOnline ? resolveContacts(owner) : localContacts(owner),
+  ])
+  const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
+
+  return (hits ?? []).map((t) => {
+    const status = t.leafyPayStatus === SETTLED_STATUS ? 'completed' : t.leafyPayStatus
+    return toTransactionRow({
+      reference: t.leafyPayTransferReference,
+      counterpartyRef: t.counterpartyArrangementReference,
+      contact: contactByRef.get(t.counterpartyArrangementReference),
+      isReceived: t.direction === 'received',
+      magnitude: Math.abs(t.amount),
+      currency: t.currency,
+      note: t.note,
+      createdAt: typeof t.createdAt === 'number' ? new Date(t.createdAt).toISOString() : t.createdAt,
+      status,
+      isPending: status !== 'completed',
+    })
+  })
+}
+
+/**
+ * Total sent to (or received from) each contact, largest first. The store does the arithmetic.
+ * @param {boolean} [isOnline]
+ * @param {'sent'|'received'} [direction]
+ * @returns {Promise<{contact: string, total: number, count: number, currency: string}[]>}
+ */
+export async function getSpendingByContact(isOnline = true, direction = 'sent') {
+  const owner = await ownerRef()
+  if (!owner) return []
+
+  const [rows, contacts] = await Promise.all([
+    (isOnline
+      ? spendingByContactEnrichment({ owner, direction })
+      : localSpendingByContact({ ownerPartyRef: owner, direction })
+    ).catch(() => []),
+    isOnline ? resolveContacts(owner) : localContacts(owner),
+  ])
+  const labelByRef = new Map(contacts.map((c) => [c.reference, c.label]))
+
+  return (rows ?? []).map((r) => ({
+    contact: labelByRef.get(r.counterpartyArrangementReference) || 'Leafy Pay user',
+    total: r.total,
+    count: r.count,
+    currency: r.currency,
+  }))
+}
+
+/**
  * Shape a stored request doc into the UI row used by the inbox and the bell. Keyed by
  * `requestReference`: Atlas keys by `_id` and the device by an ObjectBox integer, so it's the only
  * id that survives the connection dropping between reading a request and acting on it.
@@ -687,4 +763,80 @@ export async function resolveRequest(reference, status, isOnline = true) {
     return { ok: false, error: 'Could not update the request. Please try again.' }
   }
   return { ok: true }
+}
+
+/**
+ * The user's chats, newest first.
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{id: string, reference: string, title: string, updatedAt: string}[]>}
+ */
+export async function getChats(isOnline = true) {
+  const owner = await ownerRef()
+  if (!owner) return []
+  const chats = await (isOnline ? listChatDocs(owner) : listLocalChats(owner)).catch(() => [])
+  return (chats ?? [])
+    .map((c) => ({
+      id: c.chatReference,
+      reference: c.chatReference,
+      title: c.title,
+      updatedAt: typeof c.updatedAt === 'number' ? new Date(c.updatedAt).toISOString() : c.updatedAt,
+    }))
+    .sort((a, b) => new Date(b.updatedAt ?? 0) - new Date(a.updatedAt ?? 0))
+}
+
+/**
+ * Start a chat. Offline the reference is minted here — there's no server to mint one, and both
+ * stores key messages by it.
+ * @param {string} title
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{ok: boolean, chat?: object, error?: string}>}
+ */
+export async function createChat(title, isOnline = true) {
+  const owner = await ownerRef()
+  if (!owner) return { ok: false, error: 'You need to be signed in' }
+  try {
+    const chat = isOnline
+      ? await createChatDoc({ owner, title })
+      : await createLocalChat({ ownerPartyRef: owner, chatReference: randomUUID(), title })
+    return { ok: true, chat: { id: chat.chatReference, reference: chat.chatReference, title: chat.title } }
+  } catch {
+    return { ok: false, error: 'Could not start the chat.' }
+  }
+}
+
+/**
+ * A chat's messages, oldest first.
+ * @param {string} reference - The `chatReference`.
+ * @param {boolean} [isOnline]
+ */
+export async function getChatMessages(reference, isOnline = true) {
+  if (!reference) return []
+  const rows = await (isOnline ? listChatMessageDocs(reference) : listLocalChatMessages(reference)).catch(
+    () => [],
+  )
+  return (rows ?? []).map((m) => ({ id: String(m.id), role: m.role, type: 'text', text: m.text }))
+}
+
+/**
+ * Append a message to a chat.
+ * @param {string} reference - The `chatReference`.
+ * @param {{role: 'user'|'assistant', text: string}} message
+ * @param {boolean} [isOnline]
+ */
+export async function appendChatMessage(reference, { role, text }, isOnline = true) {
+  if (!reference || !text?.trim()) return { ok: false }
+  try {
+    if (isOnline) {
+      const owner = await ownerRef()
+      const chats = await listChatDocs(owner)
+      const chat = (chats ?? []).find((c) => c.chatReference === reference)
+      if (!chat?.id) return { ok: false }
+      await createChatMessageDoc({ chatId: chat.id, chatReference: reference, role, text })
+    } else {
+      await createLocalChatMessage(reference, { role, text })
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
 }

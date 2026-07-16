@@ -1,62 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { APP_USERS, SPENDING_DATA, findContact, parseIntent } from '@/lib/wallet-data'
+import {
+  appendChatMessage,
+  createChat,
+  createRequest,
+  getChatMessages,
+  getChats,
+  sendMoney,
+} from '@/lib/wallet/actions'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { useSpeech } from './useSpeech'
 
-const DECLINE_RE = /^\s*(no|nope|nah|skip|no note|no thanks)\b/i
 const NEW_CHAT_TITLE = 'New chat'
 
 let seq = 1
 const nextId = () => `msg-${Date.now()}-${seq++}`
-
-// `stream: true` marks a live reply so the UI typewrites it. Seeded/history
-// messages omit it and render in full.
-function txt(text) {
-  return { id: nextId(), role: 'assistant', type: 'text', text, stream: true }
-}
-
-function draftMessages(intent, note) {
-  const contact = findContact(intent.name)
-  return [
-    txt("Here's your draft. Review it before it goes."),
-    {
-      id: nextId(),
-      role: 'assistant',
-      type: 'action',
-      actionData: { contact, amount: intent.amount, note, mode: intent.type, isConfirmed: false },
-    },
-  ]
-}
-
-// Seeded past conversations for the history view (no backend). Static ids so
-// server and client markup match.
-const MOCK_CHATS = [
-  {
-    id: 'm1',
-    title: 'Splitting dinner with Maria',
-    messages: [
-      { id: 'm1-1', role: 'user', type: 'text', text: 'Split the dinner bill with Maria' },
-      { id: 'm1-2', role: 'assistant', type: 'text', text: "I split €40 evenly, so that's €20 each. Want me to send Maria her half?" },
-    ],
-  },
-  {
-    id: 'm2',
-    title: 'My spending this week',
-    messages: [
-      { id: 'm2-1', role: 'user', type: 'text', text: 'How much did I spend this week?' },
-      { id: 'm2-2', role: 'assistant', type: 'text', text: 'You spent €176 this week, mostly on food and fun.' },
-    ],
-  },
-  {
-    id: 'm3',
-    title: 'Request from Jordan',
-    messages: [
-      { id: 'm3-1', role: 'user', type: 'text', text: 'Request €50 from Jordan' },
-      { id: 'm3-2', role: 'assistant', type: 'text', text: "Sent Jordan a request for €50. I'll let you know when it's paid." },
-    ],
-  },
-]
 
 /**
  * Derives a short chat title from the first user message (cleaned + truncated).
@@ -70,27 +29,69 @@ function deriveTitle(text) {
 }
 
 /**
- * Chat state machine for the AI assistant tab (conversations, greeting state, voice/text input, intent resolution, auto-renaming).
+ * Streams one assistant turn. The route emits NDJSON so a drafted payment can ride the same
+ * stream as the text.
+ * @param {object} body - `{ message, history, isOnline }`.
+ * @param {(text: string) => void} onToken
+ * @returns {Promise<{text: string, drafts: object[]}>}
+ */
+async function streamTurn(body, onToken) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok || !res.body) throw new Error(await res.text().catch(() => 'Chat failed'))
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let text = ''
+  const drafts = []
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const event = JSON.parse(line)
+      if (event.type === 'token') {
+        text += event.text
+        onToken(text)
+      } else if (event.type === 'draft') {
+        drafts.push(event.draft)
+      } else if (event.type === 'error') {
+        throw new Error(event.text)
+      }
+    }
+  }
+  return { text, drafts }
+}
+
+/**
+ * Chat state machine for the AI assistant tab: conversations, greeting state, voice/text input,
+ * and the streamed reply. Chats and messages persist per user, from Atlas or the device depending
+ * on the connection.
  * @returns {object} Chat state and actions for AiTab to render.
  */
 export function useAiChat() {
-  const [user] = useState(APP_USERS[0])
-  const [chats, setChats] = useState(() => [{ id: 'chat-1', title: NEW_CHAT_TITLE, messages: [] }, ...MOCK_CHATS])
-  const [activeId, setActiveId] = useState('chat-1')
+  const { isOnline, refresh } = useWalletData()
+  const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
+  const [activeId, setActiveId] = useState('draft')
   const [view, setView] = useState('chat') // 'chat' | 'history'
   const [textInput, setTextInput] = useState('')
   const [transcript, setTranscript] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const endRef = useRef(null)
-  const timeoutRef = useRef(null)
-  // Holds a send/request intent that's waiting on the user's note answer.
-  const pendingRef = useRef(null)
-
-  useEffect(() => () => clearTimeout(timeoutRef.current), [])
+  const isOnlineRef = useRef(isOnline)
+  isOnlineRef.current = isOnline
 
   const active = chats.find((c) => c.id === activeId) ?? chats[0]
-  const msgs = active.messages
-  const title = active.title
+  const msgs = active?.messages ?? []
+  const title = active?.title ?? NEW_CHAT_TITLE
   const isEmpty = msgs.length === 0
 
   const patchActive = useCallback(
@@ -98,59 +99,126 @@ export function useAiChat() {
     [activeId],
   )
 
+  // The saved chats list; the unsaved "draft" chat stays at the top until its first message.
+  useEffect(() => {
+    let isStale = false
+    getChats(isOnline).then((saved) => {
+      if (isStale) return
+      setChats((prev) => {
+        const draft = prev.find((c) => c.id === 'draft')
+        const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
+        const rows = saved.map((c) => ({ ...c, messages: withMessages.get(c.id) ?? [] }))
+        return draft ? [draft, ...rows] : rows
+      })
+    })
+    return () => {
+      isStale = true
+    }
+  }, [isOnline])
+
   const handleProcessText = useCallback(
-    (text) => {
-      // Append the user message, auto-naming the chat off the first one.
+    async (text) => {
+      const history = msgs.filter((m) => m.type === 'text').map((m) => ({ role: m.role, text: m.text }))
+      const userMessage = { id: nextId(), role: 'user', type: 'text', text }
       patchActive((c) => ({
         ...c,
         title: c.messages.length === 0 && c.title === NEW_CHAT_TITLE ? deriveTitle(text) : c.title,
-        messages: [...c.messages, { id: nextId(), role: 'user', type: 'text', text }],
+        messages: [...c.messages, userMessage],
       }))
       setTranscript('')
       setIsThinking(true)
-      clearTimeout(timeoutRef.current)
-      timeoutRef.current = setTimeout(() => {
+
+      // A chat only becomes real once it has something in it.
+      let reference = activeId === 'draft' ? null : activeId
+      if (!reference) {
+        const created = await createChat(deriveTitle(text), isOnlineRef.current)
+        if (created.ok) {
+          reference = created.chat.reference
+          setChats((prev) => [
+            { id: 'draft', title: NEW_CHAT_TITLE, messages: [] },
+            ...prev.map((c) =>
+              c.id === 'draft' ? { ...c, id: reference, title: created.chat.title } : c,
+            ),
+          ])
+          setActiveId(reference)
+        }
+      }
+      if (reference) appendChatMessage(reference, { role: 'user', text }, isOnlineRef.current)
+
+      const replyId = nextId()
+      let streamed = false
+      try {
+        const { text: reply, drafts } = await streamTurn(
+          { message: text, history, isOnline: isOnlineRef.current },
+          (partial) => {
+            setIsThinking(false)
+            setChats((prev) =>
+              prev.map((c) => {
+                if (c.id !== (reference ?? activeId)) return c
+                const withoutReply = c.messages.filter((m) => m.id !== replyId)
+                return {
+                  ...c,
+                  messages: [
+                    ...withoutReply,
+                    { id: replyId, role: 'assistant', type: 'text', text: partial },
+                  ],
+                }
+              }),
+            )
+            streamed = true
+          },
+        )
+        if (!streamed && reply) {
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === (reference ?? activeId)
+                ? { ...c, messages: [...c.messages, { id: replyId, role: 'assistant', type: 'text', text: reply }] }
+                : c,
+            ),
+          )
+        }
+        if (reference && reply) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
+
+        for (const draft of drafts) {
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === (reference ?? activeId)
+                ? {
+                    ...c,
+                    messages: [
+                      ...c.messages,
+                      {
+                        id: nextId(),
+                        role: 'assistant',
+                        type: 'action',
+                        actionData: { ...draft, isConfirmed: false },
+                      },
+                    ],
+                  }
+                : c,
+            ),
+          )
+        }
+      } catch (error) {
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === (reference ?? activeId)
+              ? {
+                  ...c,
+                  messages: [
+                    ...c.messages.filter((m) => m.id !== replyId),
+                    { id: replyId, role: 'assistant', type: 'text', text: `I couldn't answer that: ${error.message}` },
+                  ],
+                }
+              : c,
+          ),
+        )
+      } finally {
         setIsThinking(false)
-        // Call resolve ONCE (it mutates pendingRef), never inside a state
-        // updater, which React double-invokes in StrictMode.
-        const replies = resolve(text)
-        patchActive((c) => ({ ...c, messages: [...c.messages, ...replies] }))
-      }, 3500)
+      }
     },
-    [patchActive],
+    [activeId, msgs, patchActive],
   )
-
-  // Turn the user's message into the assistant's reply(s).
-  function resolve(text) {
-    const intent = parseIntent(text)
-    const isPayment = intent?.type === 'send' || intent?.type === 'request'
-
-    // Awaiting a note, and the reply isn't itself a new command, so it's the note.
-    if (pendingRef.current && !isPayment) {
-      const drafted = pendingRef.current
-      pendingRef.current = null
-      return draftMessages(drafted, DECLINE_RE.test(text) ? '' : text.trim())
-    }
-    pendingRef.current = null
-
-    if (isPayment) {
-      if (intent.note) return draftMessages(intent, intent.note)
-      pendingRef.current = intent
-      const verb = intent.type === 'request' ? 'request' : 'payment'
-      return [txt(`Sure, add a note to this ${verb}? Reply with a note, or say "no".`)]
-    }
-
-    if (intent?.type === 'spending') {
-      return [
-        txt("Here's your spending this week:"),
-        { id: nextId(), role: 'assistant', type: 'chart', chartData: SPENDING_DATA },
-      ]
-    }
-
-    return [
-      txt('I didn\'t catch that. Try "Send €30 to Taylor for lunch", "Request €15 from Sam", or "How much did I spend?"'),
-    ]
-  }
 
   const { isListening, handleStart, handleStop } = useSpeech(handleProcessText, setTranscript)
 
@@ -162,15 +230,44 @@ export function useAiChat() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs, isThinking, transcript])
 
-  function handleConfirmAction(id) {
-    // The action card flips to its confirmed ("Sent"/"Requested") state, no
-    // extra chat reply needed.
+  /** The card is the confirm step: nothing moved until the user tapped it. */
+  async function handleConfirmAction(id) {
+    const message = msgs.find((m) => m.id === id)
+    const draft = message?.actionData
+    if (!draft || draft.isConfirmed) return
+
+    const result =
+      draft.mode === 'request'
+        ? await createRequest({
+            counterpartyArrangementReference: draft.contact.reference,
+            amount: draft.amount,
+            note: draft.note,
+            isOnline,
+          })
+        : await sendMoney({
+            counterpartyArrangementReference: draft.contact.reference,
+            amount: draft.amount,
+            note: draft.note,
+            isOnline,
+          })
+
+    if (!result.ok) {
+      patchActive((c) => ({
+        ...c,
+        messages: [
+          ...c.messages,
+          { id: nextId(), role: 'assistant', type: 'text', text: result.error },
+        ],
+      }))
+      return
+    }
     patchActive((c) => ({
       ...c,
       messages: c.messages.map((m) =>
         m.id === id ? { ...m, actionData: { ...m.actionData, isConfirmed: true } } : m,
       ),
     }))
+    refresh(draft.mode === 'request' ? ['requests'] : ['accounts', 'transactions'])
   }
 
   function handleSendText() {
@@ -185,29 +282,31 @@ export function useAiChat() {
   }
 
   function resetTransient() {
-    pendingRef.current = null
-    clearTimeout(timeoutRef.current)
     setIsThinking(false)
     setTextInput('')
     setTranscript('')
   }
 
-  function handleNewChat() {
+  async function handleNewChat() {
     resetTransient()
-    const chat = { id: nextId(), title: NEW_CHAT_TITLE, messages: [] }
-    setChats((p) => [chat, ...p])
-    setActiveId(chat.id)
+    setChats((prev) =>
+      prev.some((c) => c.id === 'draft')
+        ? prev
+        : [{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }, ...prev],
+    )
+    setActiveId('draft')
     setView('chat')
   }
 
-  function handleOpenChat(id) {
+  async function handleOpenChat(id) {
     resetTransient()
     setActiveId(id)
     setView('chat')
+    const messages = await getChatMessages(id, isOnlineRef.current)
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, messages } : c)))
   }
 
   return {
-    user,
     chats,
     activeId,
     view,

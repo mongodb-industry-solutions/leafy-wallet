@@ -50,6 +50,24 @@ export async function listTransactionEnrichment(owner) {
 }
 
 /**
+ * Semantic search over an owner's transaction notes (Atlas `$vectorSearch`).
+ * @param {{q: string, owner: string, limit?: number}} params
+ */
+export async function searchTransactionEnrichment({ q, owner, limit = 10 }) {
+  const query = new URLSearchParams({ q, ownerPartyRef: owner, limit: String(limit) }).toString()
+  return backendGet(`/api/v1/wallet-transactions/search?${query}`)
+}
+
+/**
+ * Per-contact totals, largest first — computed by Atlas, not by summing rows here.
+ * @param {{owner: string, direction?: 'sent'|'received'}} params
+ */
+export async function spendingByContactEnrichment({ owner, direction = 'sent' }) {
+  const query = new URLSearchParams({ ownerPartyRef: owner, direction }).toString()
+  return backendGet(`/api/v1/wallet-transactions/summary?${query}`)
+}
+
+/**
  * Write the enrichment doc for a completed transfer. The backend embeds the note via Ollama.
  * @param {object} doc - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, note, direction, leafyPayStatus }`.
  */
@@ -81,6 +99,28 @@ export async function listContactEnrichment(owner) {
  */
 export async function createContactEnrichment(doc) {
   return backendPost('/api/v1/wallet-contacts', doc)
+}
+
+/** An owner's chats, newest first. */
+export async function listChatDocs(owner) {
+  const query = new URLSearchParams({ ownerPartyRef: owner }).toString()
+  return backendGet(`/api/v1/chats?${query}`)
+}
+
+/** Start a chat. The server mints its `chatReference`. */
+export async function createChatDoc({ owner, title }) {
+  return backendPost('/api/v1/chats', { ownerPartyRef: owner, title })
+}
+
+/** A chat's messages, oldest first. */
+export async function listChatMessageDocs(chatReference) {
+  const query = new URLSearchParams({ chatReference }).toString()
+  return backendGet(`/api/v1/chat-messages?${query}`)
+}
+
+/** Append a message. The server embeds the text for later retrieval. */
+export async function createChatMessageDoc({ chatId, chatReference, role, text }) {
+  return backendPost('/api/v1/chat-messages', { chatId, chatReference, role, text })
 }
 
 /** Remove a replica doc by its Atlas id. */

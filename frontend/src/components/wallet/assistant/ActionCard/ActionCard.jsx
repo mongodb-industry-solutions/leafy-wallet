@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { BALANCE } from '@/lib/wallet-data'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 
 const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -24,9 +24,11 @@ function Row({ label, value }) {
  * @param {() => void} [props.onExpand] - Called when the card expands into review.
  */
 export function ActionCard({ msg, onConfirm, onExpand }) {
+  const { accounts } = useWalletData()
   const d = msg.actionData
   const isReq = d.mode === 'request'
   const [isReviewing, setIsReviewing] = useState(false)
+  const account = (accounts.data ?? []).find((a) => a.isDefault) ?? (accounts.data ?? [])[0]
 
   // When the card expands into review, scroll the thread so it stays in view.
   useEffect(() => {
@@ -62,8 +64,11 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
               <Row label="You’ll receive" value={`€${fmt(d.amount)}`} />
             ) : (
               <>
-                <Row label="From" value="Cash Balance" />
-                <Row label="Remaining" value={`€${fmt(BALANCE - d.amount)}`} />
+                <Row label="From" value={account?.label ?? 'Account'} />
+                <Row
+                  label="Remaining"
+                  value={account ? `€${fmt(account.balanceValue - d.amount)}` : '—'}
+                />
               </>
             )}
           </div>

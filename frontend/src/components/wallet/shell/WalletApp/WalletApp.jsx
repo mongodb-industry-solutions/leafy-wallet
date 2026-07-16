@@ -74,7 +74,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
             {/* Home has its own gradient hero (with the profile menu). Activity /
                 People / Chat stand on their own titles, no top bar. */}
             {tab === 'ai' ? (
-              <AiTab />
+              <AiTab user={user} />
             ) : (
               <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24">
                 {tab === 'home' && (

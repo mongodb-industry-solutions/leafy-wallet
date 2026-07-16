@@ -66,13 +66,19 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def test_lists_both_tools():
+def test_lists_every_tool():
     async def go():
         async with create_connected_server_and_client_session(mcp) as session:
             tools = await session.list_tools()
             return {t.name for t in tools.tools}
 
-    assert _run(go()) == {"search_transactions", "get_contacts"}
+    assert _run(go()) == {
+        "search_transactions",
+        "get_contacts",
+        "get_spending_by_contact",
+        "list_transactions",
+        "get_requests",
+    }
 
 
 def test_get_contacts_returns_matching_documents():
