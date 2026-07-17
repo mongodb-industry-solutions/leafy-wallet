@@ -522,12 +522,20 @@ export async function replayPendingSends() {
 
 const LOCAL_REFERENCE_PREFIX = 'local-'
 
+const toEnrichmentStatus = (status) => {
+  if (status === 'completed') return SETTLED_STATUS
+  if (status === 'failed' || status === 'exception') return status
+  return 'pending'
+}
+
 /**
  * Converge the enrichment stores to Leafy Pay for the signed-in user. Leafy Pay is the source
- * of truth for money and beneficiaries, so Atlas rows whose transfer or beneficiary no longer
- * exists there are orphans and get pruned; the deletions sync down to the device copy. Queued
- * offline sends don't exist in Leafy Pay yet and are never touched.
- * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number}>}
+ * of truth for money and beneficiaries: Atlas rows whose transfer or beneficiary no longer
+ * exists there are orphans and get pruned, and transfers Leafy Pay has that the app never saw
+ * (made elsewhere, or received) are adopted with a bare enrichment doc so they exist offline
+ * too. Both directions sync down to the device copy. Queued offline sends don't exist in
+ * Leafy Pay yet and are never touched.
+ * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number, adoptedTransactions?: number}>}
  */
 export async function reconcileWithLeafyPay() {
   const owner = await ownerRef()
@@ -541,6 +549,7 @@ export async function reconcileWithLeafyPay() {
     ])
     const transferRefs = new Set(transfers.map((t) => t.reference))
     const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
+    const enrichedRefs = new Set((txDocs ?? []).map((d) => d.leafyPayTransferReference))
 
     const orphanTransactions = (txDocs ?? []).filter(
       (d) =>
@@ -550,15 +559,31 @@ export async function reconcileWithLeafyPay() {
     const orphanContacts = (contactDocs ?? []).filter(
       (d) => !beneficiaryRefs.has(d.counterpartyArrangementReference),
     )
+    // Note stays empty on adoption: the transfer wasn't composed in this app, and Leafy Pay's
+    // own note is portal boilerplate, not something worth embedding.
+    const foreignTransfers = transfers.filter((t) => !enrichedRefs.has(t.reference))
 
     await Promise.all([
       ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
       ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
+      ...foreignTransfers.map((t) =>
+        createTransactionEnrichment({
+          leafyPayTransferReference: t.reference,
+          ownerPartyRef: owner,
+          counterpartyArrangementReference: t.counterpartyReference ?? '',
+          amount: Math.abs(t.value),
+          currency: t.currency,
+          note: null,
+          direction: t.direction,
+          leafyPayStatus: toEnrichmentStatus(t.status),
+        }).catch(() => {}),
+      ),
     ])
     return {
       ok: true,
       prunedTransactions: orphanTransactions.length,
       prunedContacts: orphanContacts.length,
+      adoptedTransactions: foreignTransfers.length,
     }
   } catch {
     return { ok: false }

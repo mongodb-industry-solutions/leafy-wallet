@@ -157,7 +157,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     refresh()
     if (!isOnlineRef.current) return
     reconcileWithLeafyPay().then((result) => {
-      if (result?.prunedTransactions || result?.prunedContacts) refresh(['contacts', 'transactions'])
+      const changed =
+        (result?.prunedTransactions ?? 0) + (result?.prunedContacts ?? 0) + (result?.adoptedTransactions ?? 0)
+      if (changed > 0) refresh(['contacts', 'transactions'])
     })
   }, [refresh])
 
