@@ -31,19 +31,24 @@ export function getMcpTools() {
 }
 
 /**
- * An MCP tool result as parsed JSON. Adapters return either the text content directly or an
- * array of content blocks, depending on the response shape.
+ * An MCP tool result as a plain array of rows. FastMCP returns a list as one content block per
+ * element (an empty list is an empty array), and the adapter may hand back a bare string for a
+ * single block, so every shape normalizes to "array of parsed rows".
  * @param {unknown} result
- * @returns {any}
+ * @returns {any[]}
  */
 export function parseMcpResult(result) {
-  if (typeof result === 'string') return JSON.parse(result)
+  if (typeof result === 'string') {
+    if (!result.trim()) return []
+    const parsed = JSON.parse(result)
+    return Array.isArray(parsed) ? parsed : [parsed]
+  }
   if (Array.isArray(result)) {
-    const text = result
-      .filter((block) => block?.type === 'text')
-      .map((block) => block.text)
-      .join('')
-    return JSON.parse(text)
+    const rows = result
+      .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+      .map((block) => JSON.parse(block.text))
+    if (rows.length === 1 && Array.isArray(rows[0])) return rows[0]
+    return rows
   }
   return result
 }

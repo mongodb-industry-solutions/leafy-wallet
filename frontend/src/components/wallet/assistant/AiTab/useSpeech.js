@@ -3,9 +3,9 @@
 import { useCallback, useRef, useState } from 'react'
 
 const SAMPLE_QUERIES = [
-  'Send €20 to Maria',
-  'Request €50 from Jordan',
   'How much did I spend this week?',
+  'Where did my money go?',
+  'Who did I pay most recently?',
 ]
 
 /**

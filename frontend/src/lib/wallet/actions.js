@@ -520,8 +520,6 @@ export async function replayPendingSends() {
   return { replayed, failed, references }
 }
 
-const LOCAL_REFERENCE_PREFIX = 'local-'
-
 const toEnrichmentStatus = (status) => {
   if (status === 'completed') return SETTLED_STATUS
   if (status === 'failed' || status === 'exception') return status

@@ -39,9 +39,8 @@ const CONTRACTS = {
   spending: {
     name: 'get_spending_by_contact',
     description:
-      "Totals per contact, largest first. Use for aggregates: 'where did my money go', 'who do I " +
-      "send the most to', 'how much have I sent Luis'. Totals are already computed - never add up " +
-      'transactions yourself.',
+      "Totals per contact, largest first, already computed. Use for aggregates: 'where did my " +
+      "money go', 'who do I send the most to', 'how much have I sent Luis'.",
     schema: z.object({
       direction: z
         .enum(['sent', 'received'])
@@ -67,9 +66,9 @@ const CONTRACTS = {
   draft: {
     name: 'draft_payment',
     description:
-      "Draft a payment or request for the user to confirm. Use when they ask to send or request " +
-      "money ('send 20 to Luis', 'ask Priya for 15'). This only drafts - the user confirms before " +
-      'anything moves. Resolve the contact from list_contacts first if the name is ambiguous.',
+      "Draft a payment or request when the user asks to send or request money ('send 20 to " +
+      "Luis', 'ask Priya for 15'). The user reviews and confirms the draft on a card. Resolve " +
+      'the contact from list_contacts first if the name is ambiguous.',
     schema: z.object({
       contact_name: z.string().describe('Who to pay or ask, as the user said it'),
       amount: z.number().positive().describe('Amount in euros'),
@@ -114,7 +113,7 @@ function buildDraftTool(isOnline, drafts) {
       return `No contact matches "${contact_name}". Saved contacts: ${names || 'none'}.`
     }
     drafts.push({ contact: match, amount, note: note ?? '', mode })
-    return `Drafted a ${mode} of ${money(amount)} ${mode === 'request' ? 'from' : 'to'} ${match.name}. It is shown to the user for confirmation. It has NOT been sent. Tell them to review and confirm it.`
+    return `Drafted a ${mode} of ${money(amount)} ${mode === 'request' ? 'from' : 'to'} ${match.name}. The draft is awaiting the user's confirmation on a card; tell them to review and confirm it.`
   }, CONTRACTS.draft)
 }
 
