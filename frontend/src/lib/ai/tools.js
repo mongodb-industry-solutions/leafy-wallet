@@ -11,13 +11,18 @@ import {
 
 const money = (n, currency = 'EUR') => `${currency} ${Math.abs(n).toFixed(2)}`
 
+// The inline card fits about this many bars before it stops being glanceable.
+const CHART_MAX_ROWS = 6
+
 /**
  * The assistant's tools, bound to a connection state.
  * @param {boolean} isOnline - Picks each tool's source (Leafy Pay ∥ Atlas, or the device).
  * @param {object[]} [drafts] - `draft_payment` pushes proposals here; the caller renders them for
- *   confirmation. No tool moves money — that needs the user.
+ *   confirmation. No tool moves money - that needs the user.
+ * @param {object[]} [charts] - `get_spending_by_contact` pushes a breakdown here; the caller
+ *   renders it as an inline chart card alongside the reply.
  */
-export function walletTools(isOnline, drafts = []) {
+export function walletTools(isOnline, drafts = [], charts = []) {
   const getBalance = tool(
     async () => {
       const accounts = await getAccounts(isOnline)
@@ -51,6 +56,10 @@ export function walletTools(isOnline, drafts = []) {
     async ({ direction }) => {
       const rows = await getSpendingByContact(isOnline, direction)
       if (rows.length === 0) return 'No activity yet.'
+      charts.push({
+        title: direction === 'received' ? 'Received by contact' : 'Sent by contact',
+        rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: r.contact, value: r.total })),
+      })
       const verb = direction === 'received' ? 'received from' : 'sent to'
       return rows
         .map((r) => `${verb} ${r.contact}: ${money(r.total, r.currency)} across ${r.count} payment(s)`)
@@ -60,7 +69,7 @@ export function walletTools(isOnline, drafts = []) {
       name: 'get_spending_by_contact',
       description:
         "Totals per contact, largest first. Use for aggregates: 'where did my money go', 'who do I " +
-        "send the most to', 'how much have I sent Luis'. Totals are already computed — never add up " +
+        "send the most to', 'how much have I sent Luis'. Totals are already computed - never add up " +
         'transactions yourself.',
       schema: z.object({
         direction: z
@@ -76,7 +85,7 @@ export function walletTools(isOnline, drafts = []) {
       const rows = await searchTransactions(query, isOnline)
       if (rows.length === 0) return 'No matching transactions.'
       return rows
-        .map((t) => `${t.date}: ${money(t.amount, t.currency)} ${t.amount > 0 ? 'from' : 'to'} ${t.name} — ${t.note}`)
+        .map((t) => `${t.date}: ${money(t.amount, t.currency)} ${t.amount > 0 ? 'from' : 'to'} ${t.name} - ${t.note}`)
         .join('\n')
     },
     {
@@ -121,17 +130,14 @@ export function walletTools(isOnline, drafts = []) {
         const names = contacts.map((c) => c.name).join(', ')
         return `No contact matches "${contact_name}". Saved contacts: ${names || 'none'}.`
       }
-      if (mode === 'request' && !match.canRequest) {
-        return `${match.name} was added by phone, so they can't be sent a request. Sending works.`
-      }
       drafts.push({ contact: match, amount, note: note ?? '', mode })
-      return `Drafted a ${mode} of ${money(amount)} ${mode === 'request' ? 'from' : 'to'} ${match.name}. It is shown to the user for confirmation — it has NOT been sent. Tell them to review and confirm it.`
+      return `Drafted a ${mode} of ${money(amount)} ${mode === 'request' ? 'from' : 'to'} ${match.name}. It is shown to the user for confirmation. It has NOT been sent. Tell them to review and confirm it.`
     },
     {
       name: 'draft_payment',
       description:
         "Draft a payment or request for the user to confirm. Use when they ask to send or request " +
-        "money ('send 20 to Luis', 'ask Julia for 15'). This only drafts — the user confirms before " +
+        "money ('send 20 to Luis', 'ask Priya for 15'). This only drafts - the user confirms before " +
         'anything moves. Resolve the contact from list_contacts first if the name is ambiguous.',
       schema: z.object({
         contact_name: z.string().describe('Who to pay or ask, as the user said it'),

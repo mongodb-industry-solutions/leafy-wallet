@@ -18,10 +18,6 @@ envSecrets:
   # MongoDB Configuration
   MONGODB_URI: <secret-group>
   DATABASE_NAME: <secret-group>
-  VOYAGE_API_KEY: <secret-group>
-  # Bedrock Inference Profiles (see cloud-cost-tracking.md)
-  CHATCOMPLETIONS_MODEL_ID: <secret-group>
-  EMBEDDINGS_MODEL_ID: <secret-group>
 
 ## should be used in case of multi-pod container i.e: both frontend and backend in one pod
 # sidecarContainers:
@@ -40,13 +36,6 @@ envSecrets:
 #           secretKeyRef:
 #             name: session-temp-kanopy
 #             key: DATABASE_NAME
-
-#       # Voyage AI API Key (embeddings)
-#       - name: VOYAGE_API_KEY
-#         valueFrom:
-#           secretKeyRef:
-#             name: session-temp-kanopy
-#             key: VOYAGE_API_KEY
 
 ## ----------------------------- Cloud Specific Configurations (For AWS only line 42 to 46 needed)-----------------------------
 

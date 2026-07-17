@@ -1,9 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { BottomSheet } from '@/components/ui/BottomSheet'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { SwipeableRow } from '@/components/ui/SwipeableRow'
 import { Peep } from '@/components/common/Peep/Peep'
 import { useRequestActions } from './useRequestActions'
 
@@ -50,7 +51,7 @@ function RequestRow({ notification, isBusy, onPay, onDecline }) {
           disabled={isBusy}
           className="h-8 rounded-full bg-secondary px-4 text-xs font-semibold text-secondary-foreground disabled:opacity-40"
         >
-          {isBusy ? 'Paying…' : 'Pay'}
+          Pay
         </button>
         <button
           onClick={onDecline}
@@ -67,60 +68,74 @@ function RequestRow({ notification, isBusy, onPay, onDecline }) {
 /**
  * Bottom-sheet notifications list: money received (inbound transfers) and payment requests addressed
  * to the user, newest first. Marks everything seen once it has opened, so the bell badge clears.
+ * Rows swipe left to clear one; "Clear all" clears the lot. Paying a request hands off to the full
+ * review flow via `onPayRequest`.
  * @param {object} props
+ * @param {(notification: object) => void} props.onPayRequest - Opens the pay-request review flow.
  * @param {() => void} props.onClose
  */
-export function NotificationsPanel({ onClose }) {
-  const { notifications, markNotificationsSeen } = useWalletData()
-  const { pending, busyId, error, notice, askToPay, cancelPay, confirmPay, handleDecline } =
-    useRequestActions()
+export function NotificationsPanel({ onPayRequest, onClose }) {
+  const { notifications, markNotificationsSeen, dismissNotifications } = useWalletData()
+  const { busyId, error, tryPay, handleDecline } = useRequestActions()
+  const [openId, setOpenId] = useState(null)
 
   return (
     <BottomSheet onClose={onClose} onEntered={markNotificationsSeen}>
-      <p className="mb-4 text-base font-bold text-foreground">Notifications</p>
-
-      {notifications.length === 0 ? (
-        <EmptyState
-          glyph="Bell"
-          title="You're all caught up"
-          subtitle="Money you receive and payment requests will show up here."
-        />
-      ) : (
+      {({ close }) => (
         <>
-          {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
-          {notice && <p className="mb-3 text-sm text-warning">{notice}</p>}
-          <div className="no-scrollbar flex max-h-[60vh] flex-col divide-y divide-border overflow-y-auto">
-            {notifications.map((n) => (
-              <div key={`${n.kind}-${n.id}`} className="flex items-center gap-3 py-3">
-                <Peep seed={n.seed} bg={n.bg} size={40} />
-                {n.kind === 'request' ? (
-                  <RequestRow
-                    notification={n}
-                    isBusy={busyId === n.id}
-                    onPay={() => askToPay(n)}
-                    onDecline={() => handleDecline(n.id)}
-                  />
-                ) : (
-                  <ReceivedRow notification={n} />
-                )}
-              </div>
-            ))}
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-base font-bold text-foreground">Notifications</p>
+            {notifications.length > 0 && (
+              <button
+                onClick={() => dismissNotifications(notifications.map((n) => n.id))}
+                className="text-xs font-semibold text-muted-foreground"
+              >
+                Clear all
+              </button>
+            )}
           </div>
-        </>
-      )}
 
-      {pending && (
-        <ConfirmDialog
-          title={`Pay €${Math.abs(pending.amount).toFixed(2)}?`}
-          message={`${pending.name} requested this${pending.note && pending.note !== 'No note' ? ` for "${pending.note}"` : ''}. The money is sent immediately.`}
-          error={error}
-          confirmLabel={`Pay €${Math.abs(pending.amount).toFixed(2)}`}
-          busyLabel="Paying…"
-          isBusy={busyId === pending.id}
-          isDestructive={false}
-          onCancel={cancelPay}
-          onConfirm={confirmPay}
-        />
+          {notifications.length === 0 ? (
+            <EmptyState
+              glyph="Bell"
+              title="You're all caught up"
+              subtitle="Money you receive and payment requests will show up here."
+            />
+          ) : (
+            <>
+              {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+              {/* -mx-6 lets the swipe reveal bleed to the sheet's edges; rows pad it back. */}
+              <div className="no-scrollbar -mx-6 flex max-h-[60vh] flex-col divide-y divide-border overflow-y-auto">
+                {notifications.map((n) => (
+                  <SwipeableRow
+                    key={`${n.kind}-${n.id}`}
+                    isOpen={openId === n.id}
+                    onOpenChange={(isOpen) => setOpenId(isOpen ? n.id : null)}
+                    actionLabel="Clear"
+                    onAction={() => dismissNotifications([n.id])}
+                    rowClassName="gap-3 bg-card px-6 py-3"
+                  >
+                    <Peep seed={n.seed} bg={n.bg} size={40} />
+                    {n.kind === 'request' ? (
+                      <RequestRow
+                        notification={n}
+                        isBusy={busyId === n.id}
+                        onPay={() => {
+                          if (!tryPay()) return
+                          close()
+                          onPayRequest(n)
+                        }}
+                        onDecline={() => handleDecline(n.id)}
+                      />
+                    ) : (
+                      <ReceivedRow notification={n} />
+                    )}
+                  </SwipeableRow>
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
     </BottomSheet>
   )

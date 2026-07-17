@@ -28,20 +28,32 @@ export async function POST(request) {
   if (!message?.trim()) return new Response('A message is required', { status: 400 })
 
   const drafts = []
-  const graph = buildGraph(isOnline, drafts)
+  const charts = []
+  const graph = buildGraph(isOnline, drafts, charts)
   const messages = [...history.map(toLangChain), new HumanMessage(message)]
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+      // Drafts and charts go out the moment a tool creates them, so the cards land with the
+      // reply rather than trailing the finished stream.
+      let sentDrafts = 0
+      let sentCharts = 0
+      const flushCards = () => {
+        for (; sentDrafts < drafts.length; sentDrafts++) send({ type: 'draft', draft: drafts[sentDrafts] })
+        for (; sentCharts < charts.length; sentCharts++) send({ type: 'chart', chart: charts[sentCharts] })
+      }
       try {
-        // `messages` mode yields only the model's own tokens, so tool results never reach the user.
+        // `messages` mode yields every message chunk, including tool results - only the
+        // model's own tokens (`ai` chunks) are for the user.
         for await (const [chunk] of await graph.stream({ messages }, { streamMode: 'messages' })) {
-          const text = typeof chunk?.content === 'string' ? chunk.content : ''
+          flushCards()
+          if (chunk?.getType?.() !== 'ai') continue
+          const text = typeof chunk.content === 'string' ? chunk.content : ''
           if (text) send({ type: 'token', text })
         }
-        drafts.forEach((draft) => send({ type: 'draft', draft }))
+        flushCards()
       } catch (error) {
         send({ type: 'error', text: error.message })
       } finally {

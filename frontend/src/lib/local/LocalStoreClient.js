@@ -53,7 +53,7 @@ export async function listLocalTransactions() {
 }
 
 /**
- * Semantic search over the device's transaction notes — ObjectBox's own HNSW index, no network.
+ * Semantic search over the device's transaction notes - ObjectBox's own HNSW index, no network.
  * @param {{q: string, ownerPartyRef?: string, limit?: number}} params
  */
 export async function searchLocalTransactions({ q, ownerPartyRef, limit = 10 }) {
@@ -97,9 +97,14 @@ export async function listLocalChats(ownerPartyRef) {
   return call('GET', `/chats${query}`)
 }
 
-/** Start a chat on device. The caller mints `chatReference` — there's no server here to do it. */
+/** Start a chat on device. The caller mints `chatReference` - there's no server here to do it. */
 export async function createLocalChat({ ownerPartyRef, chatReference, title }) {
   return call('POST', '/chats', { ownerPartyRef, chatReference, title })
+}
+
+/** Delete a chat held on device; the store removes its messages with it. */
+export async function deleteLocalChat(chatReference) {
+  return call('DELETE', `/chats/${encodeURIComponent(chatReference)}`)
 }
 
 /** A chat's messages held on device, oldest first. */
@@ -123,7 +128,7 @@ export async function listLocalRequests({ targetDigest, requesterPartyRef, statu
 }
 
 /**
- * Raise a request while offline. Needs no replay — Sync carrying it to Atlas is the delivery.
+ * Raise a request while offline. Needs no replay - Sync carrying it to Atlas is the delivery.
  * @param {object} request - `{ requestReference, requesterPartyRef, requesterName, requesterDigest, targetDigest, amount, currency, note }`.
  */
 export async function createLocalRequest(request) {

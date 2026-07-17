@@ -67,7 +67,7 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
                 <Row label="From" value={account?.label ?? 'Account'} />
                 <Row
                   label="Remaining"
-                  value={account ? `€${fmt(account.balanceValue - d.amount)}` : '—'}
+                  value={account ? `€${fmt(account.balanceValue - d.amount)}` : ' - '}
                 />
               </>
             )}

@@ -28,6 +28,7 @@ const ALL_KEYS = Object.keys(LOADERS)
 const INITIAL = { data: null, isLoading: true, error: false }
 
 const seenStorageKey = (ownerKey) => `leafy:notif-seen:${ownerKey || 'anon'}`
+const dismissedStorageKey = (ownerKey) => `leafy:notif-dismissed:${ownerKey || 'anon'}`
 
 const isNewerThan = (createdAt, seenAt) =>
   !seenAt || (createdAt ? new Date(createdAt).getTime() > seenAt : false)
@@ -35,10 +36,12 @@ const isNewerThan = (createdAt, seenAt) =>
 /**
  * Derive the notifications feed: received transfers (the PSP has no received-money notification, so
  * we surface the inbound transfers themselves) plus pending payment requests addressed to the user.
- * Unread when newer than the last time the bell was opened.
+ * Unread when newer than the last time the bell was opened. Dismissed ids are hidden - the feed is
+ * derived, so dismissal is a per-device presentation choice, not a change to the records.
  */
-function deriveNotifications(transactions, requests, lastSeen) {
+function deriveNotifications(transactions, requests, lastSeen, dismissedIds) {
   const seenAt = lastSeen ? new Date(lastSeen).getTime() : 0
+  const dismissed = new Set(dismissedIds)
   const received = (transactions ?? [])
     .filter((t) => t.amount > 0)
     .map((t) => ({
@@ -67,9 +70,9 @@ function deriveNotifications(transactions, requests, lastSeen) {
     bg: r.bg,
     isUnread: isNewerThan(r.createdAt, seenAt),
   }))
-  return [...received, ...incoming].sort(
-    (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
-  )
+  return [...received, ...incoming]
+    .filter((n) => !dismissed.has(n.id))
+    .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
 }
 
 const WalletDataContext = createContext(null)
@@ -93,6 +96,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     requests: INITIAL,
   })
   const [lastSeen, setLastSeen] = useState(null)
+  const [dismissedIds, setDismissedIds] = useState([])
 
   // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
   // consumer's callbacks on each toggle.
@@ -115,7 +119,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
 
   /**
    * Watch a just-sent transfer until it settles (`completed`/`failed`) or times out, refreshing after
-   * each poll so the balance and Activity flip Pending → Completed on their own — independent of the
+   * each poll so the balance and Activity flip Pending → Completed on their own - independent of the
    * success screen staying open.
    */
   const watchTransfer = useCallback(
@@ -151,7 +155,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     refresh()
   }, [refresh])
 
-  // Both directions re-read, since the source changes. Reconnecting also replays queued sends —
+  // Both directions re-read, since the source changes. Reconnecting also replays queued sends  - 
   // Sync moves records, not money.
   const wasOnline = useRef(isOnline)
   useEffect(() => {
@@ -169,10 +173,15 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     resync()
   }, [isOnline, refresh, watchTransfer])
 
-  // Load the persisted "notifications seen" marker for this user.
+  // Load the persisted "notifications seen" marker and dismissals for this user.
   useEffect(() => {
     if (typeof window === 'undefined') return
     setLastSeen(window.localStorage.getItem(seenStorageKey(ownerKey)))
+    try {
+      setDismissedIds(JSON.parse(window.localStorage.getItem(dismissedStorageKey(ownerKey)) ?? '[]'))
+    } catch {
+      setDismissedIds([])
+    }
   }, [ownerKey])
 
   /** Mark all notifications read; persists so the badge stays cleared across reloads. */
@@ -182,7 +191,24 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     if (typeof window !== 'undefined') window.localStorage.setItem(seenStorageKey(ownerKey), now)
   }, [ownerKey])
 
-  const notifications = deriveNotifications(state.transactions.data, state.requests.data, lastSeen)
+  /** Hide notifications on this device; persists so they stay hidden across reloads. */
+  const dismissNotifications = useCallback(
+    (ids) => {
+      const next = [...new Set([...dismissedIds, ...ids])]
+      setDismissedIds(next)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(dismissedStorageKey(ownerKey), JSON.stringify(next))
+      }
+    },
+    [dismissedIds, ownerKey],
+  )
+
+  const notifications = deriveNotifications(
+    state.transactions.data,
+    state.requests.data,
+    lastSeen,
+    dismissedIds,
+  )
   const unreadCount = notifications.reduce((n, x) => n + (x.isUnread ? 1 : 0), 0)
 
   const value = {
@@ -193,6 +219,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     notifications,
     unreadCount,
     markNotificationsSeen,
+    dismissNotifications,
   }
   return <WalletDataContext.Provider value={value}>{children}</WalletDataContext.Provider>
 }

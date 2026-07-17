@@ -1,6 +1,6 @@
 """Integration tests for leafy-local-store's chat/chat-message HTTP API, run
 against a real running instance (docker compose up -d ollama
-objectbox-sync-server leafy-local-store). Not part of CI — these are for
+objectbox-sync-server leafy-local-store). Not part of CI - these are for
 local regression-checking only, and skip cleanly if the service isn't
 reachable.
 
@@ -64,7 +64,7 @@ def test_chat_create_matches_local_id():
     assert created.status_code == 201
     body = created.json()
     # localId mirrors ObjectBox's own `id` as a plain (non-PK) field, since
-    # the PK doesn't survive the Sync Server's bridge to Atlas — see
+    # the PK doesn't survive the Sync Server's bridge to Atlas - see
     # local_store_service.cpp's LocalChat struct comment.
     assert body["localId"] == body["id"]
     httpx.delete(f"{BASE}/local/v1/chats/{payload['chatReference']}")

@@ -5,6 +5,7 @@ import {
   appendChatMessage,
   createChat,
   createRequest,
+  deleteChat,
   getChatMessages,
   getChats,
   sendMoney,
@@ -29,13 +30,13 @@ function deriveTitle(text) {
 }
 
 /**
- * Streams one assistant turn. The route emits NDJSON so a drafted payment can ride the same
- * stream as the text.
+ * Streams one assistant turn. The route emits NDJSON so drafted payments and spending charts can
+ * ride the same stream as the text - `onDraft`/`onChart` fire the moment one arrives, mid-stream.
  * @param {object} body - `{ message, history, isOnline }`.
- * @param {(text: string) => void} onToken
- * @returns {Promise<{text: string, drafts: object[]}>}
+ * @param {{onToken: (text: string) => void, onDraft: (draft: object) => void, onChart: (chart: object) => void}} handlers
+ * @returns {Promise<string>} The full reply text.
  */
-async function streamTurn(body, onToken) {
+async function streamTurn(body, { onToken, onDraft, onChart }) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -47,7 +48,6 @@ async function streamTurn(body, onToken) {
   const decoder = new TextDecoder()
   let buffer = ''
   let text = ''
-  const drafts = []
 
   for (;;) {
     const { done, value } = await reader.read()
@@ -62,13 +62,15 @@ async function streamTurn(body, onToken) {
         text += event.text
         onToken(text)
       } else if (event.type === 'draft') {
-        drafts.push(event.draft)
+        onDraft(event.draft)
+      } else if (event.type === 'chart') {
+        onChart(event.chart)
       } else if (event.type === 'error') {
         throw new Error(event.text)
       }
     }
   }
-  return { text, drafts }
+  return text
 }
 
 /**
@@ -146,59 +148,59 @@ export function useAiChat() {
       if (reference) appendChatMessage(reference, { role: 'user', text }, isOnlineRef.current)
 
       const replyId = nextId()
-      let streamed = false
-      try {
-        const { text: reply, drafts } = await streamTurn(
-          { message: text, history, isOnline: isOnlineRef.current },
-          (partial) => {
-            setIsThinking(false)
-            setChats((prev) =>
-              prev.map((c) => {
-                if (c.id !== (reference ?? activeId)) return c
-                const withoutReply = c.messages.filter((m) => m.id !== replyId)
-                return {
-                  ...c,
-                  messages: [
-                    ...withoutReply,
-                    { id: replyId, role: 'assistant', type: 'text', text: partial },
-                  ],
-                }
-              }),
-            )
-            streamed = true
-          },
+      const threadId = () => reference ?? activeId
+      const appendToThread = (message) => {
+        setChats((prev) =>
+          prev.map((c) => (c.id === threadId() ? { ...c, messages: [...c.messages, message] } : c)),
         )
-        if (!streamed && reply) {
-          setChats((prev) =>
-            prev.map((c) =>
-              c.id === (reference ?? activeId)
-                ? { ...c, messages: [...c.messages, { id: replyId, role: 'assistant', type: 'text', text: reply }] }
-                : c,
-            ),
-          )
-        }
-        if (reference && reply) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
-
-        for (const draft of drafts) {
-          setChats((prev) =>
-            prev.map((c) =>
-              c.id === (reference ?? activeId)
-                ? {
+      }
+      try {
+        const reply = await streamTurn(
+          { message: text, history, isOnline: isOnlineRef.current },
+          {
+            onToken: (partial) => {
+              setIsThinking(false)
+              setChats((prev) =>
+                prev.map((c) => {
+                  if (c.id !== threadId()) return c
+                  const withoutReply = c.messages.filter((m) => m.id !== replyId)
+                  return {
                     ...c,
                     messages: [
-                      ...c.messages,
-                      {
-                        id: nextId(),
-                        role: 'assistant',
-                        type: 'action',
-                        actionData: { ...draft, isConfirmed: false },
-                      },
+                      ...withoutReply,
+                      { id: replyId, role: 'assistant', type: 'text', text: partial, stream: 'live' },
                     ],
                   }
-                : c,
-            ),
-          )
-        }
+                }),
+              )
+            },
+            // Cards render the moment a tool produces them, alongside the streaming reply.
+            onDraft: (draft) =>
+              appendToThread({
+                id: nextId(),
+                role: 'assistant',
+                type: 'action',
+                actionData: { ...draft, isConfirmed: false },
+              }),
+            onChart: (chart) =>
+              appendToThread({
+                id: nextId(),
+                role: 'assistant',
+                type: 'chart',
+                chartTitle: chart.title,
+                chartData: chart.rows,
+              }),
+          },
+        )
+        // Seal the reply: 'done' lets the typewriter finish and mark itself so it never replays.
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === threadId()
+              ? { ...c, messages: c.messages.map((m) => (m.id === replyId ? { ...m, stream: 'done' } : m)) }
+              : c,
+          ),
+        )
+        if (reference && reply) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
       } catch (error) {
         setChats((prev) =>
           prev.map((c) =>
@@ -298,6 +300,22 @@ export function useAiChat() {
     setView('chat')
   }
 
+  /** Removes a chat everywhere: the list (optimistically) and whichever store holds it. */
+  function handleDeleteChat(id) {
+    if (id === 'draft') return
+    setChats((prev) => {
+      const rest = prev.filter((c) => c.id !== id)
+      return rest.some((c) => c.id === 'draft')
+        ? rest
+        : [{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }, ...rest]
+    })
+    if (activeId === id) {
+      resetTransient()
+      setActiveId('draft')
+    }
+    deleteChat(id, isOnlineRef.current)
+  }
+
   async function handleOpenChat(id) {
     resetTransient()
     setActiveId(id)
@@ -329,5 +347,6 @@ export function useAiChat() {
     handleSuggestion,
     handleNewChat,
     handleOpenChat,
+    handleDeleteChat,
   }
 }

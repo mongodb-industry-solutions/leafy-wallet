@@ -27,7 +27,7 @@ class WalletTransactionCreate(BaseModel):
 
     `amount`/`currency` are flat (not a nested `amount: {value, currency}`
     sub-document) to match the shape ObjectBox's MongoDB Sync Server bridge
-    writes when a transaction originates offline via leafy-local-store —
+    writes when a transaction originates offline via leafy-local-store  - 
     that connector has no way to produce nested fields, so the canonical
     Atlas schema was flattened to match it rather than special-casing one
     write path.
@@ -91,7 +91,7 @@ class WalletTransactionOut(BaseModel):
 class SpendingByContact(BaseModel):
     """Outbound shape for GET /wallet-transactions/summary: one row per counterparty.
 
-    Carries the arrangement reference rather than a name — Atlas holds the alias, and the caller
+    Carries the arrangement reference rather than a name - Atlas holds the alias, and the caller
     already resolves those for every other view.
     """
 

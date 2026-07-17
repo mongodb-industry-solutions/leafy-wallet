@@ -19,7 +19,6 @@ function amountScale(len) {
  * @param {number} props.cents - Amount in cents.
  * @param {object} props.currency - Account currency, `{ code, symbol, balance }`.
  * @param {object} [props.recipient] - Pre-selected recipient, if any.
- * @param {boolean} [props.canRequest] - Whether a request can be addressed to the pre-selected recipient.
  * @param {(updater: (cents: number) => number) => void} props.setCents
  * @param {() => void} props.onClose
  * @param {(mode: 'send'|'request') => void} props.onPick
@@ -29,7 +28,6 @@ export function NumpadStep({
   cents,
   currency,
   recipient,
-  canRequest = true,
   setCents,
   onClose,
   onPick,
@@ -85,15 +83,13 @@ export function NumpadStep({
       </div>
 
       <div className="flex gap-3 px-4 pt-4 pb-6">
-        {canRequest && (
-          <button
-            onClick={() => onPick('request')}
-            disabled={isEmpty}
-            className="h-14 flex-1 rounded-full bg-foreground/10 text-base font-semibold text-foreground disabled:opacity-40"
-          >
-            Request
-          </button>
-        )}
+        <button
+          onClick={() => onPick('request')}
+          disabled={isEmpty}
+          className="h-14 flex-1 rounded-full bg-foreground/10 text-base font-semibold text-foreground disabled:opacity-40"
+        >
+          Request
+        </button>
         <button
           onClick={() => onPick('send')}
           disabled={isEmpty}

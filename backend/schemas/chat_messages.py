@@ -12,12 +12,12 @@ class ChatMessageCreate(BaseModel):
 
     `textEmbedding` is absent on purpose: it's generated server-side by
     Ollama from `text` (see services/ollama.py), never supplied by the
-    client — same convention as `WalletTransactionCreate.noteEmbedding`.
+    client - same convention as `WalletTransactionCreate.noteEmbedding`.
     `ownerPartyRef` is absent too: it's copied from the parent chat so a
     message can never be scoped to a different owner than its conversation.
 
     Excludes `_id`/`createdAt`: server-generated. No `Update` schema exists
-    for this resource — messages are immutable once sent.
+    for this resource - messages are immutable once sent.
     """
 
     chatId: str

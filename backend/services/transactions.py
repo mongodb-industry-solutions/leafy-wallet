@@ -16,7 +16,7 @@ def list_transactions(
 ) -> list[dict]:
     """The user's transactions, newest first.
 
-    Shared by the REST route and the MCP tool. `limit=None` returns everything — the REST caller
+    Shared by the REST route and the MCP tool. `limit=None` returns everything - the REST caller
     merges the full set against Leafy Pay's list, so it can't be truncated.
     """
     query = {}
@@ -79,7 +79,7 @@ async def search_transactions(db, q: str, owner_party_ref: str | None = None, li
     Requires the `noteEmbedding_vector_index` index (see
     scripts/create_vector_index.py) to already exist on `walletTransactions`.
     Shared by `routers/wallet_transactions.py`'s `GET /search` route and the
-    `search_transactions` MCP tool — one query, two callers.
+    `search_transactions` MCP tool - one query, two callers.
     """
     query_vector = await get_embedding(q)
     if query_vector is None:

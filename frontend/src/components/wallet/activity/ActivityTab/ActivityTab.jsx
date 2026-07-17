@@ -8,7 +8,7 @@ import { Peep } from '@/components/common/Peep/Peep'
 
 const SKELETON_ROWS = 6
 
-/** Money the user has asked for and not been paid yet — no transaction exists until it's paid. */
+/** Money the user has asked for and not been paid yet - no transaction exists until it's paid. */
 function AwaitingPaymentRow({ request }) {
   return (
     <div className="flex items-center gap-3 py-3">

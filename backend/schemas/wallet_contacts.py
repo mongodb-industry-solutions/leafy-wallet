@@ -28,7 +28,7 @@ class WalletContactUpdate(BaseModel):
     Every field is optional so the client can send only what changed;
     `exclude_unset=True` in the router turns that into a partial `$set`.
     `ownerPartyRef`/`counterpartyArrangementReference` are deliberately
-    absent — they identify which beneficiary this contact caches, so
+    absent - they identify which beneficiary this contact caches, so
     changing them would mean a different contact, not an edit of this one.
     """
 

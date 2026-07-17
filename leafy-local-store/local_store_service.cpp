@@ -39,7 +39,7 @@ struct LocalTransaction {
     double amount = 0;
     std::string currency;
     std::string note;                    // empty = absent
-    std::vector<float> noteEmbedding;     // 768 dims, HNSW cosine — matches nomic-embed-text
+    std::vector<float> noteEmbedding;     // 768 dims, HNSW cosine - matches nomic-embed-text
     std::string direction;
     std::string leafyPayStatus;
     std::string localSyncStatus;
@@ -342,7 +342,7 @@ struct LocalChatMessage {
     };
 };
 
-// Last-known balance per account, purely local — deliberately NOT
+// Last-known balance per account, purely local - deliberately NOT
 // SYNC_ENABLED (see create_obx_model()). A balance is derived/non-authoritative
 // data (Leafy Pay owns the real value, re-fetched live whenever online), not a
 // source-of-truth record like a transaction or contact, so it doesn't get a
@@ -659,7 +659,7 @@ const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::leafyPa
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt(12);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
 
-// ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
+// ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
 
 constexpr int EMBEDDING_DIMENSIONS = 768;
 
@@ -667,7 +667,7 @@ OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
     // Entity name doubles as the target MongoDB collection name in the Sync
-    // Server's bridge (confirmed empirically) — this is now pointed at the
+    // Server's bridge (confirmed empirically) - this is now pointed at the
     // real walletTransactions collection the FastAPI backend also uses.
     obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -695,7 +695,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
-    // Entity 2: walletContacts — entity name is the target MongoDB collection
+    // Entity 2: walletContacts - entity name is the target MongoDB collection
     // name, same rule as entity 1 above.
     obx_model_entity(model, "walletContacts", 2, 7002000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -713,7 +713,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupDigest", OBXPropertyType_String, 10, 7002000000000010ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
-    // Entity 3: chats — a conversation. Entity name is the target MongoDB
+    // Entity 3: chats - a conversation. Entity name is the target MongoDB
     // collection name, same rule as entities 1-2 above.
     obx_model_entity(model, "chats", 3, 7003000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -729,7 +729,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 8, 7003000000000008ULL);
     obx_model_entity_last_property_id(model, 8, 7003000000000008ULL);
 
-    // Entity 4: chatMessages — a single message within a chats conversation,
+    // Entity 4: chatMessages - a single message within a chats conversation,
     // linked by chatReference (ObjectBox has no nested/array attributes).
     obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -743,7 +743,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 7, 7004000000000007ULL);
     obx_model_entity_last_property_id(model, 7, 7004000000000007ULL);
 
-    // Entity 5: LocalAccountBalance — purely local, deliberately no
+    // Entity 5: LocalAccountBalance - purely local, deliberately no
     // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
     // objectbox-sync-server/objectbox-model.json (see the struct comment
     // above). The entity name has no MongoDB-collection meaning here since
@@ -979,7 +979,7 @@ struct SpendingRow {
 };
 
 // Totals per counterparty, largest first. Mirrors
-// backend/services/transactions.py's spending_by_contact() — same rows, same
+// backend/services/transactions.py's spending_by_contact() - same rows, same
 // order, same rounding; ObjectBox has no aggregation pipeline, so the
 // $match/$group/$sort that one hands to Atlas is done by hand here.
 json spending_by_contact(const std::string& ownerPartyRef, const std::string& direction) {
@@ -1072,7 +1072,7 @@ int main(int argc, char* argv[]) {
 
     // Semantic search over locally-stored transaction notes, entirely offline:
     // embeds `q` via the local Ollama container, then runs ObjectBox's own
-    // HNSW nearestNeighbors query against noteEmbedding — no Atlas round
+    // HNSW nearestNeighbors query against noteEmbedding - no Atlas round
     // trip. Mirrors backend/routers/wallet_transactions.py's
     // GET /wallet-transactions/search, but against the on-device store.
     svr.Get("/local/v1/transactions/search", [](const httplib::Request& req, httplib::Response& res) {
@@ -1103,12 +1103,12 @@ int main(int argc, char* argv[]) {
 
             auto box = store->box<LocalTransaction>();
             // nearestNeighbors alone can't also filter by ownerPartyRef, so
-            // over-fetch and filter client-side when a filter is requested —
+            // over-fetch and filter client-side when a filter is requested  - 
             // fine at this PoC's local scale (a handful of records).
             int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
             auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
             // findWithScores() returns `score` as a *distance* (lower = more
-            // similar), already sorted nearest-first — the opposite
+            // similar), already sorted nearest-first - the opposite
             // convention from Atlas's $vectorSearch score (higher = better),
             // which backend/routers/wallet_transactions.py's /search uses.
             auto foundWithScores = query.findWithScores();
@@ -1212,7 +1212,7 @@ int main(int argc, char* argv[]) {
     });
 
     // Deletes propagate through ObjectBox Sync like any other write, so this
-    // also removes the corresponding document from Atlas once connected —
+    // also removes the corresponding document from Atlas once connected  - 
     // primarily here so integration tests can clean up after themselves.
     svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
@@ -1371,7 +1371,7 @@ int main(int argc, char* argv[]) {
     });
 
     // Bumps the parent LocalChat's updatedAt on every new message (two
-    // sequential puts, no explicit transaction — same simplicity level as
+    // sequential puts, no explicit transaction - same simplicity level as
     // the rest of this file).
     svr.Post(R"(/local/v1/chats/([^/]+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
         auto bad_request = [&res](const std::string& msg) {

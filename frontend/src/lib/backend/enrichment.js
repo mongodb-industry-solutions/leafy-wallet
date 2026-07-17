@@ -59,7 +59,7 @@ export async function searchTransactionEnrichment({ q, owner, limit = 10 }) {
 }
 
 /**
- * Per-contact totals, largest first — computed by Atlas, not by summing rows here.
+ * Per-contact totals, largest first - computed by Atlas, not by summing rows here.
  * @param {{owner: string, direction?: 'sent'|'received'}} params
  */
 export async function spendingByContactEnrichment({ owner, direction = 'sent' }) {
@@ -110,6 +110,11 @@ export async function listChatDocs(owner) {
 /** Start a chat. The server mints its `chatReference`. */
 export async function createChatDoc({ owner, title }) {
   return backendPost('/api/v1/chats', { ownerPartyRef: owner, title })
+}
+
+/** Delete a chat; the server cascades to its messages. */
+export async function deleteChatDoc(chatId) {
+  return backendDelete(`/api/v1/chats/${encodeURIComponent(chatId)}`)
 }
 
 /** A chat's messages, oldest first. */

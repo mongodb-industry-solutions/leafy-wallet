@@ -20,6 +20,7 @@ import {
   listOutgoingRequests,
   createChatDoc,
   createChatMessageDoc,
+  deleteChatDoc,
   listChatDocs,
   listChatMessageDocs,
   listTransactionEnrichment,
@@ -33,6 +34,7 @@ import {
   createLocalChat,
   createLocalChatMessage,
   createLocalRequest,
+  deleteLocalChat,
   deleteLocalTransaction,
   listLocalAccounts,
   listLocalChatMessages,
@@ -111,10 +113,7 @@ export async function getAccounts(isOnline = true) {
   return accounts.map(toAccountView)
 }
 
-/**
- * Shape a Leafy Pay beneficiary into the UI contact used across the app. `canRequest` is false
- * without a digest: phone contacts, and contacts backfilled from Leafy Pay whose email we never saw.
- */
+/** Shape a Leafy Pay beneficiary into the UI contact used across the app. */
 function toContactView(b) {
   return {
     id: b.reference,
@@ -122,7 +121,6 @@ function toContactView(b) {
     name: b.label,
     lookupType: b.lookupType,
     lookupHint: b.lookupHint,
-    canRequest: Boolean(b.lookupDigest),
     ...avatarFor(b.reference ?? b.label),
   }
 }
@@ -194,30 +192,29 @@ export async function getContacts(isOnline = true) {
 }
 
 /**
- * Add a contact: resolve a registered Leafy Pay email/phone into a saved beneficiary (source of truth),
+ * Add a contact: resolve a registered Leafy Pay email into a saved beneficiary (source of truth),
  * then mirror it to the Atlas walletContacts replica. Fails cleanly if no registered user/merchant
- * matches the given email/phone.
+ * matches the given email.
  *
  * The only moment we hold the address, so the blind index is derived here and the address discarded.
- * @param {{lookupType: 'email'|'phone', lookupValue: string, label?: string}} input
+ * @param {{lookupValue: string, label?: string}} input
  * @returns {Promise<{ok: boolean, contact?: object, error?: string}>}
  */
-export async function addContact({ lookupType, lookupValue, label = '' } = {}) {
+export async function addContact({ lookupValue, label = '' } = {}) {
   const value = String(lookupValue ?? '').trim()
-  if (!value) return { ok: false, error: 'Enter an email or phone number' }
+  if (!value) return { ok: false, error: 'Enter an email' }
 
   let result
   try {
-    result = await createBeneficiary({ lookupType, lookupValue: value, label: label.trim() })
+    result = await createBeneficiary({ lookupType: 'email', lookupValue: value, label: label.trim() })
   } catch {
     return { ok: false, error: 'Could not add contact. Please try again.' }
   }
   if (!result.found) {
-    const kind = lookupType === 'phone' ? 'phone number' : 'email'
-    return { ok: false, error: `No Leafy Pay user is registered with that ${kind}.` }
+    return { ok: false, error: 'No Leafy Pay user is registered with that email.' }
   }
   const beneficiary = result.beneficiary
-  const digest = lookupType === 'email' ? lookupDigest(value) : null
+  const digest = lookupDigest(value)
 
   const owner = await ownerRef()
   if (owner) {
@@ -231,7 +228,7 @@ export async function addContact({ lookupType, lookupValue, label = '' } = {}) {
         counterpartyLookupDigest: digest,
       })
     } catch {
-      return { ok: false, error: 'Could not save the contact — is the backend running?' }
+      return { ok: false, error: 'Could not save the contact - is the backend running?' }
     }
   }
 
@@ -341,7 +338,7 @@ export async function getTransactions(isOnline = true) {
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
 
   // Leafy Pay owns settlement, so any enrichment still marked pending against a completed transfer
-  // is stale — settling can outlast the send flow's watcher.
+  // is stale - settling can outlast the send flow's watcher.
   await Promise.all(
     transactions
       .filter((t) => {
@@ -441,7 +438,7 @@ export async function sendMoney({
         leafyPayStatus: transfer.status === 'completed' ? SETTLED_STATUS : 'pending',
       })
     } catch {
-      return { ok: false, error: 'Payment sent, but saving it failed — is the backend running?' }
+      return { ok: false, error: 'Payment sent, but saving it failed - is the backend running?' }
     }
   }
 
@@ -486,7 +483,7 @@ export async function markTransferSettled(reference, status) {
 }
 
 /**
- * Send each `local_pending` transaction for real, then drop the local record — its deletion
+ * Send each `local_pending` transaction for real, then drop the local record - its deletion
  * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
  * record for the next reconnect. Returns the new references, which the caller watches to settlement.
  * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
@@ -651,7 +648,7 @@ export async function createRequest({ counterpartyArrangementReference, amount, 
   try {
     await createRequestDoc(request)
   } catch {
-    return { ok: false, error: 'Could not send the request — is the backend running?' }
+    return { ok: false, error: 'Could not send the request - is the backend running?' }
   }
   return { ok: true }
 }
@@ -688,13 +685,14 @@ export async function getRequests(isOnline = true) {
 
 /**
  * Pay a request addressed to the user: match the requester's blind index against the user's own
- * contacts, send the transfer, then mark the request paid. Online only — the requester must already
+ * contacts, send the transfer, then mark the request paid. Online only - the requester must already
  * be a saved contact, since Leafy Pay only accepts transfers against an arrangement the sender owns.
  * @param {string} reference - The `requestReference`.
  * @param {string} [fromAccountReference] - Source account; omit for the default.
+ * @param {string} [noteOverride] - Replaces the request's note on the transfer (edited at review).
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
-export async function payRequest(reference, fromAccountReference) {
+export async function payRequest(reference, fromAccountReference, noteOverride) {
   if (!reference) return { ok: false, error: 'Missing request' }
   const session = await getSession()
   if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
@@ -713,7 +711,7 @@ export async function payRequest(reference, fromAccountReference) {
     counterpartyArrangementReference: contact.reference,
     fromAccountReference,
     amount: request.amount,
-    note: request.note || '',
+    note: noteOverride ?? (request.note || ''),
   })
   if (!sent.ok) return sent
 
@@ -785,7 +783,7 @@ export async function getChats(isOnline = true) {
 }
 
 /**
- * Start a chat. Offline the reference is minted here — there's no server to mint one, and both
+ * Start a chat. Offline the reference is minted here - there's no server to mint one, and both
  * stores key messages by it.
  * @param {string} title
  * @param {boolean} [isOnline]
@@ -815,6 +813,32 @@ export async function getChatMessages(reference, isOnline = true) {
     () => [],
   )
   return (rows ?? []).map((m) => ({ id: String(m.id), role: m.role, type: 'text', text: m.text }))
+}
+
+/**
+ * Delete a chat and its messages from whichever store holds it: Atlas when online (the sync
+ * layer propagates to the device), the on-device store when offline (and up to Atlas on sync).
+ * @param {string} reference - The `chatReference`.
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function deleteChat(reference, isOnline = true) {
+  if (!reference) return { ok: false, error: 'No chat given.' }
+  try {
+    if (isOnline) {
+      const owner = await ownerRef()
+      if (!owner) return { ok: false, error: 'You need to be signed in' }
+      const chats = await listChatDocs(owner)
+      const chat = (chats ?? []).find((c) => c.chatReference === reference)
+      if (!chat?.id) return { ok: false, error: 'Chat not found.' }
+      await deleteChatDoc(chat.id)
+    } else {
+      await deleteLocalChat(reference)
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not delete the chat.' }
+  }
 }
 
 /**

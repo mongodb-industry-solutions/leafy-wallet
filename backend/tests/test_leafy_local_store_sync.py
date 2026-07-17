@@ -1,13 +1,13 @@
 """End-to-end tests for the actual ObjectBox <-> Atlas sync bridge, run against
 a real running stack (docker compose up -d ollama objectbox-sync-server
 leafy-local-store) with a reachable Atlas cluster. Local-only, not part of CI
-— same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
+ -  same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
 deploying the whole ObjectBox Sync Server + Atlas combo in CI isn't worth it
 for this PoC, and skips cleanly if either side isn't reachable.
 
 Every other test_leafy_local_store_*.py file only exercises the local HTTP
 surface in isolation (write via leafy-local-store, read back via
-leafy-local-store) — none of them actually prove the Sync Server bridge is
+leafy-local-store) - none of them actually prove the Sync Server bridge is
 moving data to/from Atlas. That's the one thing these tests check, for every
 entity that's meant to sync: walletContacts, walletTransactions, chats,
 chatMessages. Plus one regression check the other way: LocalAccountBalance is
@@ -17,7 +17,7 @@ show up in Atlas no matter how long we wait.
 Sync is asynchronous in both directions (ObjectBox -> Sync Server -> Atlas is
 a push over the sync websocket; Atlas -> Sync Server -> ObjectBox is a Mongo
 change stream), so every assertion here polls with a timeout instead of
-checking immediately. 20s/0.5s was picked empirically — in practice syncing
+checking immediately. 20s/0.5s was picked empirically - in practice syncing
 one small document lands in well under 5s, but this leaves headroom for a
 slower CI-less local machine without making a real failure take forever to
 surface.
@@ -65,7 +65,7 @@ def _wait_until(predicate, description):
     """Poll `predicate` (a zero-arg callable returning a truthy match or
     None/False) until it succeeds or SYNC_TIMEOUT_S elapses. Returns whatever
     `predicate` returned. A timeout here means the sync bridge didn't do its
-    job in time — that's the actual failure mode these tests exist to catch,
+    job in time - that's the actual failure mode these tests exist to catch,
     not just test flakiness to paper over.
     """
     deadline = time.monotonic() + SYNC_TIMEOUT_S
@@ -242,7 +242,7 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
 
     try:
         # POST /local/v1/chats does two sequential ObjectBox puts (create,
-        # then set localId once the id is known — see local_store_service.cpp)
+        # then set localId once the id is known - see local_store_service.cpp)
         # so the Sync Server pushes two change events for this one document.
         # Polling for mere presence would flakily catch the first push, where
         # localId is still its 0 default; poll for the field's *final* value
@@ -252,7 +252,7 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
             f"chats document with title={title} and localId={local_id}",
         )
         # localId is the field that exists specifically so this row is
-        # joinable from Atlas — see backend/README.md's "Sync-related fields".
+        # joinable from Atlas - see backend/README.md's "Sync-related fields".
         assert atlas_doc[0]["localId"] == local_id
         # chatReference is what chatMessages join against, in either store.
         assert atlas_doc[0]["chatReference"] == chat_reference
@@ -265,7 +265,7 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
     title = _unique("sync-chat-atlas")
     now = datetime.now(timezone.utc)
     # Deliberately no `localId` here: this document originates from the
-    # FastAPI write path (backend/routers/chats.py), which never sets it —
+    # FastAPI write path (backend/routers/chats.py), which never sets it  - 
     # only the ObjectBox->Atlas direction does. The reverse sync must still
     # work without it.
     db.insert_one("chats", {"title": title, "createdAt": now, "updatedAt": now})
@@ -323,7 +323,7 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
     """A message written Atlas-side is readable offline, joined by chatReference.
 
     The Atlas and ObjectBox copies of a chat carry different primary keys, so
-    chatReference — the same string in both stores — is the only key that
+    chatReference - the same string in both stores - is the only key that
     makes a message written by one path visible to the other.
     """
     chat_reference = httpx.post(
@@ -373,7 +373,7 @@ def test_account_balance_never_syncs_to_atlas(db):
     assert created.status_code == 201
 
     try:
-        # There's no "success" predicate to poll for here — the whole point
+        # There's no "success" predicate to poll for here - the whole point
         # is that nothing ever shows up. Sleep the same duration the other
         # tests poll for, then assert absence once, rather than polling for a
         # positive that should never happen.

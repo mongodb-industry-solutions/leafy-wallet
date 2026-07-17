@@ -144,7 +144,7 @@ def test_message_stores_a_text_embedding(client, chat):
 
 
 def test_create_message_is_accepted_when_ollama_is_unavailable(client, chat, monkeypatch):
-    """A message must still be written when the embedding can't be computed —
+    """A message must still be written when the embedding can't be computed  - 
     `get_embedding` returning None is the documented degraded path.
     """
     async def _no_embedding(text):

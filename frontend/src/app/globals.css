@@ -204,3 +204,58 @@
     opacity: 0;
   }
 }
+
+/* Walkthrough SSO visual: the cursor glides onto the button, clicks, and loops. */
+@keyframes sso-cursor {
+  0% {
+    transform: translate(110px, 60px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translate(0, 0);
+  }
+  52% {
+    transform: translate(0, 0) scale(0.82);
+  }
+  58%,
+  82% {
+    transform: translate(0, 0) scale(1);
+  }
+  95% {
+    transform: translate(110px, 60px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(110px, 60px);
+    opacity: 0;
+  }
+}
+@keyframes sso-button-press {
+  0%,
+  46%,
+  58%,
+  100% {
+    transform: scale(1);
+  }
+  52% {
+    transform: scale(0.94);
+  }
+}
+@keyframes sso-click-ring {
+  0%,
+  50% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  56% {
+    opacity: 0.7;
+  }
+  78%,
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}

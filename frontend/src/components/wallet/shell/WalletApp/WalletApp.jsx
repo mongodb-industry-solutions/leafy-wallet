@@ -10,6 +10,7 @@ import { PeopleTab } from '@/components/wallet/people/PeopleTab/PeopleTab'
 import { AiTab } from '@/components/wallet/assistant/AiTab/AiTab'
 import { TxDetail } from '@/components/wallet/transactions/TxDetail/TxDetail'
 import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
+import { PayRequestFlow } from '@/components/wallet/send/PayRequestFlow/PayRequestFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel/NotificationsPanel'
@@ -32,13 +33,14 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAddContactOpen, setIsAddContactOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [payRequestNotification, setPayRequestNotification] = useState(null)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
   // aurora intro plays once per login, not on every return to the Home tab.
   const heroIntroPlayedRef = useRef(false)
 
   let flow
-  if (isSendOpen) {
-    flow = sendMode === 'request' ? 'request' : 'send'
+  if (isSendOpen || payRequestNotification) {
+    flow = sendMode === 'request' && !payRequestNotification ? 'request' : 'send'
   } else if (detail) {
     flow = 'transaction'
   } else {
@@ -69,7 +71,7 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
   return (
     <WalletDataProvider isOnline={isOnline} ownerKey={user?.sub}>
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
-        {!isSendOpen && (
+        {!isSendOpen && !payRequestNotification && (
           <>
             {/* Home has its own gradient hero (with the profile menu). Activity /
                 People / Chat stand on their own titles, no top bar. */}
@@ -113,9 +115,21 @@ export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = 
             onClose={handleCloseSend}
           />
         )}
+        {payRequestNotification && (
+          <PayRequestFlow
+            notification={payRequestNotification}
+            isOnline={isOnline}
+            onClose={() => setPayRequestNotification(null)}
+          />
+        )}
         {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
         {isAddContactOpen && <AddContactSheet onClose={() => setIsAddContactOpen(false)} />}
-        {isNotificationsOpen && <NotificationsPanel onClose={() => setIsNotificationsOpen(false)} />}
+        {isNotificationsOpen && (
+          <NotificationsPanel
+            onPayRequest={setPayRequestNotification}
+            onClose={() => setIsNotificationsOpen(false)}
+          />
+        )}
         {isProfileOpen && (
           <div className="absolute inset-0 z-40">
             <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />

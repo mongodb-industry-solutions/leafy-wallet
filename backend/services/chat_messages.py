@@ -41,7 +41,7 @@ async def search_chat_messages(
     Requires the `textEmbedding_vector_index` index (see
     scripts/create_vector_index.py) to already exist on `chatMessages`.
     Shared by `routers/chat_messages.py`'s `GET /search` route and the MCP
-    server — one query, two callers.
+    server - one query, two callers.
     """
     query_vector = await get_embedding(q)
     if query_vector is None:

@@ -72,7 +72,7 @@ async def spending_summary(
     direction: str = Query(default="sent", pattern="^(sent|received)$"),
     db: MongoDBConnector = Depends(get_db),
 ):
-    """Total per counterparty, largest first — "where did my money go"."""
+    """Total per counterparty, largest first - "where did my money go"."""
     return spending_by_contact_service(db, ownerPartyRef, direction)
 
 

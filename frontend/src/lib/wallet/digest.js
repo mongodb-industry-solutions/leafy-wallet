@@ -13,6 +13,6 @@ export function lookupDigest(email) {
   if (!normalized) return ''
   const key = ENV.lookupDigestKey()
   // Without a key the digests would silently match nothing, stranding every request.
-  if (!key) throw new Error('LOOKUP_DIGEST_KEY is not set — payment requests cannot be addressed')
+  if (!key) throw new Error('LOOKUP_DIGEST_KEY is not set - payment requests cannot be addressed')
   return createHmac('sha256', key).update(normalized).digest('hex')
 }

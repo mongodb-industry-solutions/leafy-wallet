@@ -13,22 +13,41 @@ import {
   Waypoints,
   Zap,
 } from 'lucide-react'
+import { SsoLoginVisual } from '@/components/stage/Walkthrough/SsoLoginVisual'
+import { DemoUsersVisual } from '@/components/stage/Walkthrough/DemoUsersVisual'
 
 // Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet
-// screen, narrating the MongoDB tech behind it (each step carries an icon).
+// screen. Written for a non-engineer presenter: plain language, with a tech term
+// only where it is the point of the step. Each step carries an icon; a step may
+// instead carry a `visual` component that fills the illustration tile.
 export const WALKTHROUGH = {
+  login: {
+    label: 'Sign in',
+    steps: [
+      {
+        visual: SsoLoginVisual,
+        title: 'Start with SSO',
+        body: 'Click Continue with SSO. It opens Leafy Pay’s real login page; your password never touches the wallet app.',
+      },
+      {
+        visual: DemoUsersVisual,
+        title: 'Sign in as a demo user',
+        body: 'Pick any of the three and type the email and password exactly as shown.',
+      },
+    ],
+  },
   home: {
     label: 'Home',
     steps: [
       {
         icon: Database,
         title: 'Balance from the device',
-        body: 'Your balance is read directly from the on-device ObjectBox store, so it shows the instant the app opens. There’s no round-trip to a server, and it stays fully readable even with no signal at all.',
+        body: 'The balance is read from a small database inside the phone, not from a server. That is why it shows instantly and still works with zero signal.',
       },
       {
         icon: RefreshCw,
         title: 'Quiet background sync',
-        body: 'The moment you’re back online, local writes stream up to MongoDB Atlas through the ObjectBox Sync connector. It runs in the background — no spinners, and nothing blocks the interface.',
+        body: 'Back online, everything written on the device copies up to MongoDB Atlas, the cloud database, in the background. No spinners, nothing to retry by hand.',
       },
     ],
   },
@@ -38,12 +57,12 @@ export const WALKTHROUGH = {
       {
         icon: Database,
         title: 'One local source of truth',
-        body: 'The whole history renders straight from ObjectBox, so your activity is always there whether you’re online or completely offline. The list never waits on the network to paint.',
+        body: 'The full payment history lives on the phone, so scrolling never waits on the network. Online or offline, the list is always there and always fast.',
       },
       {
         icon: ListChecks,
-        title: 'Per-row sync state',
-        body: 'Every row carries its own status — pending, confirmed, or failed — mirrored from Atlas change streams. You always know exactly which payments have made it to the cloud.',
+        title: 'Every payment knows its status',
+        body: 'Each row shows pending, confirmed, or failed, straight from the cloud as things settle. You see what really happened, not what the phone hopes.',
       },
     ],
   },
@@ -54,17 +73,17 @@ export const WALKTHROUGH = {
       {
         icon: Database,
         title: 'Written locally first',
-        body: 'The transaction commits to ObjectBox immediately as pending_sync, so the money moves the instant you tap. Nothing depends on a live connection to feel done.',
+        body: 'Tap send and the payment saves to the phone first, marked as waiting to sync. It feels instant because nothing waits for a server to answer.',
       },
       {
         icon: ShieldCheck,
-        title: 'ACID keeps it honest',
-        body: 'Multi-document ACID transactions keep balances correct even when several offline writes land at once. No double-spends, no drift — the ledger stays consistent.',
+        title: 'ACID keeps the math honest',
+        body: 'ACID transactions are the bank-grade guarantee: related changes all happen together or none do. Balances never drift, money is never counted twice.',
       },
       {
         icon: CheckCheck,
         title: 'Confirmed on reconnect',
-        body: 'Back online, the write syncs to Atlas and flips from pending to confirmed via change streams. The status you see is the real server state, reflected back to the device.',
+        body: 'Back online, the payment uploads to Atlas and flips from pending to confirmed. The checkmark is the cloud’s real answer, reflected back to the phone.',
       },
     ],
   },
@@ -74,18 +93,18 @@ export const WALKTHROUGH = {
     steps: [
       {
         icon: Zap,
-        title: 'Optimistic write',
-        body: 'The payment is recorded locally and shown right away, with no waiting on the network. The UI treats it as done the moment it’s durable on the device.',
+        title: 'Instant by design',
+        body: 'The payment shows as done the moment you tap, no network involved. The phone trusts its own copy first and settles up with the cloud afterwards.',
       },
       {
         icon: Clock,
         title: 'Queued while offline',
-        body: 'If you’re offline, it simply waits in the ObjectBox queue. As soon as a connection returns, it sends automatically — the presenter never has to retry by hand.',
+        body: 'No connection? The payment waits in a queue on the device and sends itself the moment one returns. Nothing to retry, nothing lost.',
       },
       {
         icon: CloudUpload,
         title: 'Synced to Atlas',
-        body: 'Once online, the Sync connector pushes the payment up to MongoDB Atlas in the background, where server-side triggers can pick it up for fraud checks and more.',
+        body: 'Once online, the queued payment pushes up to MongoDB Atlas in the background, where the bank side picks it up for fraud checks and reporting.',
       },
     ],
   },
@@ -95,13 +114,13 @@ export const WALKTHROUGH = {
     steps: [
       {
         icon: ArrowDownLeft,
-        title: 'A local intent',
-        body: 'The request is stored on the device first, so composing it works with no signal. It behaves exactly like any other locally-first write.',
+        title: 'Composed anywhere',
+        body: 'The request saves to the phone first, so you can write it with no signal at all. Safe locally, delivered later.',
       },
       {
         icon: Send,
-        title: 'Delivered on sync',
-        body: 'When both sides are online, Atlas fans the request out to the recipient. The document model makes it easy to attach notes, splits, or context along the way.',
+        title: 'Delivered through the cloud',
+        body: 'When both people are online, the request travels through Atlas to the other wallet, carrying its note and context along as one flexible document.',
       },
     ],
   },
@@ -110,8 +129,8 @@ export const WALKTHROUGH = {
     steps: [
       {
         icon: Search,
-        title: 'Search that works offline',
-        body: 'Contacts and notes are searchable with Atlas Vector Search when online, and with on-device vectors when offline. The same natural query works in either mode.',
+        title: 'Search by meaning, even offline',
+        body: 'Search payments by what they were about, like "coffee", even when the words are not exact. Atlas Vector Search matches online; the phone matches offline.',
       },
     ],
   },
@@ -120,13 +139,13 @@ export const WALKTHROUGH = {
     steps: [
       {
         icon: Waypoints,
-        title: 'LangGraph routing',
-        body: 'Your natural-language request is routed by a LangGraph agent to the right tool for the job — sending, requesting, splitting, or answering a spending question.',
+        title: 'An assistant that checks, never guesses',
+        body: 'Ask in plain words and LangGraph routes it to the right tool: balance, spending, or a payment draft. It only answers from real data, never a guess.',
       },
       {
         icon: Cpu,
-        title: 'Online vs offline tools',
-        body: 'Online, the agent calls MCP tools backed by Atlas. Offline, it falls back to local tools and on-device vectors, so the assistant keeps working with no connection.',
+        title: 'AI that stays on the machine',
+        body: 'The model runs locally, so money questions never leave the demo machine. Its tools read Atlas online and the phone’s copy offline. It works either way.',
       },
     ],
   },

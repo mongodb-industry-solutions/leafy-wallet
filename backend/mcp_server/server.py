@@ -6,7 +6,7 @@ from services import requests as requests_service
 from services import transactions as transactions_service
 
 # Read-only over Atlas. Balances and transfers live in Leafy Pay, which this service holds no
-# credentials for — a tool that "sends money" here could only write a record, not move any.
+# credentials for - a tool that "sends money" here could only write a record, not move any.
 mcp = FastMCP("leafy-wallet")
 
 
@@ -15,7 +15,7 @@ async def _search_transactions_tool(q: str, owner_party_ref: str, limit: int = 1
     """Semantically search the user's past transactions by meaning, not exact text match.
 
     Use for spending questions like "how much did I spend on restaurants" or
-    "find the coffee shop payment" — this searches transaction notes by meaning,
+    "find the coffee shop payment" - this searches transaction notes by meaning,
     so it doesn't need the exact words used in the note.
     """
     return await transactions_service.search_transactions(get_db(), q, owner_party_ref, limit)
@@ -36,7 +36,7 @@ def _get_spending_by_contact_tool(owner_party_ref: str, direction: str = "sent")
     """Total amount the user sent to (or received from) each contact, largest first.
 
     Use for aggregate questions like "where did my money go", "who do I send the most money to",
-    or "how much have I sent Luis in total". Returns the totals already computed — prefer it over
+    or "how much have I sent Luis in total". Returns the totals already computed - prefer it over
     listing transactions and adding them up. Pass direction="received" for money coming in.
     """
     db = get_db()
