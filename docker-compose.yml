@@ -98,9 +98,11 @@ services:
       # browser-facing, so they must match what Leafy Pay has registered.
       - BACKEND_URL=http://backend:8000
       - LOCAL_STORE_URL=http://leafy-local-store:8090
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       - backend
       - leafy-local-store
+      - ollama
     restart: always
     container_name: leafy-wallet-frontend
 
