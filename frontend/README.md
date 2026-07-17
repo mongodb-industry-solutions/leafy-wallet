@@ -39,7 +39,7 @@ The AI chat is a single streaming route:
 > _Intended diagram: browser to POST /api/chat to LangGraph graph to Ollama, with the NDJSON events (token, draft, chart, error) flowing back to the browser as they are produced._
 
 - `POST /api/chat` streams NDJSON events: `token` (reply text), `draft` (a payment card to confirm), `chart` (a spending breakdown), and `error`.
-- The LangGraph graph and its wallet tools live in `src/lib/ai/`; tools answer from the same Server Actions the UI uses.
+- The LangGraph graph and its wallet tools live in `src/lib/ai/`. Online, the read tools call the backend's MCP server (`/mcp`); offline they read the on-device store; balance and drafting stay native.
 
 ## Tech Stack
 
@@ -72,7 +72,7 @@ src/
     └── walkthrough.js           # Behind-the-scenes narration per screen
 ```
 
-Key conventions (see [CLAUDE.md](../CLAUDE.md) for the full guide):
+Key conventions:
 
 - App components each get their own folder with colocated hooks; `ui/` is flat.
 - Server Actions over API Routes for internal data operations. API Routes exist only where a real HTTP endpoint is required (OAuth callbacks, the streaming chat route).
@@ -89,31 +89,9 @@ The UI depends on the backend services, which must be running to enable full fun
 - Ollama (Port **11434**)
   - *Needed for the Leafy assistant and semantic search embeddings.*
 
-## Run it Locally
+## Running
 
-1. Navigate to the `/frontend` folder.
-2. Install dependencies by running:
-```bash
-npm install
-```
-3. Start the frontend development server with:
-```bash
-npm run dev
-```
-4. The frontend will now be accessible at http://localhost:3000 by default.
-
-## Run with Docker
-
-Make sure to run this on the root directory.
-
-1. To run with Docker use the following command:
-```
-make build
-```
-2. To delete the containers and images run:
-```
-make clean
-```
+The whole demo runs with Docker from the repository root. See [Run with Docker](../README.md#run-with-docker) in the main README.
 
 ## Common errors
 

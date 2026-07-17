@@ -22,22 +22,6 @@ class WalletContactCreate(BaseModel):
     counterpartyLookupDigest: str | None = None
 
 
-class WalletContactUpdate(BaseModel):
-    """Inbound payload for PATCH /wallet-contacts/{id}.
-
-    Every field is optional so the client can send only what changed;
-    `exclude_unset=True` in the router turns that into a partial `$set`.
-    `ownerPartyRef`/`counterpartyArrangementReference` are deliberately
-    absent - they identify which beneficiary this contact caches, so
-    changing them would mean a different contact, not an edit of this one.
-    """
-
-    counterpartyLabel: str | None = None
-    counterpartyLookupType: Literal["phone", "email"] | None = None
-    counterpartyLookupHint: str | None = None
-    counterpartyLookupDigest: str | None = None
-
-
 class WalletContactOut(BaseModel):
     """Outbound shape returned to the client: the full stored document,
     including the server-managed fields that never appear in `Create`/`Update`.

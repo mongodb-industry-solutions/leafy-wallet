@@ -145,7 +145,7 @@ export const WALKTHROUGH = {
       {
         icon: Cpu,
         title: 'AI that stays on the machine',
-        body: 'The model runs locally, so money questions never leave the demo machine. Its tools read Atlas online and the phone’s copy offline. It works either way.',
+        body: 'The model runs locally, so money questions never leave the demo machine. Online, its tools call the MongoDB MCP server over Atlas; offline they read the phone’s copy.',
       },
     ],
   },

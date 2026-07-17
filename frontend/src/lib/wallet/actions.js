@@ -15,6 +15,7 @@ import {
   createRequestDoc,
   createTransactionEnrichment,
   deleteContactEnrichment,
+  deleteTransactionEnrichment,
   listContactEnrichment,
   listIncomingRequests,
   listOutgoingRequests,
@@ -119,7 +120,6 @@ function toContactView(b) {
     id: b.reference,
     reference: b.reference,
     name: b.label,
-    lookupType: b.lookupType,
     lookupHint: b.lookupHint,
     ...avatarFor(b.reference ?? b.label),
   }
@@ -518,6 +518,51 @@ export async function replayPendingSends() {
     }
   }
   return { replayed, failed, references }
+}
+
+const LOCAL_REFERENCE_PREFIX = 'local-'
+
+/**
+ * Converge the enrichment stores to Leafy Pay for the signed-in user. Leafy Pay is the source
+ * of truth for money and beneficiaries, so Atlas rows whose transfer or beneficiary no longer
+ * exists there are orphans and get pruned; the deletions sync down to the device copy. Queued
+ * offline sends don't exist in Leafy Pay yet and are never touched.
+ * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number}>}
+ */
+export async function reconcileWithLeafyPay() {
+  const owner = await ownerRef()
+  if (!owner) return { ok: false }
+  try {
+    const [transfers, beneficiaries, txDocs, contactDocs] = await Promise.all([
+      listTransactions(),
+      listBeneficiaries(),
+      listTransactionEnrichment(owner).catch(() => []),
+      listContactEnrichment(owner).catch(() => []),
+    ])
+    const transferRefs = new Set(transfers.map((t) => t.reference))
+    const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
+
+    const orphanTransactions = (txDocs ?? []).filter(
+      (d) =>
+        !String(d.leafyPayTransferReference ?? '').startsWith(LOCAL_REFERENCE_PREFIX) &&
+        !transferRefs.has(d.leafyPayTransferReference),
+    )
+    const orphanContacts = (contactDocs ?? []).filter(
+      (d) => !beneficiaryRefs.has(d.counterpartyArrangementReference),
+    )
+
+    await Promise.all([
+      ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
+      ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
+    ])
+    return {
+      ok: true,
+      prunedTransactions: orphanTransactions.length,
+      prunedContacts: orphanContacts.length,
+    }
+  } catch {
+    return { ok: false }
+  }
 }
 
 /**

@@ -16,12 +16,6 @@ class ChatCreate(BaseModel):
     title: str
 
 
-class ChatUpdate(BaseModel):
-    """Inbound payload for PATCH /chats/{id}: rename a conversation."""
-
-    title: str | None = None
-
-
 class ChatOut(BaseModel):
     """Outbound shape returned to the client: the full stored document.
 

@@ -8,6 +8,7 @@ import {
   getTransactions,
   getTransferStatus,
   markTransferSettled,
+  reconcileWithLeafyPay,
   replayPendingSends,
 } from '@/lib/wallet/actions'
 
@@ -147,12 +148,17 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     [refresh],
   )
 
-  // Initial load, once per mount (i.e. once per login).
+  // Initial load, once per mount (i.e. once per login). When online, also converge the
+  // enrichment stores to Leafy Pay and re-read whatever the reconcile pruned.
   const hasLoaded = useRef(false)
   useEffect(() => {
     if (hasLoaded.current) return
     hasLoaded.current = true
     refresh()
+    if (!isOnlineRef.current) return
+    reconcileWithLeafyPay().then((result) => {
+      if (result?.prunedTransactions || result?.prunedContacts) refresh(['contacts', 'transactions'])
+    })
   }, [refresh])
 
   // Both directions re-read, since the source changes. Reconnecting also replays queued sends  - 

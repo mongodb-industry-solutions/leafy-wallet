@@ -76,14 +76,6 @@ async def spending_summary(
     return spending_by_contact_service(db, ownerPartyRef, direction)
 
 
-@router.get("/{transaction_id}", response_model=WalletTransactionOut)
-async def get_transaction(transaction_id: str, db: MongoDBConnector = Depends(get_db)):
-    results = db.find(COLLECTION, {"_id": parse_object_id(transaction_id)})
-    if not results:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return with_str_id(results[0])
-
-
 @router.patch("/{transaction_id}", response_model=WalletTransactionOut)
 async def update_transaction(
     transaction_id: str, payload: WalletTransactionUpdate, db: MongoDBConnector = Depends(get_db)
@@ -108,6 +100,8 @@ async def update_transaction(
 
 @router.delete("/{transaction_id}", status_code=204)
 async def delete_transaction(transaction_id: str, db: MongoDBConnector = Depends(get_db)):
+    """Used by the login-time reconcile: enrichment whose transfer no longer
+    exists in Leafy Pay is an orphan and gets pruned."""
     deleted = db.delete_one(COLLECTION, {"_id": parse_object_id(transaction_id)})
     if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")

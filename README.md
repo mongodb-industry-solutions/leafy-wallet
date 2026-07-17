@@ -52,8 +52,8 @@ Transfers and their enrichment records stay consistent even when several offline
 ### 3. **Atlas Vector Search, online and on-device**
 Transaction notes are embedded (via a local embedding model) and searchable by meaning: Atlas `$vectorSearch` when online, ObjectBox's HNSW index on the device when offline. The same natural query works in either mode.
 
-### 4. **A LangGraph agent over local AI**
-The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Aggregations like spending-by-contact are computed by the database, not by the model.
+### 4. **A LangGraph agent over local AI, through MCP**
+The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
 
 ## Tech Stack
 
@@ -75,9 +75,9 @@ The assistant routes each question to the right tool (balances, contacts, spendi
   - [Tailwind CSS](https://tailwindcss.com/) v4
   - [LeafyGreen UI](https://github.com/mongodb/leafygreen-ui) accents
 
-## Important: Leafy Pay is a hard dependency
+## Leafy Pay dependency
 
-**This demo does not work without a running Leafy Pay instance.** Leafy Pay is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
+**The demo needs a running Leafy Pay instance.** Leafy Pay is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
 
 To run the demo outside MongoDB:
 
@@ -155,13 +155,6 @@ The services and their ports:
 | leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
 | objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
 | ollama | 11434 | Local chat + embedding models |
-
-## Run it Locally
-
-1. Start the data services with Docker (`ollama`, `objectbox-sync-server`, `leafy-local-store`).
-2. Backend: from the repo root run `make uv_init && make uv_sync`, then `cd backend && uv run uvicorn main:app --reload`.
-3. Frontend: `cd frontend && npm install && npm run dev`.
-4. The app is served at http://localhost:3000.
 
 ## Repository Layout
 

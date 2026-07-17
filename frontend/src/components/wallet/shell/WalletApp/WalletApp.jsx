@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { APP_USERS } from '@/lib/wallet-data'
 import { WalletDataProvider } from '@/lib/wallet/WalletDataProvider'
 import { BottomNav } from '@/components/wallet/shell/BottomNav/BottomNav'
 import { HomeTab } from '@/components/wallet/home/HomeTab/HomeTab'
@@ -18,13 +17,12 @@ import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel
 /**
  * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
  * @param {object} props
- * @param {{name: string, email: string, seed: string, bg: string}} [props.user] - The authenticated identity (falls back to seed data).
+ * @param {{name: string, email: string, seed: string, bg: string, sub: string}} props.user - The authenticated identity.
  * @param {() => void} props.onSignOut
  * @param {(flow: string) => void} [props.onFlowChange] - Called whenever the active screen changes.
  * @param {boolean} [props.isOnline] - Whether the simulated connection is up.
  */
-export function WalletApp({ user: userProp, onSignOut, onFlowChange, isOnline = true }) {
-  const user = userProp ?? APP_USERS[0]
+export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
   const [tab, setTab] = useState('home')
   const [detail, setDetail] = useState(null)
   const [sendContact, setSendContact] = useState(null)

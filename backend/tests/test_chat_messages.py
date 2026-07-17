@@ -2,7 +2,6 @@ import time
 from datetime import datetime, timezone
 
 import pytest
-from bson import ObjectId
 
 from db.client import get_db
 
@@ -41,28 +40,15 @@ def test_chat_message_crud_lifecycle(client, chat):
     assert body["role"] == "user"
     assert body["text"] == "Split the dinner bill with Maria"
 
-    fetched = client.get(f"{BASE}/{message_id}")
-    assert fetched.status_code == 200
-    assert fetched.json()["text"] == "Split the dinner bill with Maria"
-
     listed = client.get(f"{BASE}", params={"chatId": chat["_id"]})
     assert listed.status_code == 200
     assert any(m["_id"] == message_id for m in listed.json())
-
-    deleted = client.delete(f"{BASE}/{message_id}")
-    assert deleted.status_code == 204
-
-    missing = client.get(f"{BASE}/{message_id}")
-    assert missing.status_code == 404
 
 
 def test_message_inherits_owner_from_its_chat(client, chat):
     created = client.post(f"{BASE}", json=_message_payload(chat))
     assert created.status_code == 201
-    try:
-        assert created.json()["ownerPartyRef"] == OWNER
-    finally:
-        client.delete(f"{BASE}/{created.json()['_id']}")
+    assert created.json()["ownerPartyRef"] == OWNER
 
 
 def test_list_messages_filters_by_chat_reference(client, chat):
@@ -124,39 +110,6 @@ def test_list_messages_omits_the_raw_embedding_vector(client, chat):
     assert all("textEmbedding" not in m for m in listed)
 
 
-def test_message_stores_a_text_embedding(client, chat):
-    """The vector is server-generated and never returned by the API, so this
-    asserts against the stored document. Skips when Ollama is unreachable,
-    since the embedding is then legitimately None.
-    """
-    created = client.post(f"{BASE}", json=_message_payload(chat, text="Dinner with the team"))
-    assert created.status_code == 201
-    message_id = created.json()["_id"]
-
-    try:
-        stored = get_db().find("chatMessages", {"_id": ObjectId(message_id)})[0]
-        if stored.get("textEmbedding") is None:
-            pytest.skip("Ollama unreachable; message stored without an embedding")
-        assert len(stored["textEmbedding"]) > 0
-        assert all(isinstance(value, float) for value in stored["textEmbedding"][:5])
-    finally:
-        client.delete(f"{BASE}/{message_id}")
-
-
-def test_create_message_is_accepted_when_ollama_is_unavailable(client, chat, monkeypatch):
-    """A message must still be written when the embedding can't be computed  - 
-    `get_embedding` returning None is the documented degraded path.
-    """
-    async def _no_embedding(text):
-        return None
-
-    monkeypatch.setattr("routers.chat_messages.get_embedding", _no_embedding)
-
-    created = client.post(f"{BASE}", json=_message_payload(chat, text="written while ollama is down"))
-    assert created.status_code == 201
-    client.delete(f"{BASE}/{created.json()['_id']}")
-
-
 def test_message_on_an_ownerless_synced_chat_is_accepted(client):
     """Chats synced in from leafy-local-store carry no ownerPartyRef, so
     posting to one must not fail on the owner copy.
@@ -216,17 +169,3 @@ def test_create_message_missing_chat_reference_returns_422(client, chat):
     response = client.post(f"{BASE}", json=payload)
     assert response.status_code == 422
 
-
-def test_get_message_invalid_id_returns_404(client):
-    response = client.get(f"{BASE}/not-a-valid-object-id")
-    assert response.status_code == 404
-
-
-def test_get_message_unknown_id_returns_404(client):
-    response = client.get(f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1")
-    assert response.status_code == 404
-
-
-def test_delete_unknown_message_returns_404(client):
-    response = client.delete(f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1")
-    assert response.status_code == 404

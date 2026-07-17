@@ -29,7 +29,7 @@ export async function POST(request) {
 
   const drafts = []
   const charts = []
-  const graph = buildGraph(isOnline, drafts, charts)
+  const graph = await buildGraph(isOnline, drafts, charts)
   const messages = [...history.map(toLangChain), new HumanMessage(message)]
 
   const encoder = new TextEncoder()

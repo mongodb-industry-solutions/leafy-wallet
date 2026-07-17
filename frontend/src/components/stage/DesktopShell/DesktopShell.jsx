@@ -51,7 +51,7 @@ export function DesktopShell() {
               <h2 className="text-base font-bold text-foreground">Under the hood</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              The tech behind the {WALKTHROUGH[activeFlow]?.label ?? 'Home'} screen.
+              The tech behind the {WALKTHROUGH[activeFlow].label} screen.
             </p>
 
             <div className="mt-5">

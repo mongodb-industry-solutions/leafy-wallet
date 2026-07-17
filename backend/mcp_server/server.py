@@ -1,13 +1,18 @@
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from db.client import get_db
 from services import contacts as contacts_service
-from services import requests as requests_service
 from services import transactions as transactions_service
 
 # Read-only over Atlas. Balances and transfers live in Leafy Pay, which this service holds no
 # credentials for - a tool that "sends money" here could only write a record, not move any.
-mcp = FastMCP("leafy-wallet")
+# DNS-rebinding protection is off: the default allows only localhost hosts, and inside the
+# compose network this service is reached as backend:8000.
+mcp = FastMCP(
+    "leafy-wallet",
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
 
 
 @mcp.tool(name="search_transactions")
@@ -60,13 +65,3 @@ def _list_transactions_tool(
     "show my payments"). For questions about what a payment was *for*, use search_transactions.
     """
     return transactions_service.list_transactions(get_db(), owner_party_ref, direction, limit=limit)
-
-
-@mcp.tool(name="get_requests")
-def _get_requests_tool(owner_party_ref: str, status: str | None = None) -> list[dict]:
-    """List payment requests the user has raised, optionally filtered by status.
-
-    Use for questions like "who owes me money" or "what have I asked people to pay".
-    Statuses: pending, paid, declined, cancelled.
-    """
-    return requests_service.list_requests_for_requester(get_db(), owner_party_ref, status)

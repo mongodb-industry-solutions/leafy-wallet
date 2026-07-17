@@ -12,16 +12,6 @@ async function call(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
-/** Whether the on-device store is reachable. */
-export async function isLocalStoreUp() {
-  try {
-    await call('GET', '/health')
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Cached account balances. Local-only: this entity never syncs, so `cacheAccount` populates it. */
 export async function listLocalAccounts() {
   return call('GET', '/accounts')

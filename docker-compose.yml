@@ -23,7 +23,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:3b && ollama run qwen2.5:3b 'Reply with just: OK'"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:3b"]
     restart: "no"
   objectbox-sync-server:
     image: objectboxio/sync-server-trial

@@ -84,6 +84,11 @@ export async function createTransactionEnrichment(doc) {
   return backendPost('/api/v1/wallet-transactions', doc)
 }
 
+/** Delete an enrichment doc whose transfer no longer exists in Leafy Pay. */
+export async function deleteTransactionEnrichment(id) {
+  return backendDelete(`/api/v1/wallet-transactions/${encodeURIComponent(id)}`)
+}
+
 /**
  * The Atlas `walletContacts` replica for an owner (the offline copy of their saved beneficiaries).
  * @param {string} owner - The OAuth `sub` (ownerPartyRef).

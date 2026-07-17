@@ -46,14 +46,6 @@ async def list_requests(
     return [with_str_id(doc) for doc in db.find(COLLECTION, query)]
 
 
-@router.get("/{request_id}", response_model=WalletRequestOut)
-async def get_request(request_id: str, db: MongoDBConnector = Depends(get_db)):
-    results = db.find(COLLECTION, {"_id": parse_object_id(request_id)})
-    if not results:
-        raise HTTPException(status_code=404, detail="Request not found")
-    return with_str_id(results[0])
-
-
 @router.patch("/{request_id}", response_model=WalletRequestOut)
 async def update_request(
     request_id: str, payload: WalletRequestUpdate, db: MongoDBConnector = Depends(get_db)
@@ -76,10 +68,3 @@ async def update_request(
 
     db.update_one(COLLECTION, {"_id": object_id}, {"$set": updates})
     return with_str_id(db.find(COLLECTION, {"_id": object_id})[0])
-
-
-@router.delete("/{request_id}", status_code=204)
-async def delete_request(request_id: str, db: MongoDBConnector = Depends(get_db)):
-    deleted = db.delete_one(COLLECTION, {"_id": parse_object_id(request_id)})
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Request not found")

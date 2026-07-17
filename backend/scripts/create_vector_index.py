@@ -1,5 +1,4 @@
-"""Provision the Atlas Vector Search indexes backing GET /wallet-transactions/search
-and GET /chat-messages/search.
+"""Provision the Atlas Vector Search index backing GET /wallet-transactions/search.
 
 Idempotent: safe to re-run. Requires an Atlas cluster tier that supports
 Vector Search (M10+ dedicated, or Search Nodes/Serverless).
@@ -15,11 +14,10 @@ from pymongo.operations import SearchIndexModel
 from db.mdb import MongoDBConnector
 from services.ollama import get_embedding
 
-# Each entry is (collection, index name, embedded field). Both indexes filter
-# on `ownerPartyRef` so a search can be scoped to a single user.
+# (collection, index name, embedded field). The index filters on
+# `ownerPartyRef` so a search can be scoped to a single user.
 INDEX_SPECS = [
     ("walletTransactions", "noteEmbedding_vector_index", "noteEmbedding"),
-    ("chatMessages", "textEmbedding_vector_index", "textEmbedding"),
 ]
 
 

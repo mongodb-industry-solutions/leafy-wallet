@@ -77,7 +77,6 @@ def test_lists_every_tool():
         "get_contacts",
         "get_spending_by_contact",
         "list_transactions",
-        "get_requests",
     }
 
 

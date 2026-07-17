@@ -30,18 +30,18 @@ const OFFLINE_NOTE = `The device is offline. You are reading a local copy that s
 
 /**
  * The assistant's graph: the model either answers or calls a tool, and loops until it answers.
+ * Async because the online tool set is loaded from the backend's MCP server.
  * @param {boolean} isOnline - Passed to the tools, which pick their own source from it.
  * @param {object[]} [drafts] - Collects any payment the model drafts for confirmation.
  * @param {object[]} [charts] - Collects any spending breakdown a tool produces for inline display.
  */
-export function buildGraph(isOnline, drafts = [], charts = []) {
-  const tools = walletTools(isOnline, drafts, charts)
+export async function buildGraph(isOnline, drafts = [], charts = []) {
+  const tools = await walletTools(isOnline, drafts, charts)
   const model = new ChatOllama({
     baseUrl: OLLAMA_URL,
     model: CHAT_MODEL,
     numCtx: NUM_CTX,
     temperature: 0,
-    keepAlive: -1, // Match the server's OLLAMA_KEEP_ALIVE so a request never schedules an unload.
   }).bindTools(tools)
 
   async function callModel(state) {

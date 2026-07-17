@@ -14,6 +14,7 @@
     "@dicebear/open-peeps": "^9.4.2",
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
+    "@langchain/mcp-adapters": "^1.1.3",
     "@langchain/ollama": "^1.3.0",
     "@leafygreen-ui/icon": "^14.9.0",
     "@leafygreen-ui/logo": "^11.1.0",

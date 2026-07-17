@@ -14,7 +14,7 @@ const AUTO_ADVANCE_MS = 10000
  * @param {string} props.flow - Key into WALKTHROUGH for the active wallet screen.
  */
 export function Walkthrough({ flow }) {
-  const { steps } = WALKTHROUGH[flow] ?? WALKTHROUGH.home
+  const { steps } = WALKTHROUGH[flow]
   const [step, setStep] = useState(0)
   const count = steps.length
 

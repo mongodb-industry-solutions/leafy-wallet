@@ -13,8 +13,9 @@
 3. **Spending summaries**
    - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
 
-4. **Read-only MCP server**
-   - A mounted MCP app exposes the collections to AI agents as read-only tools.
+4. **Read-only 
+server**
+   - A mounted MCP app exposes the collections as read-only tools. The wallet's own assistant calls it for online reads, and any external MCP client can connect to the same endpoint.
 
 ## Where Does MongoDB Shine?
 
@@ -53,31 +54,9 @@ DATABASE_NAME="<your-database-name>"
 OLLAMA_BASE_URL="http://localhost:11434"
 ```
 
-## Run it Locally
+## Running
 
-1. From the repository root, install uv and sync dependencies:
-```bash
-make uv_init
-make uv_sync
-```
-2. Start the API:
-```bash
-cd backend && uv run uvicorn main:app --reload --port 8000
-```
-3. Interactive API docs are served at http://localhost:8000/docs.
-
-## Run with Docker
-
-Make sure to run this on the root directory.
-
-1. To run with Docker use the following command:
-```
-make build
-```
-2. To delete the containers and images run:
-```
-make clean
-```
+The whole demo runs with Docker from the repository root. See [Run with Docker](../README.md#run-with-docker) in the main README. Once up, interactive API docs are served at http://localhost:8000/docs.
 
 ## Testing
 
