@@ -2,7 +2,6 @@
 
 import { Peep } from '@/components/common/Peep/Peep'
 import { DEMO_USERS } from '@/lib/demo-users'
-import { avatarFor } from '@/lib/wallet/format'
 
 const SSO_PROVIDER = 'Continue with SSO'
 const SSO_LOGIN_URL = '/api/auth/login'
@@ -30,7 +29,7 @@ export function LoginScreen() {
         {/* One profile card per demo user. */}
         <div className="flex justify-center gap-3">
           {DEMO_USERS.map((user) => {
-            const { seed, bg } = avatarFor(user.email)
+            const { seed, bg } = user
             return (
               <button
                 key={user.email}
