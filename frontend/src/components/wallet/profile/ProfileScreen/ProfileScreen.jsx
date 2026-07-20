@@ -36,21 +36,6 @@ function Toggle({ checked, onChange, label, disabled }) {
   )
 }
 
-/** A tappable row inside a settings card (label left, chevron right). */
-function LinkRow({ label, sub }) {
-  return (
-    <button className="flex w-full items-center gap-3 py-3.5 text-left">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        {sub && <p className="truncate text-xs text-muted-foreground">{sub}</p>}
-      </div>
-      <span className="text-muted-foreground">
-        <Icon glyph="ChevronRight" size={18} />
-      </span>
-    </button>
-  )
-}
-
 /** Uppercase muted section heading above a card, with an optional leading icon. */
 function SectionLabel({ icon, children }) {
   return (
@@ -62,7 +47,7 @@ function SectionLabel({ icon, children }) {
 }
 
 /**
- * Full-screen Profile view: SSO identity, masked linked Leafy Pay account, passwordless-login control, and decorative security/legal links.
+ * Full-screen Profile view: SSO identity, masked linked Leafy Pay account, and the passwordless-login control.
  * @param {object} props
  * @param {{name: string, email: string, seed: string, bg: string, sub: string}} props.user
  * @param {() => void} props.onClose
@@ -129,16 +114,6 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
                 label="Enable passwordless login"
                 disabled={isBusy}
               />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <SectionLabel>Security &amp; legal</SectionLabel>
-          <div className="rounded-2xl border border-border bg-card px-4 shadow-sm">
-            <div className="divide-y divide-border">
-              <LinkRow label="Privacy Policy" />
-              <LinkRow label="Terms of Service" />
             </div>
           </div>
         </div>

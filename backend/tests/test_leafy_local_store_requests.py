@@ -1,6 +1,6 @@
 """Integration tests for leafy-local-store's payment-request HTTP API, run
 against a real running instance (docker compose up -d ollama
-objectbox-sync-server leafy-local-store). Not part of CI — these are for
+objectbox-sync-server leafy-local-store). Not part of CI - these are for
 local regression-checking only, and skip cleanly if the service isn't
 reachable.
 

@@ -15,23 +15,38 @@ import {
   createRequestDoc,
   createTransactionEnrichment,
   deleteContactEnrichment,
+  deleteTransactionEnrichment,
   listContactEnrichment,
   listIncomingRequests,
   listOutgoingRequests,
+  createChatDoc,
+  createChatMessageDoc,
+  deleteChatDoc,
+  listChatDocs,
+  listChatMessageDocs,
   listTransactionEnrichment,
   resolveRequestDoc,
+  searchTransactionEnrichment,
+  spendingByContactEnrichment,
   updateTransactionEnrichment,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
+  createLocalChat,
+  createLocalChatMessage,
   createLocalRequest,
+  deleteLocalChat,
   deleteLocalTransaction,
   listLocalAccounts,
+  listLocalChatMessages,
+  listLocalChats,
   listLocalContacts,
   listLocalRequests,
   listLocalTransactions,
+  localSpendingByContact,
   queueLocalSend,
   resolveLocalRequest,
+  searchLocalTransactions,
 } from '@/lib/local/LocalStoreClient'
 import { lookupDigest } from './digest'
 import { avatarFor, formatDate, formatMoney } from './format'
@@ -99,18 +114,13 @@ export async function getAccounts(isOnline = true) {
   return accounts.map(toAccountView)
 }
 
-/**
- * Shape a Leafy Pay beneficiary into the UI contact used across the app. `canRequest` is false
- * without a digest: phone contacts, and contacts backfilled from Leafy Pay whose email we never saw.
- */
+/** Shape a Leafy Pay beneficiary into the UI contact used across the app. */
 function toContactView(b) {
   return {
     id: b.reference,
     reference: b.reference,
     name: b.label,
-    lookupType: b.lookupType,
     lookupHint: b.lookupHint,
-    canRequest: Boolean(b.lookupDigest),
     ...avatarFor(b.reference ?? b.label),
   }
 }
@@ -182,30 +192,29 @@ export async function getContacts(isOnline = true) {
 }
 
 /**
- * Add a contact: resolve a registered Leafy Pay email/phone into a saved beneficiary (source of truth),
+ * Add a contact: resolve a registered Leafy Pay email into a saved beneficiary (source of truth),
  * then mirror it to the Atlas walletContacts replica. Fails cleanly if no registered user/merchant
- * matches the given email/phone.
+ * matches the given email.
  *
  * The only moment we hold the address, so the blind index is derived here and the address discarded.
- * @param {{lookupType: 'email'|'phone', lookupValue: string, label?: string}} input
+ * @param {{lookupValue: string, label?: string}} input
  * @returns {Promise<{ok: boolean, contact?: object, error?: string}>}
  */
-export async function addContact({ lookupType, lookupValue, label = '' } = {}) {
+export async function addContact({ lookupValue, label = '' } = {}) {
   const value = String(lookupValue ?? '').trim()
-  if (!value) return { ok: false, error: 'Enter an email or phone number' }
+  if (!value) return { ok: false, error: 'Enter an email' }
 
   let result
   try {
-    result = await createBeneficiary({ lookupType, lookupValue: value, label: label.trim() })
+    result = await createBeneficiary({ lookupType: 'email', lookupValue: value, label: label.trim() })
   } catch {
     return { ok: false, error: 'Could not add contact. Please try again.' }
   }
   if (!result.found) {
-    const kind = lookupType === 'phone' ? 'phone number' : 'email'
-    return { ok: false, error: `No Leafy Pay user is registered with that ${kind}.` }
+    return { ok: false, error: 'No Leafy Pay user is registered with that email.' }
   }
   const beneficiary = result.beneficiary
-  const digest = lookupType === 'email' ? lookupDigest(value) : null
+  const digest = lookupDigest(value)
 
   const owner = await ownerRef()
   if (owner) {
@@ -219,7 +228,7 @@ export async function addContact({ lookupType, lookupValue, label = '' } = {}) {
         counterpartyLookupDigest: digest,
       })
     } catch {
-      return { ok: false, error: 'Could not save the contact — is the backend running?' }
+      return { ok: false, error: 'Could not save the contact - is the backend running?' }
     }
   }
 
@@ -329,7 +338,7 @@ export async function getTransactions(isOnline = true) {
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
 
   // Leafy Pay owns settlement, so any enrichment still marked pending against a completed transfer
-  // is stale — settling can outlast the send flow's watcher.
+  // is stale - settling can outlast the send flow's watcher.
   await Promise.all(
     transactions
       .filter((t) => {
@@ -429,7 +438,7 @@ export async function sendMoney({
         leafyPayStatus: transfer.status === 'completed' ? SETTLED_STATUS : 'pending',
       })
     } catch {
-      return { ok: false, error: 'Payment sent, but saving it failed — is the backend running?' }
+      return { ok: false, error: 'Payment sent, but saving it failed - is the backend running?' }
     }
   }
 
@@ -474,7 +483,7 @@ export async function markTransferSettled(reference, status) {
 }
 
 /**
- * Send each `local_pending` transaction for real, then drop the local record — its deletion
+ * Send each `local_pending` transaction for real, then drop the local record - its deletion
  * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
  * record for the next reconnect. Returns the new references, which the caller watches to settlement.
  * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
@@ -509,6 +518,138 @@ export async function replayPendingSends() {
     }
   }
   return { replayed, failed, references }
+}
+
+const toEnrichmentStatus = (status) => {
+  if (status === 'completed') return SETTLED_STATUS
+  if (status === 'failed' || status === 'exception') return status
+  return 'pending'
+}
+
+/**
+ * Converge the enrichment stores to Leafy Pay for the signed-in user. Leafy Pay is the source
+ * of truth for money and beneficiaries: Atlas rows whose transfer or beneficiary no longer
+ * exists there are orphans and get pruned, and transfers Leafy Pay has that the app never saw
+ * (made elsewhere, or received) are adopted with a bare enrichment doc so they exist offline
+ * too. Both directions sync down to the device copy. Queued offline sends don't exist in
+ * Leafy Pay yet and are never touched.
+ * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number, adoptedTransactions?: number}>}
+ */
+export async function reconcileWithLeafyPay() {
+  const owner = await ownerRef()
+  if (!owner) return { ok: false }
+  try {
+    const [transfers, beneficiaries, txDocs, contactDocs] = await Promise.all([
+      listTransactions(),
+      listBeneficiaries(),
+      listTransactionEnrichment(owner).catch(() => []),
+      listContactEnrichment(owner).catch(() => []),
+    ])
+    const transferRefs = new Set(transfers.map((t) => t.reference))
+    const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
+    const enrichedRefs = new Set((txDocs ?? []).map((d) => d.leafyPayTransferReference))
+
+    const orphanTransactions = (txDocs ?? []).filter(
+      (d) =>
+        !String(d.leafyPayTransferReference ?? '').startsWith(LOCAL_REFERENCE_PREFIX) &&
+        !transferRefs.has(d.leafyPayTransferReference),
+    )
+    const orphanContacts = (contactDocs ?? []).filter(
+      (d) => !beneficiaryRefs.has(d.counterpartyArrangementReference),
+    )
+    // Note stays empty on adoption: the transfer wasn't composed in this app, and Leafy Pay's
+    // own note is portal boilerplate, not something worth embedding.
+    const foreignTransfers = transfers.filter((t) => !enrichedRefs.has(t.reference))
+
+    await Promise.all([
+      ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
+      ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
+      ...foreignTransfers.map((t) =>
+        createTransactionEnrichment({
+          leafyPayTransferReference: t.reference,
+          ownerPartyRef: owner,
+          counterpartyArrangementReference: t.counterpartyReference ?? '',
+          amount: Math.abs(t.value),
+          currency: t.currency,
+          note: null,
+          direction: t.direction,
+          leafyPayStatus: toEnrichmentStatus(t.status),
+        }).catch(() => {}),
+      ),
+    ])
+    return {
+      ok: true,
+      prunedTransactions: orphanTransactions.length,
+      prunedContacts: orphanContacts.length,
+      adoptedTransactions: foreignTransfers.length,
+    }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Semantic search over the user's transaction notes, for the assistant.
+ * @param {string} q - Natural language, matched by meaning against the note.
+ * @param {boolean} [isOnline]
+ * @param {number} [limit]
+ * @returns {Promise<object[]>} Rows shaped like the Activity list.
+ */
+export async function searchTransactions(q, isOnline = true, limit = 10) {
+  const owner = await ownerRef()
+  if (!q?.trim() || !owner) return []
+
+  const [hits, contacts] = await Promise.all([
+    (isOnline
+      ? searchTransactionEnrichment({ q, owner, limit })
+      : searchLocalTransactions({ q, ownerPartyRef: owner, limit })
+    ).catch(() => []),
+    isOnline ? resolveContacts(owner) : localContacts(owner),
+  ])
+  const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
+
+  return (hits ?? []).map((t) => {
+    const status = t.leafyPayStatus === SETTLED_STATUS ? 'completed' : t.leafyPayStatus
+    return toTransactionRow({
+      reference: t.leafyPayTransferReference,
+      counterpartyRef: t.counterpartyArrangementReference,
+      contact: contactByRef.get(t.counterpartyArrangementReference),
+      isReceived: t.direction === 'received',
+      magnitude: Math.abs(t.amount),
+      currency: t.currency,
+      note: t.note,
+      createdAt: typeof t.createdAt === 'number' ? new Date(t.createdAt).toISOString() : t.createdAt,
+      status,
+      isPending: status !== 'completed',
+    })
+  })
+}
+
+/**
+ * Total sent to (or received from) each contact, largest first. The store does the arithmetic.
+ * @param {boolean} [isOnline]
+ * @param {'sent'|'received'} [direction]
+ * @returns {Promise<{contact: string, total: number, count: number, currency: string}[]>}
+ */
+export async function getSpendingByContact(isOnline = true, direction = 'sent') {
+  const owner = await ownerRef()
+  if (!owner) return []
+
+  const [rows, contacts] = await Promise.all([
+    (isOnline
+      ? spendingByContactEnrichment({ owner, direction })
+      : localSpendingByContact({ ownerPartyRef: owner, direction })
+    ).catch(() => []),
+    isOnline ? resolveContacts(owner) : localContacts(owner),
+  ])
+  const labelByRef = new Map(contacts.map((c) => [c.reference, c.label]))
+
+  return (rows ?? []).map((r) => ({
+    contact: labelByRef.get(r.counterpartyArrangementReference) || 'Leafy Pay user',
+    total: r.total,
+    count: r.count,
+    currency: r.currency,
+  }))
 }
 
 /**
@@ -575,7 +716,7 @@ export async function createRequest({ counterpartyArrangementReference, amount, 
   try {
     await createRequestDoc(request)
   } catch {
-    return { ok: false, error: 'Could not send the request — is the backend running?' }
+    return { ok: false, error: 'Could not send the request - is the backend running?' }
   }
   return { ok: true }
 }
@@ -612,13 +753,14 @@ export async function getRequests(isOnline = true) {
 
 /**
  * Pay a request addressed to the user: match the requester's blind index against the user's own
- * contacts, send the transfer, then mark the request paid. Online only — the requester must already
+ * contacts, send the transfer, then mark the request paid. Online only - the requester must already
  * be a saved contact, since Leafy Pay only accepts transfers against an arrangement the sender owns.
  * @param {string} reference - The `requestReference`.
  * @param {string} [fromAccountReference] - Source account; omit for the default.
+ * @param {string} [noteOverride] - Replaces the request's note on the transfer (edited at review).
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
-export async function payRequest(reference, fromAccountReference) {
+export async function payRequest(reference, fromAccountReference, noteOverride) {
   if (!reference) return { ok: false, error: 'Missing request' }
   const session = await getSession()
   if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
@@ -637,7 +779,7 @@ export async function payRequest(reference, fromAccountReference) {
     counterpartyArrangementReference: contact.reference,
     fromAccountReference,
     amount: request.amount,
-    note: request.note || '',
+    note: noteOverride ?? (request.note || ''),
   })
   if (!sent.ok) return sent
 
@@ -687,4 +829,106 @@ export async function resolveRequest(reference, status, isOnline = true) {
     return { ok: false, error: 'Could not update the request. Please try again.' }
   }
   return { ok: true }
+}
+
+/**
+ * The user's chats, newest first.
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{id: string, reference: string, title: string, updatedAt: string}[]>}
+ */
+export async function getChats(isOnline = true) {
+  const owner = await ownerRef()
+  if (!owner) return []
+  const chats = await (isOnline ? listChatDocs(owner) : listLocalChats(owner)).catch(() => [])
+  return (chats ?? [])
+    .map((c) => ({
+      id: c.chatReference,
+      reference: c.chatReference,
+      title: c.title,
+      updatedAt: typeof c.updatedAt === 'number' ? new Date(c.updatedAt).toISOString() : c.updatedAt,
+    }))
+    .sort((a, b) => new Date(b.updatedAt ?? 0) - new Date(a.updatedAt ?? 0))
+}
+
+/**
+ * Start a chat. Offline the reference is minted here - there's no server to mint one, and both
+ * stores key messages by it.
+ * @param {string} title
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{ok: boolean, chat?: object, error?: string}>}
+ */
+export async function createChat(title, isOnline = true) {
+  const owner = await ownerRef()
+  if (!owner) return { ok: false, error: 'You need to be signed in' }
+  try {
+    const chat = isOnline
+      ? await createChatDoc({ owner, title })
+      : await createLocalChat({ ownerPartyRef: owner, chatReference: randomUUID(), title })
+    return { ok: true, chat: { id: chat.chatReference, reference: chat.chatReference, title: chat.title } }
+  } catch {
+    return { ok: false, error: 'Could not start the chat.' }
+  }
+}
+
+/**
+ * A chat's messages, oldest first.
+ * @param {string} reference - The `chatReference`.
+ * @param {boolean} [isOnline]
+ */
+export async function getChatMessages(reference, isOnline = true) {
+  if (!reference) return []
+  const rows = await (isOnline ? listChatMessageDocs(reference) : listLocalChatMessages(reference)).catch(
+    () => [],
+  )
+  return (rows ?? []).map((m) => ({ id: String(m.id), role: m.role, type: 'text', text: m.text }))
+}
+
+/**
+ * Delete a chat and its messages from whichever store holds it: Atlas when online (the sync
+ * layer propagates to the device), the on-device store when offline (and up to Atlas on sync).
+ * @param {string} reference - The `chatReference`.
+ * @param {boolean} [isOnline]
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export async function deleteChat(reference, isOnline = true) {
+  if (!reference) return { ok: false, error: 'No chat given.' }
+  try {
+    if (isOnline) {
+      const owner = await ownerRef()
+      if (!owner) return { ok: false, error: 'You need to be signed in' }
+      const chats = await listChatDocs(owner)
+      const chat = (chats ?? []).find((c) => c.chatReference === reference)
+      if (!chat?.id) return { ok: false, error: 'Chat not found.' }
+      await deleteChatDoc(chat.id)
+    } else {
+      await deleteLocalChat(reference)
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not delete the chat.' }
+  }
+}
+
+/**
+ * Append a message to a chat.
+ * @param {string} reference - The `chatReference`.
+ * @param {{role: 'user'|'assistant', text: string}} message
+ * @param {boolean} [isOnline]
+ */
+export async function appendChatMessage(reference, { role, text }, isOnline = true) {
+  if (!reference || !text?.trim()) return { ok: false }
+  try {
+    if (isOnline) {
+      const owner = await ownerRef()
+      const chats = await listChatDocs(owner)
+      const chat = (chats ?? []).find((c) => c.chatReference === reference)
+      if (!chat?.id) return { ok: false }
+      await createChatMessageDoc({ chatId: chat.id, chatReference: reference, role, text })
+    } else {
+      await createLocalChatMessage(reference, { role, text })
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
 }

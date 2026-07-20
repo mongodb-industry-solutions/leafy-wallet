@@ -4,17 +4,17 @@ import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
-const AUTO_ADVANCE_MS = 6000
+const AUTO_ADVANCE_MS = 10000
 
 /**
- * "Under the hood" panel: cycles through the MongoDB-tech talking points for
- * the given wallet screen, auto-advancing every {@link AUTO_ADVANCE_MS} and
- * resetting whenever the active screen (`flow`) changes.
+ * "Under the hood" panel: cycles through the talking points for the given wallet
+ * screen, auto-advancing every {@link AUTO_ADVANCE_MS} and resetting whenever the
+ * active screen (`flow`) changes. Steps are switched by tapping the dots.
  * @param {object} props
  * @param {string} props.flow - Key into WALKTHROUGH for the active wallet screen.
  */
 export function Walkthrough({ flow }) {
-  const { steps } = WALKTHROUGH[flow] ?? WALKTHROUGH.home
+  const { steps } = WALKTHROUGH[flow]
   const [step, setStep] = useState(0)
   const count = steps.length
 
@@ -28,11 +28,12 @@ export function Walkthrough({ flow }) {
 
   const current = steps[Math.min(step, count - 1)]
   const Media = current.icon
+  const Visual = current.visual
   const go = (delta) => setStep((s) => (s + delta + count) % count)
 
   return (
     <>
-      <div className="h-[176px] overflow-hidden">
+      <div className="min-h-[132px] overflow-hidden">
         <h3 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
           {current.title}
         </h3>
@@ -41,9 +42,13 @@ export function Walkthrough({ flow }) {
         </p>
       </div>
 
-      {/* Illustration area, icon placeholder for a future image/animation. */}
-      <div className="grid h-32 place-items-center rounded-2xl bg-secondary/[0.06]">
-        {Media && <Media className="size-9 text-secondary" strokeWidth={1.5} />}
+      {/* Illustration area: a step's own visual when it has one, its icon otherwise. */}
+      <div className="mt-4 grid h-48 place-items-center overflow-hidden rounded-2xl bg-secondary/[0.06]">
+        {Visual ? (
+          <Visual />
+        ) : (
+          Media && <Media className="size-10 text-secondary" strokeWidth={1.5} />
+        )}
       </div>
 
       <div className="mt-6 flex items-center justify-center gap-2.5">
@@ -57,9 +62,9 @@ export function Walkthrough({ flow }) {
         </button>
 
         <div className="flex h-8 items-center gap-2 rounded-full bg-foreground/[0.06] px-3">
-          {steps.map((_, i) =>
+          {steps.map((s, i) =>
             i === step ? (
-              <span key={i} className="h-1.5 w-6 overflow-hidden rounded-full bg-secondary/25">
+              <span key={s.title} className="h-1.5 w-6 overflow-hidden rounded-full bg-secondary/25">
                 <span
                   key={step}
                   className="block h-full rounded-full bg-secondary"
@@ -71,7 +76,12 @@ export function Walkthrough({ flow }) {
                 />
               </span>
             ) : (
-              <span key={i} className="size-1.5 rounded-full bg-muted-foreground/40" />
+              <button
+                key={s.title}
+                aria-label={`Step ${i + 1}`}
+                onClick={() => setStep(i)}
+                className="size-1.5 rounded-full bg-muted-foreground/40 transition-colors hover:bg-muted-foreground/70"
+              />
             ),
           )}
         </div>

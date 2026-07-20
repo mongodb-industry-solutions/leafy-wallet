@@ -18,31 +18,17 @@ def test_contact_crud_lifecycle(client):
     assert body["createdAt"] == body["updatedAt"]
 
     try:
-        fetched = client.get(f"{BASE}/{contact_id}")
-        assert fetched.status_code == 200
-        assert fetched.json()["counterpartyLabel"] == "Jane Doe"
-
         listed = client.get(
             f"{BASE}", params={"ownerPartyRef": CONTACT_PAYLOAD["ownerPartyRef"]}
         )
         assert listed.status_code == 200
         assert any(c["_id"] == contact_id for c in listed.json())
-
-        updated = client.patch(
-            f"{BASE}/{contact_id}", json={"counterpartyLabel": "Jane Updated"}
-        )
-        assert updated.status_code == 200
-        assert updated.json()["counterpartyLabel"] == "Jane Updated"
-        assert updated.json()["updatedAt"] != body["updatedAt"]
-
-        empty_patch = client.patch(f"{BASE}/{contact_id}", json={})
-        assert empty_patch.status_code == 400
     finally:
         deleted = client.delete(f"{BASE}/{contact_id}")
         assert deleted.status_code == 204
 
-    missing = client.get(f"{BASE}/{contact_id}")
-    assert missing.status_code == 404
+    gone = client.delete(f"{BASE}/{contact_id}")
+    assert gone.status_code == 404
 
 
 def test_list_contacts_q_filter_matches_label_case_insensitively(client):
@@ -69,25 +55,13 @@ def test_list_contacts_q_filter_matches_label_case_insensitively(client):
         client.delete(f"{BASE}/{bob.json()['_id']}")
 
 
-def test_get_contact_invalid_id_returns_404(client):
-    response = client.get(f"{BASE}/not-a-valid-object-id")
-    assert response.status_code == 404
-
-
-def test_get_contact_unknown_id_returns_404(client):
-    response = client.get(f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1")
+def test_delete_contact_invalid_id_returns_404(client):
+    response = client.delete(f"{BASE}/not-a-valid-object-id")
     assert response.status_code == 404
 
 
 def test_delete_unknown_contact_returns_404(client):
     response = client.delete(f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1")
-    assert response.status_code == 404
-
-
-def test_patch_unknown_contact_returns_404(client):
-    response = client.patch(
-        f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1", json={"counterpartyLabel": "Ghost"}
-    )
     assert response.status_code == 404
 
 

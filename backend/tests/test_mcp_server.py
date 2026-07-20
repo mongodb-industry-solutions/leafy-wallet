@@ -1,5 +1,5 @@
 """Integration tests for the MCP server (backend/mcp_server/server.py), run
-against real MongoDB Atlas — same skip-if-unreachable convention as the rest
+against real MongoDB Atlas - same skip-if-unreachable convention as the rest
 of this suite. Uses mcp.shared.memory's in-memory client/server session
 helper rather than spinning up a real HTTP server: it connects a real
 ClientSession directly to our FastMCP instance over in-memory streams, so
@@ -36,7 +36,7 @@ def _require_atlas():
 
 @pytest.fixture
 def _require_vector_index_and_ollama():
-    """Same skip conditions as test_wallet_transactions_search.py — only
+    """Same skip conditions as test_wallet_transactions_search.py - only
     needed for the search_transactions test, not the contacts ones."""
     db = get_db()
     try:
@@ -66,13 +66,18 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def test_lists_both_tools():
+def test_lists_every_tool():
     async def go():
         async with create_connected_server_and_client_session(mcp) as session:
             tools = await session.list_tools()
             return {t.name for t in tools.tools}
 
-    assert _run(go()) == {"search_transactions", "get_contacts"}
+    assert _run(go()) == {
+        "search_transactions",
+        "get_contacts",
+        "get_spending_by_contact",
+        "list_transactions",
+    }
 
 
 def test_get_contacts_returns_matching_documents():
@@ -187,7 +192,7 @@ def test_search_transactions_finds_semantically_similar_note(_require_vector_ind
                     "search_transactions", {"q": "food with a friend", "owner_party_ref": owner}
                 )
 
-        # Atlas Search indexes newly written documents asynchronously — poll
+        # Atlas Search indexes newly written documents asynchronously - poll
         # briefly, same reasoning as test_wallet_transactions_search.py.
         found = False
         for _ in range(30):

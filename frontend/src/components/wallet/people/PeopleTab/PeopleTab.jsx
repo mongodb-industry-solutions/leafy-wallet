@@ -26,7 +26,7 @@ function ContactRowSkeleton() {
 
 /**
  * The "People" tab: a searchable contact list where tapping a contact starts a send flow, plus adding
- * (by a registered Leafy Pay email/phone) and removing saved contacts.
+ * (by a registered Leafy Pay email) and removing saved contacts.
  * @param {object} props
  * @param {(contact: object) => void} props.onSendTo
  * @param {() => void} props.onAddContact - Opens the add-contact sheet (rendered at the shell level).
@@ -54,7 +54,7 @@ export function PeopleTab({ onSendTo, onAddContact }) {
     empty = { glyph: 'Warning', title: "Couldn't load contacts", subtitle: 'Check your connection and try again.' }
   } else if (filtered.length === 0) {
     empty = query
-      ? { glyph: 'MagnifyingGlass', title: 'No one found', subtitle: 'Try a different name, email, or phone.' }
+      ? { glyph: 'MagnifyingGlass', title: 'No one found', subtitle: 'Try a different name or email.' }
       : { glyph: 'Person', title: 'No contacts yet', subtitle: 'Tap + to add someone on Leafy Pay.' }
   }
 

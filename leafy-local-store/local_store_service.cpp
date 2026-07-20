@@ -7,10 +7,14 @@
 
 #define OBX_CPP_FILE
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <chrono>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <thread>
 #include <vector>
@@ -35,7 +39,7 @@ struct LocalTransaction {
     double amount = 0;
     std::string currency;
     std::string note;                    // empty = absent
-    std::vector<float> noteEmbedding;     // 768 dims, HNSW cosine — matches nomic-embed-text
+    std::vector<float> noteEmbedding;     // 768 dims, HNSW cosine - matches nomic-embed-text
     std::string direction;
     std::string leafyPayStatus;
     std::string localSyncStatus;
@@ -201,7 +205,7 @@ struct LocalContact {
 };
 
 // A conversation. Messages live in the separate LocalChatMessage entity
-// (ObjectBox has no nested/array attributes), linked by chatId.
+// (ObjectBox has no nested/array attributes), linked by chatReference.
 
 struct LocalChat {
     int64_t id = 0;
@@ -210,10 +214,13 @@ struct LocalChat {
     int64_t updatedAt = 0;   // epoch millis
     // Mirrors `id` once it's assigned, but as a *non-PK* field. ObjectBox's
     // Sync Server drops the PK `id` when bridging to Mongo (Mongo assigns its
-    // own `_id` instead), so without this, LocalChatMessage.chatId (which
-    // does sync through as a plain field) has nothing to join against once
-    // synced. Set right after `id` is assigned by the first `put()`.
+    // own `_id` instead). Set right after `id` is assigned by the first `put()`.
     int64_t localId = 0;
+    std::string ownerPartyRef;
+    // Store-independent join key (a uuid), minted by whichever write path
+    // creates the chat. The Atlas `_id` and the ObjectBox `id` differ for the
+    // same conversation, so this is what LocalChatMessage joins against.
+    std::string chatReference;
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 3; }
@@ -223,6 +230,8 @@ struct LocalChat {
         static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalChat& object) {
             fbb.Clear();
             auto offsetTitle = fbb.CreateString(object.title);
+            auto offsetOwner = fbb.CreateString(object.ownerPartyRef);
+            auto offsetChatReference = fbb.CreateString(object.chatReference);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
@@ -230,6 +239,8 @@ struct LocalChat {
             fbb.AddElement(8, object.createdAt);            // 3: createdAt
             fbb.AddElement(10, object.updatedAt);           // 4: updatedAt
             fbb.AddElement(14, object.localId);             // 6: localId
+            fbb.AddOffset(16, offsetOwner);                 // 7: ownerPartyRef
+            fbb.AddOffset(18, offsetChatReference);         // 8: chatReference
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -250,6 +261,8 @@ struct LocalChat {
             out.createdAt = table->GetField<int64_t>(8, 0);
             out.updatedAt = table->GetField<int64_t>(10, 0);
             out.localId = table->GetField<int64_t>(14, 0);
+            readString(16, out.ownerPartyRef);
+            readString(18, out.chatReference);
         }
 
         static LocalChat fromFlatBuffer(const void* data, size_t size) {
@@ -271,10 +284,10 @@ struct LocalChat {
 
 struct LocalChatMessage {
     int64_t id = 0;
-    int64_t chatId = 0;
     std::string role;
     std::string text;
     int64_t createdAt = 0;   // epoch millis
+    std::string chatReference;   // joins to LocalChat::chatReference
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 4; }
@@ -285,13 +298,14 @@ struct LocalChatMessage {
             fbb.Clear();
             auto offsetRole = fbb.CreateString(object.role);
             auto offsetText = fbb.CreateString(object.text);
+            auto offsetChatReference = fbb.CreateString(object.chatReference);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
-            fbb.AddElement(6, object.chatId);               // 2: chatId
             fbb.AddOffset(8, offsetRole);                   // 3: role
             fbb.AddOffset(10, offsetText);                  // 4: text
             fbb.AddElement(12, object.createdAt);           // 5: createdAt
+            fbb.AddOffset(16, offsetChatReference);         // 7: chatReference
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -308,10 +322,10 @@ struct LocalChatMessage {
             };
 
             out.id = table->GetField<int64_t>(4, 0);
-            out.chatId = table->GetField<int64_t>(6, 0);
             readString(8, out.role);
             readString(10, out.text);
             out.createdAt = table->GetField<int64_t>(12, 0);
+            readString(16, out.chatReference);
         }
 
         static LocalChatMessage fromFlatBuffer(const void* data, size_t size) {
@@ -328,7 +342,7 @@ struct LocalChatMessage {
     };
 };
 
-// Last-known balance per account, purely local — deliberately NOT
+// Last-known balance per account, purely local - deliberately NOT
 // SYNC_ENABLED (see create_obx_model()). A balance is derived/non-authoritative
 // data (Leafy Pay owns the real value, re-fetched live whenever online), not a
 // source-of-truth record like a transaction or contact, so it doesn't get a
@@ -565,6 +579,8 @@ struct LocalChat_ {
     static const obx::Property<LocalChat, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalChat, OBXPropertyType_Date> updatedAt;
     static const obx::Property<LocalChat, OBXPropertyType_Long> localId;
+    static const obx::Property<LocalChat, OBXPropertyType_String> ownerPartyRef;
+    static const obx::Property<LocalChat, OBXPropertyType_String> chatReference;
 };
 
 const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::id(1);
@@ -572,20 +588,22 @@ const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::title(2);
 const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::createdAt(3);
 const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::updatedAt(4);
 const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::localId(6);
+const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::ownerPartyRef(7);
+const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::chatReference(8);
 
 struct LocalChatMessage_ {
     static const obx::Property<LocalChatMessage, OBXPropertyType_Long> id;
-    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> chatId;
     static const obx::Property<LocalChatMessage, OBXPropertyType_String> role;
     static const obx::Property<LocalChatMessage, OBXPropertyType_String> text;
     static const obx::Property<LocalChatMessage, OBXPropertyType_Date> createdAt;
+    static const obx::Property<LocalChatMessage, OBXPropertyType_String> chatReference;
 };
 
 const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::id(1);
-const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::chatId(2);
 const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::role(3);
 const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::text(4);
 const obx::Property<LocalChatMessage, OBXPropertyType_Date> LocalChatMessage_::createdAt(5);
+const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::chatReference(7);
 
 struct LocalAccountBalance_ {
     static const obx::Property<LocalAccountBalance, OBXPropertyType_Long> id;
@@ -641,7 +659,7 @@ const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::leafyPa
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt(12);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
 
-// ─── Model — must match objectbox-sync-server/objectbox-model.json exactly ─
+// ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
 
 constexpr int EMBEDDING_DIMENSIONS = 768;
 
@@ -649,7 +667,7 @@ OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
     // Entity name doubles as the target MongoDB collection name in the Sync
-    // Server's bridge (confirmed empirically) — this is now pointed at the
+    // Server's bridge (confirmed empirically) - this is now pointed at the
     // real walletTransactions collection the FastAPI backend also uses.
     obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -677,7 +695,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
-    // Entity 2: walletContacts — entity name is the target MongoDB collection
+    // Entity 2: walletContacts - entity name is the target MongoDB collection
     // name, same rule as entity 1 above.
     obx_model_entity(model, "walletContacts", 2, 7002000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -695,7 +713,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupDigest", OBXPropertyType_String, 10, 7002000000000010ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
-    // Entity 3: chats — a conversation. Entity name is the target MongoDB
+    // Entity 3: chats - a conversation. Entity name is the target MongoDB
     // collection name, same rule as entities 1-2 above.
     obx_model_entity(model, "chats", 3, 7003000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
@@ -707,23 +725,25 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 3, 7003000000000003ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 4, 7003000000000004ULL);
     obx_model_property(model, "localId", OBXPropertyType_Long, 6, 7003000000000006ULL);
-    obx_model_entity_last_property_id(model, 6, 7003000000000006ULL);
+    obx_model_property(model, "ownerPartyRef", OBXPropertyType_String, 7, 7003000000000007ULL);
+    obx_model_property(model, "chatReference", OBXPropertyType_String, 8, 7003000000000008ULL);
+    obx_model_entity_last_property_id(model, 8, 7003000000000008ULL);
 
-    // Entity 4: chatMessages — a single message within a chats conversation,
-    // linked by chatId (ObjectBox has no nested/array attributes).
+    // Entity 4: chatMessages - a single message within a chats conversation,
+    // linked by chatReference (ObjectBox has no nested/array attributes).
     obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
     obx_model_property(model, "id", OBXPropertyType_Long, 1, 7004000000000001ULL);
     obx_model_property_flags(model, OBXPropertyFlags_ID);
 
-    obx_model_property(model, "chatId", OBXPropertyType_Long, 2, 7004000000000002ULL);
     obx_model_property(model, "role", OBXPropertyType_String, 3, 7004000000000003ULL);
     obx_model_property(model, "text", OBXPropertyType_String, 4, 7004000000000004ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 5, 7004000000000005ULL);
-    obx_model_entity_last_property_id(model, 6, 7004000000000006ULL);
+    obx_model_property(model, "chatReference", OBXPropertyType_String, 7, 7004000000000007ULL);
+    obx_model_entity_last_property_id(model, 7, 7004000000000007ULL);
 
-    // Entity 5: LocalAccountBalance — purely local, deliberately no
+    // Entity 5: LocalAccountBalance - purely local, deliberately no
     // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
     // objectbox-sync-server/objectbox-model.json (see the struct comment
     // above). The entity name has no MongoDB-collection meaning here since
@@ -854,6 +874,23 @@ int64_t now_epoch_millis() {
     ).count();
 }
 
+// Random (v4) uuid, for callers that don't mint their own reference.
+std::string new_uuid() {
+    static std::mt19937_64 generator(std::random_device{}());
+    static std::uniform_int_distribution<uint32_t> hexDigit(0, 15);
+    static const char* HEX = "0123456789abcdef";
+
+    std::string uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+    for (char& c : uuid) {
+        if (c == 'x') {
+            c = HEX[hexDigit(generator)];
+        } else if (c == 'y') {
+            c = HEX[(hexDigit(generator) & 0x3) | 0x8];
+        }
+    }
+    return uuid;
+}
+
 json transaction_to_json(const LocalTransaction& t) {
     return {
         {"id", t.id},
@@ -910,20 +947,71 @@ json chat_to_json(const LocalChat& c) {
     return {
         {"id", c.id},
         {"title", c.title},
+        {"ownerPartyRef", c.ownerPartyRef.empty() ? json(nullptr) : json(c.ownerPartyRef)},
+        {"chatReference", c.chatReference},
         {"createdAt", c.createdAt},
         {"updatedAt", c.updatedAt},
         {"localId", c.localId},
     };
 }
 
+std::unique_ptr<LocalChat> find_chat_by_reference(const std::string& chatReference) {
+    auto query = store->box<LocalChat>().query(LocalChat_::chatReference.equals(chatReference)).build();
+    auto found = query.find();
+    return found.empty() ? nullptr : std::make_unique<LocalChat>(found.front());
+}
+
 json chat_message_to_json(const LocalChatMessage& m) {
     return {
         {"id", m.id},
-        {"chatId", m.chatId},
+        {"chatReference", m.chatReference},
         {"role", m.role},
         {"text", m.text},
         {"createdAt", m.createdAt},
     };
+}
+
+struct SpendingRow {
+    double total = 0;
+    int64_t count = 0;
+    std::string currency;
+    int64_t lastAt = 0;
+};
+
+// Totals per counterparty, largest first. Mirrors
+// backend/services/transactions.py's spending_by_contact() - same rows, same
+// order, same rounding; ObjectBox has no aggregation pipeline, so the
+// $match/$group/$sort that one hands to Atlas is done by hand here.
+json spending_by_contact(const std::string& ownerPartyRef, const std::string& direction) {
+    std::map<std::string, SpendingRow> grouped;
+    for (const auto& t : store->box<LocalTransaction>().getAll()) {
+        if (t->ownerPartyRef != ownerPartyRef || t->direction != direction) continue;
+
+        SpendingRow& row = grouped[t->counterpartyArrangementReference];
+        row.total += t->amount;
+        row.count += 1;
+        if (row.currency.empty()) {
+            row.currency = t->currency;
+        }
+        row.lastAt = std::max(row.lastAt, t->createdAt);
+    }
+
+    std::vector<std::pair<std::string, SpendingRow>> rows(grouped.begin(), grouped.end());
+    std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) {
+        return a.second.total > b.second.total;
+    });
+
+    json results = json::array();
+    for (const auto& [counterparty, row] : rows) {
+        results.push_back({
+            {"counterpartyArrangementReference", counterparty},
+            {"total", std::round(row.total * 100.0) / 100.0},
+            {"count", row.count},
+            {"currency", row.currency},
+            {"lastAt", row.lastAt == 0 ? json(nullptr) : json(row.lastAt)},
+        });
+    }
+    return results;
 }
 
 json account_balance_to_json(const LocalAccountBalance& a) {
@@ -984,7 +1072,7 @@ int main(int argc, char* argv[]) {
 
     // Semantic search over locally-stored transaction notes, entirely offline:
     // embeds `q` via the local Ollama container, then runs ObjectBox's own
-    // HNSW nearestNeighbors query against noteEmbedding — no Atlas round
+    // HNSW nearestNeighbors query against noteEmbedding - no Atlas round
     // trip. Mirrors backend/routers/wallet_transactions.py's
     // GET /wallet-transactions/search, but against the on-device store.
     svr.Get("/local/v1/transactions/search", [](const httplib::Request& req, httplib::Response& res) {
@@ -1015,12 +1103,12 @@ int main(int argc, char* argv[]) {
 
             auto box = store->box<LocalTransaction>();
             // nearestNeighbors alone can't also filter by ownerPartyRef, so
-            // over-fetch and filter client-side when a filter is requested —
+            // over-fetch and filter client-side when a filter is requested  - 
             // fine at this PoC's local scale (a handful of records).
             int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
             auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
             // findWithScores() returns `score` as a *distance* (lower = more
-            // similar), already sorted nearest-first — the opposite
+            // similar), already sorted nearest-first - the opposite
             // convention from Atlas's $vectorSearch score (higher = better),
             // which backend/routers/wallet_transactions.py's /search uses.
             auto foundWithScores = query.findWithScores();
@@ -1038,6 +1126,33 @@ int main(int argc, char* argv[]) {
                 }
             }
             res.set_content(results.dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        }
+    });
+
+    // Offline twin of the backend's GET /wallet-transactions/summary: same rows,
+    // computed against the on-device store instead of an Atlas pipeline.
+    svr.Get("/local/v1/transactions/summary", [](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_param("ownerPartyRef")) {
+            res.status = 400;
+            res.set_content(json{{"error", "Missing required query param: ownerPartyRef"}}.dump(),
+                            "application/json");
+            return;
+        }
+
+        std::string direction = req.has_param("direction") ? req.get_param_value("direction") : "sent";
+        if (direction != "sent" && direction != "received") {
+            res.status = 400;
+            res.set_content(json{{"error", "direction must be \"sent\" or \"received\""}}.dump(),
+                            "application/json");
+            return;
+        }
+
+        try {
+            res.set_content(spending_by_contact(req.get_param_value("ownerPartyRef"), direction).dump(),
+                            "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
             res.set_content(json{{"error", e.what()}}.dump(), "application/json");
@@ -1097,7 +1212,7 @@ int main(int argc, char* argv[]) {
     });
 
     // Deletes propagate through ObjectBox Sync like any other write, so this
-    // also removes the corresponding document from Atlas once connected —
+    // also removes the corresponding document from Atlas once connected  - 
     // primarily here so integration tests can clean up after themselves.
     svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
@@ -1178,11 +1293,17 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    svr.Get("/local/v1/chats", [](const httplib::Request&, httplib::Response& res) {
+    // Filtered by ownerPartyRef; no filter returns everything, matching
+    // /contacts and /transactions.
+    svr.Get("/local/v1/chats", [](const httplib::Request& req, httplib::Response& res) {
         try {
+            const std::string ownerPartyRef =
+                req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
+
             auto box = store->box<LocalChat>();
             json results = json::array();
             for (const auto& c : box.getAll()) {
+                if (!ownerPartyRef.empty() && c->ownerPartyRef != ownerPartyRef) continue;
                 results.push_back(chat_to_json(*c));
             }
             res.set_content(results.dump(), "application/json");
@@ -1205,6 +1326,11 @@ int main(int argc, char* argv[]) {
         try {
             LocalChat c;
             c.title = body.value("title", "New chat");
+            c.ownerPartyRef = body.value("ownerPartyRef", "");
+            c.chatReference = body.value("chatReference", "");
+            if (c.chatReference.empty()) {
+                c.chatReference = new_uuid();
+            }
             c.createdAt = now_epoch_millis();
             c.updatedAt = c.createdAt;
 
@@ -1221,16 +1347,18 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    svr.Get(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Get(R"(/local/v1/chats/([^/]+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
         try {
-            int64_t chatId = std::stoll(req.matches[1]);
-            if (!store->box<LocalChat>().get(chatId)) {
+            std::string chatReference = req.matches[1];
+            if (!find_chat_by_reference(chatReference)) {
                 res.status = 404;
                 res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
                 return;
             }
 
-            auto query = store->box<LocalChatMessage>().query(LocalChatMessage_::chatId.equals(chatId)).build();
+            auto query = store->box<LocalChatMessage>()
+                             .query(LocalChatMessage_::chatReference.equals(chatReference))
+                             .build();
             json results = json::array();
             for (const auto& m : query.find()) {
                 results.push_back(chat_message_to_json(m));
@@ -1243,15 +1371,15 @@ int main(int argc, char* argv[]) {
     });
 
     // Bumps the parent LocalChat's updatedAt on every new message (two
-    // sequential puts, no explicit transaction — same simplicity level as
+    // sequential puts, no explicit transaction - same simplicity level as
     // the rest of this file).
-    svr.Post(R"(/local/v1/chats/(\d+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Post(R"(/local/v1/chats/([^/]+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
         auto bad_request = [&res](const std::string& msg) {
             res.status = 400;
             res.set_content(json{{"error", msg}}.dump(), "application/json");
         };
 
-        int64_t chatId = std::stoll(req.matches[1]);
+        std::string chatReference = req.matches[1];
 
         json body;
         try {
@@ -1275,8 +1403,7 @@ int main(int argc, char* argv[]) {
         }
 
         try {
-            auto chatBox = store->box<LocalChat>();
-            auto chat = chatBox.get(chatId);
+            auto chat = find_chat_by_reference(chatReference);
             if (!chat) {
                 res.status = 404;
                 res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
@@ -1284,7 +1411,7 @@ int main(int argc, char* argv[]) {
             }
 
             LocalChatMessage m;
-            m.chatId = chatId;
+            m.chatReference = chatReference;
             m.role = role;
             m.text = body.at("text").get<std::string>();
             m.createdAt = now_epoch_millis();
@@ -1292,7 +1419,7 @@ int main(int argc, char* argv[]) {
             store->box<LocalChatMessage>().put(m);
 
             chat->updatedAt = m.createdAt;
-            chatBox.put(*chat);
+            store->box<LocalChat>().put(*chat);
 
             res.status = 201;
             res.set_content(chat_message_to_json(m).dump(), "application/json");
@@ -1306,19 +1433,20 @@ int main(int argc, char* argv[]) {
     // also removes the corresponding document from Atlas once connected.
     // Cascades to the chat's messages, mirroring backend/routers/chats.py's
     // delete_chat.
-    svr.Delete(R"(/local/v1/chats/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Delete(R"(/local/v1/chats/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
-            obx_id chatId = std::stoll(req.matches[1]);
+            std::string chatReference = req.matches[1];
 
-            auto chatBox = store->box<LocalChat>();
-            if (!chatBox.remove(chatId)) {
+            auto chat = find_chat_by_reference(chatReference);
+            if (!chat) {
                 res.status = 404;
                 res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
                 return;
             }
+            store->box<LocalChat>().remove(chat->id);
 
             auto messageBox = store->box<LocalChatMessage>();
-            auto query = messageBox.query(LocalChatMessage_::chatId.equals(chatId)).build();
+            auto query = messageBox.query(LocalChatMessage_::chatReference.equals(chatReference)).build();
             for (const auto& m : query.find()) {
                 messageBox.remove(m.id);
             }
@@ -1330,14 +1458,14 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    svr.Delete(R"(/local/v1/chats/(\d+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Delete(R"(/local/v1/chats/([^/]+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
-            obx_id chatId = std::stoll(req.matches[1]);
+            std::string chatReference = req.matches[1];
             obx_id messageId = std::stoll(req.matches[2]);
 
             auto messageBox = store->box<LocalChatMessage>();
             auto existing = messageBox.get(messageId);
-            if (!existing || existing->chatId != chatId) {
+            if (!existing || existing->chatReference != chatReference) {
                 res.status = 404;
                 res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
                 return;

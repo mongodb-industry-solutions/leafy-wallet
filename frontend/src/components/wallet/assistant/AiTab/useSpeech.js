@@ -1,7 +1,12 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { SAMPLE_QUERIES } from '@/lib/wallet-data'
+
+const SAMPLE_QUERIES = [
+  'How much did I spend this week?',
+  'Where did my money go?',
+  'Who did I pay most recently?',
+]
 
 /**
  * Voice input with graceful fallback: when the Web Speech API is unavailable

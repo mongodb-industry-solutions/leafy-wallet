@@ -16,7 +16,9 @@ import { useAiChat } from './useAiChat'
 const TYPE_SPEED_MS = 16
 
 /**
- * Typewrites `text` when `animate` is true (else renders in full), calling `onDone` once complete.
+ * Typewrites `text` when `animate` is true (else renders in full). While streaming, `text` keeps
+ * growing and the reveal simply trails it; `onDone` (passed only once the stream is sealed) fires
+ * when the reveal catches up, so a mid-stream pause never ends the animation early.
  */
 function Typewriter({ text, animate, onDone }) {
   const [count, setCount] = useState(animate ? 0 : text.length)
@@ -33,9 +35,12 @@ function Typewriter({ text, animate, onDone }) {
 }
 
 /**
- * The "Chat" tab (Leafy AI): greeting empty-state, message thread, and mock history, with all state/logic in {@link useAiChat}.
+ * The "Chat" tab (Leafy AI): greeting empty-state, message thread, and saved history, with all
+ * state/logic in {@link useAiChat}.
+ * @param {object} props
+ * @param {{name: string}} props.user - The authenticated identity, for the greeting.
  */
-export function AiTab() {
+export function AiTab({ user }) {
   const c = useAiChat()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat)
   // never replays it.
@@ -52,6 +57,7 @@ export function AiTab() {
         activeId={c.activeId}
         onOpen={c.handleOpenChat}
         onNew={c.handleNewChat}
+        onDelete={c.handleDeleteChat}
         onClose={() => c.setView('chat')}
       />
     )
@@ -100,10 +106,15 @@ export function AiTab() {
         </div>
       </div>
 
-      <ChatHeader title={c.title} onBack={() => c.setView('history')} onNew={c.handleNewChat} />
+      <ChatHeader
+        title={c.title}
+        canCreate={!c.isEmpty}
+        onBack={() => c.setView('history')}
+        onNew={c.handleNewChat}
+      />
 
       {showEmpty ? (
-        <EmptyState user={c.user} onSuggestion={c.handleSuggestion} />
+        <EmptyState user={user} onSuggestion={c.handleSuggestion} />
       ) : (
         <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-32">
           {c.msgs.map((m) => {
@@ -117,7 +128,7 @@ export function AiTab() {
             if (m.type === 'chart') {
               return (
                 <div key={m.id} className="flex justify-start">
-                  <SpendingChart data={m.chartData} />
+                  <SpendingChart data={m.chartData} title={m.chartTitle} />
                 </div>
               )
             }
@@ -135,7 +146,7 @@ export function AiTab() {
                 <Typewriter
                   text={m.text}
                   animate={Boolean(m.stream) && !streamedRef.current.has(m.id)}
-                  onDone={() => streamedRef.current.add(m.id)}
+                  onDone={m.stream === 'done' ? () => streamedRef.current.add(m.id) : undefined}
                 />
               </p>
             )

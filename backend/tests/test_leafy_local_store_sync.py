@@ -1,13 +1,13 @@
 """End-to-end tests for the actual ObjectBox <-> Atlas sync bridge, run against
 a real running stack (docker compose up -d ollama objectbox-sync-server
 leafy-local-store) with a reachable Atlas cluster. Local-only, not part of CI
-— same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
+ -  same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
 deploying the whole ObjectBox Sync Server + Atlas combo in CI isn't worth it
 for this PoC, and skips cleanly if either side isn't reachable.
 
 Every other test_leafy_local_store_*.py file only exercises the local HTTP
 surface in isolation (write via leafy-local-store, read back via
-leafy-local-store) — none of them actually prove the Sync Server bridge is
+leafy-local-store) - none of them actually prove the Sync Server bridge is
 moving data to/from Atlas. That's the one thing these tests check, for every
 entity that's meant to sync: walletContacts, walletTransactions, chats,
 chatMessages. Plus one regression check the other way: LocalAccountBalance is
@@ -17,7 +17,7 @@ show up in Atlas no matter how long we wait.
 Sync is asynchronous in both directions (ObjectBox -> Sync Server -> Atlas is
 a push over the sync websocket; Atlas -> Sync Server -> ObjectBox is a Mongo
 change stream), so every assertion here polls with a timeout instead of
-checking immediately. 20s/0.5s was picked empirically — in practice syncing
+checking immediately. 20s/0.5s was picked empirically - in practice syncing
 one small document lands in well under 5s, but this leaves headroom for a
 slower CI-less local machine without making a real failure take forever to
 surface.
@@ -65,7 +65,7 @@ def _wait_until(predicate, description):
     """Poll `predicate` (a zero-arg callable returning a truthy match or
     None/False) until it succeeds or SYNC_TIMEOUT_S elapses. Returns whatever
     `predicate` returned. A timeout here means the sync bridge didn't do its
-    job in time — that's the actual failure mode these tests exist to catch,
+    job in time - that's the actual failure mode these tests exist to catch,
     not just test flakiness to paper over.
     """
     deadline = time.monotonic() + SYNC_TIMEOUT_S
@@ -238,10 +238,11 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
     created = httpx.post(f"{LOCAL_BASE}/local/v1/chats", json={"title": title})
     assert created.status_code == 201
     local_id = created.json()["id"]
+    chat_reference = created.json()["chatReference"]
 
     try:
         # POST /local/v1/chats does two sequential ObjectBox puts (create,
-        # then set localId once the id is known — see local_store_service.cpp)
+        # then set localId once the id is known - see local_store_service.cpp)
         # so the Sync Server pushes two change events for this one document.
         # Polling for mere presence would flakily catch the first push, where
         # localId is still its 0 default; poll for the field's *final* value
@@ -251,10 +252,12 @@ def test_chat_created_via_objectbox_syncs_to_atlas(db):
             f"chats document with title={title} and localId={local_id}",
         )
         # localId is the field that exists specifically so this row is
-        # joinable from Atlas — see backend/README.md's "Sync-related fields".
+        # joinable from Atlas - see backend/README.md's "Sync-related fields".
         assert atlas_doc[0]["localId"] == local_id
+        # chatReference is what chatMessages join against, in either store.
+        assert atlas_doc[0]["chatReference"] == chat_reference
     finally:
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
         db.delete_many("chats", {"title": title})
 
 
@@ -262,7 +265,7 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
     title = _unique("sync-chat-atlas")
     now = datetime.now(timezone.utc)
     # Deliberately no `localId` here: this document originates from the
-    # FastAPI write path (backend/routers/chats.py), which never sets it —
+    # FastAPI write path (backend/routers/chats.py), which never sets it  - 
     # only the ObjectBox->Atlas direction does. The reverse sync must still
     # work without it.
     db.insert_one("chats", {"title": title, "createdAt": now, "updatedAt": now})
@@ -282,7 +285,7 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
             (c for c in httpx.get(f"{LOCAL_BASE}/local/v1/chats").json() if c["title"] == title),
             None,
         ):
-            httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_doc['id']}")
+            httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{local_doc['chatReference']}")
 
 
 # ─── chatMessages ───────────────────────────────────────────────────────────
@@ -290,12 +293,15 @@ def test_chat_created_via_atlas_syncs_to_objectbox(db):
 
 def test_chat_message_created_via_objectbox_syncs_to_atlas(db):
     chat_title = _unique("sync-chat-for-message-ob")
-    chat_id = httpx.post(f"{LOCAL_BASE}/local/v1/chats", json={"title": chat_title}).json()["id"]
+    chat_reference = httpx.post(
+        f"{LOCAL_BASE}/local/v1/chats", json={"title": chat_title}
+    ).json()["chatReference"]
     text = _unique("sync-message-ob")
 
     try:
         created = httpx.post(
-            f"{LOCAL_BASE}/local/v1/chats/{chat_id}/messages", json={"role": "user", "text": text}
+            f"{LOCAL_BASE}/local/v1/chats/{chat_reference}/messages",
+            json={"role": "user", "text": text},
         )
         assert created.status_code == 201
 
@@ -303,31 +309,33 @@ def test_chat_message_created_via_objectbox_syncs_to_atlas(db):
             lambda: db.find("chatMessages", {"text": text}),
             f"chatMessages document with text={text}",
         )
-        assert atlas_doc[0]["chatId"] == chat_id
+        assert atlas_doc[0]["chatReference"] == chat_reference
         assert atlas_doc[0]["role"] == "user"
     finally:
         # Cascades to the message locally; Atlas cleanup is still explicit
         # since the cascade's sync-back timing isn't something to depend on.
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
         db.delete_many("chatMessages", {"text": text})
         db.delete_many("chats", {"title": chat_title})
 
 
 def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
-    # Needs a real local chat first: GET /local/v1/chats/{chatId}/messages
-    # 404s for an unknown chatId, so the message can only be observed through
-    # a chatId that already exists in the local store (see
-    # local_store_service.cpp's GET .../messages handler).
-    chat_id = httpx.post(
+    """A message written Atlas-side is readable offline, joined by chatReference.
+
+    The Atlas and ObjectBox copies of a chat carry different primary keys, so
+    chatReference - the same string in both stores - is the only key that
+    makes a message written by one path visible to the other.
+    """
+    chat_reference = httpx.post(
         f"{LOCAL_BASE}/local/v1/chats", json={"title": _unique("sync-chat-for-message-atlas")}
-    ).json()["id"]
+    ).json()["chatReference"]
     text = _unique("sync-message-atlas")
 
     try:
         db.insert_one(
             "chatMessages",
             {
-                "chatId": chat_id,
+                "chatReference": chat_reference,
                 "role": "assistant",
                 "text": text,
                 "createdAt": datetime.now(timezone.utc),
@@ -338,7 +346,9 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
             lambda: next(
                 (
                     m
-                    for m in httpx.get(f"{LOCAL_BASE}/local/v1/chats/{chat_id}/messages").json()
+                    for m in httpx.get(
+                        f"{LOCAL_BASE}/local/v1/chats/{chat_reference}/messages"
+                    ).json()
                     if m["text"] == text
                 ),
                 None,
@@ -348,7 +358,7 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
         assert local_doc["role"] == "assistant"
     finally:
         db.delete_many("chatMessages", {"text": text})
-        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_id}")
+        httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
 
 
 # ─── LocalAccountBalance (regression: must NEVER sync) ─────────────────────
@@ -363,7 +373,7 @@ def test_account_balance_never_syncs_to_atlas(db):
     assert created.status_code == 201
 
     try:
-        # There's no "success" predicate to poll for here — the whole point
+        # There's no "success" predicate to poll for here - the whole point
         # is that nothing ever shows up. Sleep the same duration the other
         # tests poll for, then assert absence once, rather than polling for a
         # positive that should never happen.

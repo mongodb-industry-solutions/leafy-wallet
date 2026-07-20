@@ -27,7 +27,7 @@ jobs:
       - name: Ensure Atlas credentials are configured
         run: |
           if [ -z "${{ secrets.MONGODB_URI }}" ]; then
-            echo "::error::MONGODB_URI secret is not set. Tests would silently skip instead of running — add the repo secret first."
+            echo "::error::MONGODB_URI secret is not set. Tests would silently skip instead of running - add the repo secret first."
             exit 1
           fi
 

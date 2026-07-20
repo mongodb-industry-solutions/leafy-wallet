@@ -1,7 +1,7 @@
 """Integration tests for leafy-local-store's HTTP API, run against a real
 running instance (docker compose up -d ollama objectbox-sync-server
-leafy-local-store). Not part of CI — deploying ObjectBox there isn't worth
-it (see backend/README.md's "ObjectBox Offline Sync (PoC)" section) — these
+leafy-local-store). Not part of CI - deploying ObjectBox there isn't worth
+it (see backend/README.md's "ObjectBox Offline Sync (PoC)" section) - these
 are for local regression-checking only, and skip cleanly if the service
 isn't reachable.
 
@@ -101,7 +101,7 @@ def test_transaction_send_and_search_ranks_semantically():
         scores_by_note = {r["note"]: r["score"] for r in response.json()}
         assert "Dinner with the team" in scores_by_note
         assert "Monthly rent payment" in scores_by_note
-        # score is a *distance* here (lower = more similar) — opposite of
+        # score is a *distance* here (lower = more similar) - opposite of
         # Atlas's $vectorSearch convention, see backend/README.md.
         assert scores_by_note["Dinner with the team"] < scores_by_note["Monthly rent payment"]
     finally:

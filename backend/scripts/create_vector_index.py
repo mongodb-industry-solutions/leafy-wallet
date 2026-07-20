@@ -14,8 +14,11 @@ from pymongo.operations import SearchIndexModel
 from db.mdb import MongoDBConnector
 from services.ollama import get_embedding
 
-COLLECTION = "walletTransactions"
-INDEX_NAME = "noteEmbedding_vector_index"
+# (collection, index name, embedded field). The index filters on
+# `ownerPartyRef` so a search can be scoped to a single user.
+INDEX_SPECS = [
+    ("walletTransactions", "noteEmbedding_vector_index", "noteEmbedding"),
+]
 
 
 def _embedding_dimensions() -> int:
@@ -33,39 +36,52 @@ def _embedding_dimensions() -> int:
     return len(vector)
 
 
-def main():
-    db = MongoDBConnector()
-    collection = db.get_collection(COLLECTION)
-
+def _ensure_index(db, collection_name: str, index_name: str, path: str, dimensions: int):
+    """Create `index_name` on `collection_name`, or update it if it exists."""
+    collection = db.get_collection(collection_name)
     index_definition = {
         "fields": [
             {
                 "type": "vector",
-                "path": "noteEmbedding",
-                "numDimensions": _embedding_dimensions(),
+                "path": path,
+                "numDimensions": dimensions,
                 "similarity": "cosine",
             },
             {"type": "filter", "path": "ownerPartyRef"},
         ]
     }
 
-    existing = list(collection.list_search_indexes(INDEX_NAME))
+    existing = list(collection.list_search_indexes(index_name))
     if existing:
-        print(f"Index '{INDEX_NAME}' already exists (status: {existing[0].get('status')}); "
+        print(f"Index '{index_name}' already exists (status: {existing[0].get('status')}); "
               "updating definition in case it changed.")
-        collection.update_search_index(INDEX_NAME, index_definition)
+        collection.update_search_index(index_name, index_definition)
     else:
-        model = SearchIndexModel(definition=index_definition, name=INDEX_NAME, type="vectorSearch")
+        model = SearchIndexModel(definition=index_definition, name=index_name, type="vectorSearch")
         collection.create_search_index(model)
-        print(f"Creating index '{INDEX_NAME}'...")
+        print(f"Creating index '{index_name}'...")
 
+
+def _wait_until_queryable(db, collection_name: str, index_name: str):
+    collection = db.get_collection(collection_name)
     for _ in range(60):
-        info = list(collection.list_search_indexes(INDEX_NAME))
+        info = list(collection.list_search_indexes(index_name))
         if info and info[0].get("queryable"):
-            print("Index is queryable.")
+            print(f"Index '{index_name}' is queryable.")
             return
         time.sleep(2)
-    raise TimeoutError(f"Index '{INDEX_NAME}' did not become queryable in time")
+    raise TimeoutError(f"Index '{index_name}' did not become queryable in time")
+
+
+def main():
+    db = MongoDBConnector()
+    dimensions = _embedding_dimensions()
+
+    for collection_name, index_name, path in INDEX_SPECS:
+        _ensure_index(db, collection_name, index_name, path, dimensions)
+    # Waiting only after every index is requested lets Atlas build them in parallel.
+    for collection_name, index_name, _ in INDEX_SPECS:
+        _wait_until_queryable(db, collection_name, index_name)
 
 
 if __name__ == "__main__":

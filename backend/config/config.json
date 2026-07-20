@@ -1,4 +1,0 @@
-{
-    "INDUSTRY": "Cross",
-    "_NOTE": "For deployed environments, use inference profile ARNs instead of direct model IDs. Set CHATCOMPLETIONS_MODEL_ID and EMBEDDINGS_MODEL_ID via helm ksec. See cloud-cost-tracking.md"
-}

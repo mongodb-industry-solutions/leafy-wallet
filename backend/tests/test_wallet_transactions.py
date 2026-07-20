@@ -1,5 +1,9 @@
 from datetime import datetime
 
+from bson import ObjectId
+
+from db.client import get_db
+
 BASE = "/api/v1/wallet-transactions"
 
 TRANSACTION_PAYLOAD = {
@@ -13,6 +17,10 @@ TRANSACTION_PAYLOAD = {
 }
 
 
+def _cleanup(transaction_id):
+    get_db().delete_one("walletTransactions", {"_id": ObjectId(transaction_id)})
+
+
 def test_transaction_crud_lifecycle(client):
     created = client.post(f"{BASE}", json=TRANSACTION_PAYLOAD)
     assert created.status_code == 201
@@ -23,9 +31,6 @@ def test_transaction_crud_lifecycle(client):
     assert body["settledAt"] is None
 
     try:
-        fetched = client.get(f"{BASE}/{transaction_id}")
-        assert fetched.status_code == 200
-
         listed = client.get(
             f"{BASE}",
             params={"ownerPartyRef": TRANSACTION_PAYLOAD["ownerPartyRef"], "direction": "sent"},
@@ -43,11 +48,7 @@ def test_transaction_crud_lifecycle(client):
         empty_patch = client.patch(f"{BASE}/{transaction_id}", json={})
         assert empty_patch.status_code == 400
     finally:
-        deleted = client.delete(f"{BASE}/{transaction_id}")
-        assert deleted.status_code == 204
-
-    missing = client.get(f"{BASE}/{transaction_id}")
-    assert missing.status_code == 404
+        _cleanup(transaction_id)
 
 
 def test_transaction_without_note_has_no_embedding(client):
@@ -61,12 +62,23 @@ def test_transaction_without_note_has_no_embedding(client):
     assert created.status_code == 201
     body = created.json()
     assert body["noteEmbedding"] is None
-    client.delete(f"{BASE}/{body['_id']}")
+    _cleanup(body["_id"])
 
 
-def test_get_transaction_invalid_id_returns_404(client):
-    response = client.get(f"{BASE}/not-a-valid-object-id")
-    assert response.status_code == 404
+def test_delete_removes_transaction(client):
+    payload = {
+        **TRANSACTION_PAYLOAD,
+        "leafyPayTransferReference": "88888888-8888-8888-8888-888888888888",
+        "note": None,
+    }
+    created = client.post(f"{BASE}", json=payload)
+    transaction_id = created.json()["_id"]
+
+    deleted = client.delete(f"{BASE}/{transaction_id}")
+    assert deleted.status_code == 204
+
+    gone = client.delete(f"{BASE}/{transaction_id}")
+    assert gone.status_code == 404
 
 
 def test_patch_unknown_transaction_returns_404(client):
@@ -93,7 +105,7 @@ def test_settling_without_explicit_settledAt_is_autostamped(client):
         assert body["leafyPayStatus"] == "settled"
         assert body["settledAt"] is not None
     finally:
-        client.delete(f"{BASE}/{transaction_id}")
+        _cleanup(transaction_id)
 
 
 def test_settling_with_explicit_settledAt_keeps_provided_value(client):
@@ -114,7 +126,7 @@ def test_settling_with_explicit_settledAt_keeps_provided_value(client):
         settled_at = datetime.fromisoformat(updated.json()["settledAt"])
         assert settled_at == datetime.fromisoformat("2026-01-01T00:00:00+00:00")
     finally:
-        client.delete(f"{BASE}/{transaction_id}")
+        _cleanup(transaction_id)
 
 
 def test_list_transactions_filtered_by_leafy_pay_status(client):
@@ -135,7 +147,7 @@ def test_list_transactions_filtered_by_leafy_pay_status(client):
         pending = client.get(f"{BASE}", params={"leafyPayStatus": "pending"})
         assert not any(t["_id"] == transaction_id for t in pending.json())
     finally:
-        client.delete(f"{BASE}/{transaction_id}")
+        _cleanup(transaction_id)
 
 
 def test_create_transaction_invalid_status_returns_422(client):
@@ -188,4 +200,4 @@ def test_transaction_with_note_stores_returned_embedding(client, monkeypatch):
     assert created.status_code == 201
     body = created.json()
     assert body["noteEmbedding"] == [0.1, 0.2, 0.3]
-    client.delete(f"{BASE}/{body['_id']}")
+    _cleanup(body["_id"])

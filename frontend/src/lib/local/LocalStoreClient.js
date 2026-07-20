@@ -12,16 +12,6 @@ async function call(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
-/** Whether the on-device store is reachable. */
-export async function isLocalStoreUp() {
-  try {
-    await call('GET', '/health')
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Cached account balances. Local-only: this entity never syncs, so `cacheAccount` populates it. */
 export async function listLocalAccounts() {
   return call('GET', '/accounts')
@@ -53,6 +43,31 @@ export async function listLocalTransactions() {
 }
 
 /**
+ * Semantic search over the device's transaction notes - ObjectBox's own HNSW index, no network.
+ * @param {{q: string, ownerPartyRef?: string, limit?: number}} params
+ */
+export async function searchLocalTransactions({ q, ownerPartyRef, limit = 10 }) {
+  const query = new URLSearchParams({
+    q,
+    ...(ownerPartyRef ? { ownerPartyRef } : {}),
+    limit: String(limit),
+  }).toString()
+  return call('GET', `/transactions/search?${query}`)
+}
+
+/**
+ * Per-contact totals held on the device.
+ * @param {{ownerPartyRef?: string, direction?: 'sent'|'received'}} params
+ */
+export async function localSpendingByContact({ ownerPartyRef, direction = 'sent' }) {
+  const query = new URLSearchParams({
+    ...(ownerPartyRef ? { ownerPartyRef } : {}),
+    direction,
+  }).toString()
+  return call('GET', `/transactions/summary?${query}`)
+}
+
+/**
  * Queue a send while offline. The store stamps it `local_pending` and embeds the note; the caller
  * supplies the stand-in `leafyPayTransferReference`.
  * @param {object} send - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
@@ -66,6 +81,32 @@ export async function deleteLocalTransaction(id) {
   return call('DELETE', `/transactions/${encodeURIComponent(id)}`)
 }
 
+/** Chats held on device. */
+export async function listLocalChats(ownerPartyRef) {
+  const query = ownerPartyRef ? `?${new URLSearchParams({ ownerPartyRef })}` : ''
+  return call('GET', `/chats${query}`)
+}
+
+/** Start a chat on device. The caller mints `chatReference` - there's no server here to do it. */
+export async function createLocalChat({ ownerPartyRef, chatReference, title }) {
+  return call('POST', '/chats', { ownerPartyRef, chatReference, title })
+}
+
+/** Delete a chat held on device; the store removes its messages with it. */
+export async function deleteLocalChat(chatReference) {
+  return call('DELETE', `/chats/${encodeURIComponent(chatReference)}`)
+}
+
+/** A chat's messages held on device, oldest first. */
+export async function listLocalChatMessages(chatReference) {
+  return call('GET', `/chats/${encodeURIComponent(chatReference)}/messages`)
+}
+
+/** Append a message on device. The store embeds the text via Ollama. */
+export async function createLocalChatMessage(chatReference, { role, text }) {
+  return call('POST', `/chats/${encodeURIComponent(chatReference)}/messages`, { role, text })
+}
+
 /** Payment requests held on device. Pass `targetDigest` for an inbox, `requesterPartyRef` for an outbox. */
 export async function listLocalRequests({ targetDigest, requesterPartyRef, status } = {}) {
   const query = new URLSearchParams({
@@ -77,7 +118,7 @@ export async function listLocalRequests({ targetDigest, requesterPartyRef, statu
 }
 
 /**
- * Raise a request while offline. Needs no replay — Sync carrying it to Atlas is the delivery.
+ * Raise a request while offline. Needs no replay - Sync carrying it to Atlas is the delivery.
  * @param {object} request - `{ requestReference, requesterPartyRef, requesterName, requesterDigest, targetDigest, amount, currency, note }`.
  */
 export async function createLocalRequest(request) {

@@ -4,7 +4,7 @@ import { getSession, setSession } from '@/lib/auth/session'
 import { refreshTokens } from '@/lib/auth/oauth'
 
 /** Error from a Leafy Pay request, carrying the HTTP status. */
-export class PspError extends Error {
+class PspError extends Error {
   constructor(status, body) {
     super(`Leafy Pay request failed: ${status}`)
     this.name = 'PspError'

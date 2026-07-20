@@ -22,7 +22,9 @@ export function DesktopShell() {
   const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
   const [flow, setFlow] = useState('home')
 
-  const shouldNudge = isOnline && Boolean(WALKTHROUGH[flow]?.offlineMoment)
+  // Before authentication the wallet reports no flow - narrate the sign-in itself.
+  const activeFlow = phase === 'authed' ? flow : 'login'
+  const shouldNudge = isOnline && Boolean(WALKTHROUGH[activeFlow]?.offlineMoment)
 
   let phoneContent
   if (phase === 'authed') {
@@ -49,11 +51,11 @@ export function DesktopShell() {
               <h2 className="text-base font-bold text-foreground">Under the hood</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              The tech behind the {WALKTHROUGH[flow]?.label ?? 'Home'} screen.
+              The tech behind the {WALKTHROUGH[activeFlow].label} screen.
             </p>
 
             <div className="mt-5">
-              <Walkthrough flow={flow} />
+              <Walkthrough flow={activeFlow} />
             </div>
           </div>
 

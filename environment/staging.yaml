@@ -19,10 +19,6 @@ envSecrets:
   # MongoDB Configuration
   MONGODB_URI: <secret-group>
   DATABASE_NAME: <secret-group>
-  VOYAGE_API_KEY: <secret-group>
-  # Bedrock Inference Profiles (see cloud-cost-tracking.md)
-  CHATCOMPLETIONS_MODEL_ID: <secret-group>
-  EMBEDDINGS_MODEL_ID: <secret-group>
 
 ## should be used in case of multiple sidecar containers
 # sidecarContainers:
@@ -42,16 +38,9 @@ envSecrets:
 #             name: session-temp-kanopy
 #             key: DATABASE_NAME
 
-#       # Voyage AI API Key (embeddings)
-#       - name: VOYAGE_API_KEY
-#         valueFrom:
-#           secretKeyRef:
-#             name: session-temp-kanopy
-#             key: VOYAGE_API_KEY
-
 ## ----------------------------- Cloud Specific Configurations -----------------------------
 
-# Add IRSA configuration here, role here gives access to bedrock, s3, aws secrets manager
+# Add IRSA configuration here (AWS access for the pod, e.g. s3, secrets manager)
 serviceAccount:
   enabled: true
   irsa:
