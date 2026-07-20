@@ -6,14 +6,14 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    environment:
-      - OLLAMA_KEEP_ALIVE=-1
     healthcheck:
+      # Fast checks only during startup (so dependents unblock quickly), then quiet once healthy.
       test: ["CMD", "ollama", "list"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
+      start_interval: 2s
     restart: always
   ollama-pull:
     image: ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a
@@ -23,7 +23,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:3b"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
   objectbox-sync-server:
     image: objectboxio/sync-server-trial

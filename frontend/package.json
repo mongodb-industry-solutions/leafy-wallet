@@ -6,7 +6,10 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -37,7 +40,8 @@
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
     "license-checker": "^25.0.1",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.2",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "postcss": "^8.5.10"

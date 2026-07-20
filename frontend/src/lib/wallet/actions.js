@@ -10,6 +10,7 @@ import {
   removeBeneficiary,
   sendToBeneficiary,
 } from '@/lib/psp/PspClient'
+import { classifyNotes, emojiForCategory } from '@/lib/wallet/categories'
 import {
   createContactEnrichment,
   createRequestDoc,
@@ -650,6 +651,33 @@ export async function getSpendingByContact(isOnline = true, direction = 'sent') 
     count: r.count,
     currency: r.currency,
   }))
+}
+
+/**
+ * Spending grouped into categories (Dining, Bills, ...), largest first. Each outgoing payment's note
+ * is matched to its nearest category by embedding similarity - the same vector model as note search,
+ * so it works identically online and offline. Notes with no text fall under "Other".
+ * @param {boolean} isOnline - Picks the transaction source; classification is the same either way.
+ * @returns {Promise<{category: string, total: number, count: number, currency: string}[]>}
+ */
+export async function getSpendingByCategory(isOnline = true) {
+  const spends = (await getTransactions(isOnline)).filter((t) => t.amount < 0)
+  if (spends.length === 0) return []
+
+  const categories = await classifyNotes(spends.map((t) => t.note))
+  const totals = new Map()
+  spends.forEach((t, i) => {
+    const category = categories[i]
+    const row =
+      totals.get(category) ??
+      { category, emoji: emojiForCategory(category), total: 0, count: 0, currency: t.currency }
+    row.total += Math.abs(t.amount)
+    row.count += 1
+    totals.set(category, row)
+  })
+  return [...totals.values()]
+    .map((r) => ({ ...r, total: Math.round(r.total * 100) / 100 }))
+    .sort((a, b) => b.total - a.total)
 }
 
 /**

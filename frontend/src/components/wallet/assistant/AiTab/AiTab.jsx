@@ -116,7 +116,7 @@ export function AiTab({ user }) {
       {showEmpty ? (
         <EmptyState user={user} onSuggestion={c.handleSuggestion} />
       ) : (
-        <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-32">
+        <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-44">
           {c.msgs.map((m) => {
             if (m.type === 'action') {
               return (

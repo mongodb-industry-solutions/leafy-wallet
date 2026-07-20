@@ -174,14 +174,27 @@ export function useAiChat() {
                 }),
               )
             },
-            // Cards render the moment a tool produces them, alongside the streaming reply.
+            // Cards render the moment a tool produces them, alongside the streaming reply. A
+            // re-draft (editing the note or amount) supersedes the prior unconfirmed card for the
+            // same person so only the current one is confirmable, landing it next to the new reply.
             onDraft: (draft) =>
-              appendToThread({
-                id: nextId(),
-                role: 'assistant',
-                type: 'action',
-                actionData: { ...draft, isConfirmed: false },
-              }),
+              setChats((prev) =>
+                prev.map((c) => {
+                  if (c.id !== threadId()) return c
+                  const isStaleDraft = (m) =>
+                    m.type === 'action' &&
+                    !m.actionData.isConfirmed &&
+                    m.actionData.mode === draft.mode &&
+                    m.actionData.contact?.reference === draft.contact?.reference
+                  return {
+                    ...c,
+                    messages: [
+                      ...c.messages.filter((m) => !isStaleDraft(m)),
+                      { id: nextId(), role: 'assistant', type: 'action', actionData: { ...draft, isConfirmed: false } },
+                    ],
+                  }
+                }),
+              ),
             onChart: (chart) =>
               appendToThread({
                 id: nextId(),
