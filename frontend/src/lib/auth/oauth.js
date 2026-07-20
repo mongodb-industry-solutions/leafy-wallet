@@ -51,7 +51,7 @@ function basicAuthHeader() {
 }
 
 /** Build the browser-facing authorize URL (Leafy Pay's frontend login page). */
-export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes }) {
+export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefillEmail, prefillPassword }) {
   const u = new URL(ENV.authorizeUrl())
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', ENV.clientId())
@@ -61,6 +61,10 @@ export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes }) {
   u.searchParams.set('nonce', nonce)
   u.searchParams.set('code_challenge', codeChallenge)
   u.searchParams.set('code_challenge_method', 'S256')
+  // Demo convenience: prefill Leafy Pay's login form (login_hint is standard OIDC; the PSP also
+  // reads prefill_password, but only in its non-production builds).
+  if (prefillEmail) u.searchParams.set('login_hint', prefillEmail)
+  if (prefillPassword) u.searchParams.set('prefill_password', prefillPassword)
   return u.toString()
 }
 
