@@ -28,6 +28,7 @@ export function LoginScreen() {
 
       <div className="relative flex flex-col gap-4 px-6">
         {/* One profile card per demo user. */}
+        <p className="-mb-1 text-center text-sm font-semibold text-foreground">Choose an account</p>
         <div className="flex justify-center gap-3">
           {DEMO_USERS.map((user) => {
             const { seed, bg } = avatarFor(user.email)
@@ -36,13 +37,20 @@ export function LoginScreen() {
                 key={user.email}
                 type="button"
                 onClick={() => handleLogin(user.email)}
-                className="flex flex-1 flex-col items-center gap-2 rounded-2xl border border-border bg-card px-2 py-4 shadow-sm transition-opacity hover:opacity-90"
+                className="flex flex-1 flex-col items-center gap-2.5 rounded-2xl border border-border bg-card px-2 py-5 shadow-sm transition-opacity hover:opacity-90"
               >
-                <Peep seed={seed} bg={bg} size={56} />
-                <span className="text-sm font-semibold text-foreground">{user.name.split(' ')[0]}</span>
+                <Peep seed={seed} bg={bg} size={72} />
+                <span className="text-[15px] font-semibold text-foreground">{user.name.split(' ')[0]}</span>
               </button>
             )
           })}
+        </div>
+
+        {/* Divider between the demo profiles and the generic SSO entry point. */}
+        <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          or
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <button
