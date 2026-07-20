@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  appendChatCard,
   appendChatMessage,
   createChat,
   createRequest,
@@ -154,9 +155,12 @@ export function useAiChat() {
         // Cards land first (above the reply); then the reply reveals via the typewriter. `done` lets
         // the typewriter run once over the finished text and mark itself so it never replays.
         drafts.forEach(upsertDraftCard)
-        charts.forEach((chart) =>
-          appendToThread({ id: nextId(), role: 'assistant', type: 'chart', chartTitle: chart.title, chartData: chart.rows }),
-        )
+        charts.forEach((chart) => {
+          const card = { type: 'chart', chartTitle: chart.title, chartData: chart.rows }
+          appendToThread({ id: nextId(), role: 'assistant', ...card })
+          // Persist alongside the reply so the chart is still there when the chat is reopened.
+          if (reference) appendChatCard(reference, card, isOnlineRef.current)
+        })
         if (reply) {
           appendToThread({ id: replyId, role: 'assistant', type: 'text', text: reply, stream: 'done' })
           if (reference) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
@@ -198,18 +202,20 @@ export function useAiChat() {
     const draft = message?.actionData
     if (!draft || draft.isConfirmed) return
 
+    // The note may have been edited on the card; store the bare phrase, since the card shows "For <note>".
+    const note = (draft.note ?? '').trim().replace(/^for\s+/i, '')
     const result =
       draft.mode === 'request'
         ? await createRequest({
             counterpartyArrangementReference: draft.contact.reference,
             amount: draft.amount,
-            note: draft.note,
+            note,
             isOnline,
           })
         : await sendMoney({
             counterpartyArrangementReference: draft.contact.reference,
             amount: draft.amount,
-            note: draft.note,
+            note,
             isOnline,
           })
 
@@ -230,6 +236,18 @@ export function useAiChat() {
       ),
     }))
     refresh(draft.mode === 'request' ? ['requests'] : ['accounts', 'transactions'])
+  }
+
+  /** Edit a pending draft's note on the card, so changing it never depends on the model re-drafting. */
+  function handleEditNote(id, note) {
+    patchActive((c) => ({
+      ...c,
+      messages: c.messages.map((m) =>
+        m.id === id && m.type === 'action' && !m.actionData.isConfirmed
+          ? { ...m, actionData: { ...m.actionData, note } }
+          : m,
+      ),
+    }))
   }
 
   function handleSendText() {
@@ -303,6 +321,7 @@ export function useAiChat() {
     hasText: textInput.trim().length > 0,
     handleScrollToEnd,
     handleConfirmAction,
+    handleEditNote,
     handleSendText,
     handleSuggestion,
     handleNewChat,

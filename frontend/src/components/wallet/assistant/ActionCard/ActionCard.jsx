@@ -21,9 +21,10 @@ function Row({ label, value }) {
  * @param {object} props
  * @param {object} props.msg - Chat message with an `actionData` payload.
  * @param {(id: string) => void} props.onConfirm - Called when the user confirms the action.
+ * @param {(id: string, note: string) => void} [props.onEditNote] - Edits the draft's note before confirming.
  * @param {() => void} [props.onExpand] - Called when the card expands into review.
  */
-export function ActionCard({ msg, onConfirm, onExpand }) {
+export function ActionCard({ msg, onConfirm, onEditNote, onExpand }) {
   const { accounts } = useWalletData()
   const d = msg.actionData
   const isReq = d.mode === 'request'
@@ -59,6 +60,17 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
         </div>
       ) : isReviewing ? (
         <div className="border-t border-border p-4">
+          <label className="mb-3 block">
+            <span className="mb-1 block text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+              Note
+            </span>
+            <input
+              value={d.note}
+              onChange={(e) => onEditNote?.(msg.id, e.target.value)}
+              placeholder="What’s it for?"
+              className="w-full rounded-lg bg-foreground/[0.05] px-2.5 py-2 text-sm outline-none ring-1 ring-transparent focus:ring-secondary"
+            />
+          </label>
           <div className="flex flex-col gap-2 text-xs">
             {isReq ? (
               <Row label="You’ll receive" value={`€${fmt(d.amount)}`} />

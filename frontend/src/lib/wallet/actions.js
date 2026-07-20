@@ -936,8 +936,26 @@ export async function createChat(title, isOnline = true) {
   }
 }
 
+// Inline cards (spending charts) are kept in the text-only message store by JSON-encoding them behind
+// this marker (a record-separator char the user can't type), so chat history round-trips them without
+// a schema or on-device store change, online and offline alike.
+const CARD_PREFIX = '␞'
+const encodeCard = (card) => `${CARD_PREFIX}${JSON.stringify(card)}`
+
+/** Reconstruct a stored message: a card if it was encoded behind the marker, else plain text. */
+function decodeChatMessage(m) {
+  if (typeof m.text === 'string' && m.text.startsWith(CARD_PREFIX)) {
+    try {
+      return { id: String(m.id), role: m.role, ...JSON.parse(m.text.slice(CARD_PREFIX.length)) }
+    } catch {
+      /* corrupt payload; fall back to showing it as plain text */
+    }
+  }
+  return { id: String(m.id), role: m.role, type: 'text', text: m.text }
+}
+
 /**
- * A chat's messages, oldest first.
+ * A chat's messages, oldest first. Text and any inline cards (e.g. a spending chart) both round-trip.
  * @param {string} reference - The `chatReference`.
  * @param {boolean} [isOnline]
  */
@@ -946,7 +964,7 @@ export async function getChatMessages(reference, isOnline = true) {
   const rows = await (isOnline ? listChatMessageDocs(reference) : listLocalChatMessages(reference)).catch(
     () => [],
   )
-  return (rows ?? []).map((m) => ({ id: String(m.id), role: m.role, type: 'text', text: m.text }))
+  return (rows ?? []).map(decodeChatMessage)
 }
 
 /**
@@ -997,4 +1015,15 @@ export async function appendChatMessage(reference, { role, text }, isOnline = tr
   } catch {
     return { ok: false }
   }
+}
+
+/**
+ * Persist an inline card (e.g. a spending chart) as an assistant message, so it survives closing and
+ * reopening the chat. Stored behind the card marker in the same text field as everything else.
+ * @param {string} reference - The `chatReference`.
+ * @param {object} card - The rendered card message minus its id, e.g. `{ type: 'chart', chartTitle, chartData }`.
+ * @param {boolean} [isOnline]
+ */
+export async function appendChatCard(reference, card, isOnline = true) {
+  return appendChatMessage(reference, { role: 'assistant', text: encodeCard(card) }, isOnline)
 }

@@ -121,7 +121,12 @@ export function AiTab({ user }) {
             if (m.type === 'action') {
               return (
                 <div key={m.id} className="flex justify-start">
-                  <ActionCard msg={m} onConfirm={c.handleConfirmAction} onExpand={c.handleScrollToEnd} />
+                  <ActionCard
+                    msg={m}
+                    onConfirm={c.handleConfirmAction}
+                    onEditNote={c.handleEditNote}
+                    onExpand={c.handleScrollToEnd}
+                  />
                 </div>
               )
             }
