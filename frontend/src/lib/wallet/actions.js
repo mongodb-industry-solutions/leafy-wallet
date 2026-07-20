@@ -51,6 +51,42 @@ import {
 } from '@/lib/local/LocalStoreClient'
 import { lookupDigest } from './digest'
 import { avatarFor, formatDate, formatMoney } from './format'
+import { DEMO_USERS } from '@/lib/demo-users'
+
+// Demo-user avatars keyed by email blind index. A contact/transaction/request that resolves to a
+// demo user then shows the same pinned illustration regardless of the alias the user saved it under
+// (the name is editable, the email digest is stable).
+let demoAvatarsByDigest = null
+function demoAvatarByDigest(digest) {
+  if (!digest) return undefined
+  if (!demoAvatarsByDigest) {
+    demoAvatarsByDigest = new Map(DEMO_USERS.map((u) => [lookupDigest(u.email), { seed: u.seed, bg: u.bg }]))
+  }
+  return demoAvatarsByDigest.get(digest)
+}
+
+// Backfilled contacts keep no digest and only a first-char-masked email hint ("p***@back.es"), so we
+// fall back to matching that hint's (first local char + domain) against the demo users. Only matches
+// when exactly one demo user fits, so it never guesses between two similar addresses.
+function demoAvatarByHint(hint) {
+  const at = hint?.indexOf('@') ?? -1
+  if (at <= 0) return undefined // not an email hint (e.g. phone) or malformed
+  const firstChar = hint[0].toLowerCase()
+  const domain = hint.slice(at + 1).toLowerCase()
+  const matches = DEMO_USERS.filter((u) => {
+    const [local, dom] = u.email.toLowerCase().split('@')
+    return local[0] === firstChar && dom === domain
+  })
+  return matches.length === 1 ? { seed: matches[0].seed, bg: matches[0].bg } : undefined
+}
+
+// Requests carry no hint and a digest that predates the current key, but `requesterName` is the
+// requester's real profile name (not a user-editable local alias), so it's a reliable key here.
+function demoAvatarByName(name) {
+  const key = name?.trim().toLowerCase()
+  const user = key ? DEMO_USERS.find((u) => u.name.toLowerCase() === key) : undefined
+  return user ? { seed: user.seed, bg: user.bg } : undefined
+}
 
 async function ownerRef() {
   const session = await getSession()
@@ -122,7 +158,7 @@ function toContactView(b) {
     reference: b.reference,
     name: b.label,
     lookupHint: b.lookupHint,
-    ...avatarFor(b.reference ?? b.label),
+    ...(demoAvatarByDigest(b.lookupDigest) ?? demoAvatarByHint(b.lookupHint) ?? avatarFor(b.reference ?? b.label)),
   }
 }
 
@@ -287,7 +323,7 @@ function toTransactionRow({ reference, counterpartyRef, contact, isReceived, mag
     createdAt,
     status,
     isPending,
-    ...avatarFor(counterpartyRef ?? reference),
+    ...(demoAvatarByDigest(contact?.lookupDigest) ?? demoAvatarByHint(contact?.lookupHint) ?? avatarFor(counterpartyRef ?? reference)),
   }
 }
 
@@ -697,7 +733,9 @@ function toRequestView(r) {
     status: r.status,
     date: formatDate(createdAt),
     createdAt,
-    ...avatarFor(r.requesterDigest ?? r.requestReference),
+    ...(demoAvatarByDigest(r.requesterDigest) ??
+      demoAvatarByName(r.requesterName) ??
+      avatarFor(r.requesterDigest ?? r.requestReference)),
   }
 }
 

@@ -6,8 +6,20 @@
  * walkthrough will display whatever is listed here. The values below match MongoDB's shared
  * demo environment.
  */
+// `seed`/`bg` pin each user's Peep avatar (dicebear open-peeps) so the login card and the in-app
+// profile picture always render the same illustration. `bg` is a hex color without the leading `#`.
 export const DEMO_USERS = [
-  { name: 'Amara Okafor', email: 'amara.okafor@back.es', password: 'demo-password' },
-  { name: 'Luis Fernandez', email: 'luis.fernandez@back.es', password: 'demo-password' },
-  { name: 'Priya Patel', email: 'priya.patel@back.es', password: 'demo-password' },
+  { name: 'Amara Okafor', email: 'amara.okafor@back.es', password: 'demo-password', seed: 'amara', bg: 'dcfce7' },
+  { name: 'Luis Fernandez', email: 'luis.fernandez@back.es', password: 'demo-password', seed: 'luis-fernandez', bg: 'dbeafe' },
+  { name: 'Priya Patel', email: 'priya.patel@back.es', password: 'demo-password', seed: 'priya-patel', bg: 'fce7f3' },
 ]
+
+/**
+ * Look up a demo user's pinned avatar by email, so the in-app profile picture matches the login card.
+ * @param {string} [email]
+ * @returns {{seed: string, bg: string} | undefined}
+ */
+export function demoAvatarFor(email) {
+  const user = email ? DEMO_USERS.find((u) => u.email === email) : undefined
+  return user ? { seed: user.seed, bg: user.bg } : undefined
+}
