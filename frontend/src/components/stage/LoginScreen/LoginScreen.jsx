@@ -28,7 +28,6 @@ export function LoginScreen() {
 
       <div className="relative flex flex-col gap-4 px-6">
         {/* One profile card per demo user. */}
-        <p className="-mb-1 text-center text-sm font-semibold text-foreground">Choose an account</p>
         <div className="flex justify-center gap-3">
           {DEMO_USERS.map((user) => {
             const { seed, bg } = avatarFor(user.email)
