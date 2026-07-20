@@ -3,18 +3,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { me } from '@/lib/auth/actions'
 import { hasCredential } from '@/lib/auth/authenticator'
+import { demoAvatarFor } from '@/lib/demo-users'
 
-// Forest-green tint for the identity avatar until we cache a per-user color.
+// Forest-green tint for the identity avatar when the user isn't a pinned demo profile.
 const AVATAR_BG = '00684A'
 const LOGOUT_URL = '/api/auth/logout'
 
 /** Shapes the me() identity into the user object the wallet UI expects (Peep seed/bg plus display name). */
 function toUser(identity) {
+  // Pin the avatar for known demo users so it matches the login card; otherwise derive from the sub.
+  const avatar = demoAvatarFor(identity.email) ?? { seed: identity.sub, bg: AVATAR_BG }
   return {
     name: identity.name || identity.email || 'You',
     email: identity.email || '',
-    seed: identity.sub,
-    bg: AVATAR_BG,
+    seed: avatar.seed,
+    bg: avatar.bg,
     sub: identity.sub,
   }
 }
