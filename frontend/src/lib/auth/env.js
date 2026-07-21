@@ -10,6 +10,8 @@ export const REQUESTED_SCOPES = [
   'write:transfers',
   'read:accounts',
   'read:transactions',
+  'read:rtp',
+  'write:rtp',
 ]
 
 /** Read an env var, treating empty strings as unset. */
@@ -30,9 +32,4 @@ export const ENV = {
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
   // Browser-facing login page, on the frontend host (a different host from the API).
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,
-  // Corp SSO session cookie: lets server-side calls through the gate fronting the
-  // staging PSP. Set only in .env.local; unset when deployed inside the corp network.
-  pspDevCookie: () => envVar('PSP_DEV_COOKIE') ?? '',
-  // Blind-index key for contact/request lookup digests. Rotating it orphans every stored digest.
-  lookupDigestKey: () => envVar('LOOKUP_DIGEST_KEY') ?? '',
 }

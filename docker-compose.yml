@@ -26,7 +26,7 @@ services:
     entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
   objectbox-sync-server:
-    image: objectboxio/sync-server-trial
+    image: objectboxio/sync:sync-server-2026-07-14
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
@@ -45,7 +45,8 @@ services:
           --unsecured-no-authentication \
           --admin-bind 0.0.0.0:9980 \
           --mongo-url "$$MONGODB_URI" \
-          --mongo-db "$$DATABASE_NAME"
+          --mongo-db "$$DATABASE_NAME" \
+          --mongo-initial-import
     restart: always
   leafy-local-store:
     build:

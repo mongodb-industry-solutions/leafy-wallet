@@ -83,9 +83,8 @@ To run the demo outside MongoDB:
 
 1. Run Leafy Pay locally, or deploy it to your own infrastructure.
 2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
-3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`) in that instance.
+3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
 
-> **_Note:_** You may notice a `PSP_DEV_COOKIE` variable in the code and env examples. That cookie is a MongoDB-internal bypass for the corporate gate that sits in front of our shared Leafy Pay environment. It is not part of the demo's design and is not needed when you run Leafy Pay yourself. It will be removed from the code once this demo is deployed to MongoDB's staging infrastructure; until then, simply leave it unset.
 
 ## Prerequisites
 
@@ -100,18 +99,18 @@ To run the demo outside MongoDB:
 > **_Note:_** Create a `.env.local` file within the `/frontend` directory and a `.env` file within the `/backend` directory. Ask the demo owner for the values.
 
 ```bash
-# frontend/.env.local
+# frontend/.env.local - everything else has a working local default
 CLIENT_ID="<leafy-pay-oauth-client-id>"
 CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
 PSP_BASE_URL="<leafy-pay-api-base-url>"
 PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
-APP_BASE_URL="http://localhost:3000"
-REDIRECT_URI="http://localhost:3000/api/auth/callback"
 SESSION_SECRET="<random-string>"
-BACKEND_URL="http://localhost:8000"
-PSP_DEV_COOKIE=""   # MongoDB-internal only, leave unset when running your own Leafy Pay
-LOOKUP_DIGEST_KEY="<random-string-for-blind-indexes>"
 ```
+
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`) and `GROVE_API_KEY`, plus the
+URLs that only default correctly on localhost - see [`environment/`](environment/). `APP_ENV` is what
+sends the assistant's chat to MongoDB's Grove gateway; embeddings stay on Ollama in every
+environment, since they have to run on the device for offline search.
 
 ```bash
 # backend/.env
@@ -168,7 +167,7 @@ The services and their ports:
 - **The first AI reply is slow or times out.** The chat model loads into memory on first use; the `ollama-pull` container warms it at startup, so wait for that container to exit before chatting.
 - **Chats or requests don't sync.** Make sure the ObjectBox Sync trial license was activated at http://localhost:9980.
 - **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
-- **Payment requests never arrive.** `LOOKUP_DIGEST_KEY` must be set and identical across environments that should exchange requests.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
 
 ## 📄 License
 

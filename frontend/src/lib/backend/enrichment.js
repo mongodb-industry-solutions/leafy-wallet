@@ -139,37 +139,26 @@ export async function deleteContactEnrichment(id) {
 }
 
 /**
- * Pending payment requests addressed to a user. Leafy Pay has no concept of a request, so these
- * live only in Atlas; the target finds their own by digesting their session email.
- * @param {string} targetDigest - The blind index of the target's email (see lib/wallet/digest.js).
+ * The Atlas `walletRequests` replica for a user: requests they raised (`requesterPartyRef`) or are
+ * asked to pay (`payerPartyRef`). Leafy Pay owns the requests themselves; this copy exists so they
+ * can be read on the device with no connection.
+ * @param {{requesterPartyRef?: string, payerPartyRef?: string}} filter
  */
-export async function listIncomingRequests(targetDigest) {
-  const query = new URLSearchParams({ targetDigest, status: 'pending' }).toString()
+export async function listRequestDocs(filter) {
+  const query = new URLSearchParams(filter).toString()
   return backendGet(`/api/v1/wallet-requests?${query}`)
 }
 
 /**
- * Payment requests a user has raised, in any state (their outbox).
- * @param {string} owner - The OAuth `sub` (requesterPartyRef).
+ * Mirror one Leafy Pay request into Atlas. Keyed by `requestReference`, so re-reading a request
+ * converges onto the same doc instead of duplicating it.
+ * @param {object} doc - `{ requestReference, requesterPartyRef, requesterName, payerPartyRef, payerCounterpartyRef, amount, currency, note, status, localSyncStatus, leafyPayTransferReference, createdAt, resolvedAt }`.
  */
-export async function listOutgoingRequests(owner) {
-  const query = new URLSearchParams({ requesterPartyRef: owner }).toString()
-  return backendGet(`/api/v1/wallet-requests?${query}`)
-}
-
-/**
- * Raise a payment request.
- * @param {object} doc - `{ requesterPartyRef, requesterName, requesterDigest, targetDigest, amount, currency, note }`.
- */
-export async function createRequestDoc(doc) {
+export async function upsertRequestDoc(doc) {
   return backendPost('/api/v1/wallet-requests', doc)
 }
 
-/**
- * Resolve a request. The backend rejects a second resolution, so a request can only settle once.
- * @param {string} id - The Atlas id.
- * @param {object} patch - `{ status, leafyPayTransferReference? }`.
- */
-export async function resolveRequestDoc(id, patch) {
-  return backendPatch(`/api/v1/wallet-requests/${encodeURIComponent(id)}`, patch)
+/** Delete a replica whose request no longer exists in Leafy Pay. */
+export async function deleteRequestDoc(id) {
+  return backendDelete(`/api/v1/wallet-requests/${encodeURIComponent(id)}`)
 }

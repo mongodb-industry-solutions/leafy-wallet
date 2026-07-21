@@ -8,6 +8,8 @@ ownership:
 
 env:
   NODE_ENV: staging
+  # Routes the assistant's chat model to the Grove gateway. Only "local" uses an Ollama chat model.
+  APP_ENV: staging
   # AWS region for IRSA (no credentials needed)
   AWS_REGION: us-east-1
   # Backend API URL for frontend to connect to backend health check - get <service-name> using kubectl get services
@@ -19,6 +21,13 @@ envSecrets:
   # MongoDB Configuration
   MONGODB_URI: <secret-group>
   DATABASE_NAME: <secret-group>
+  # Leafy Pay OAuth client
+  CLIENT_ID: <secret-group>
+  CLIENT_SECRET: <secret-group>
+  SESSION_SECRET: <secret-group>
+  # Grove gateway key. Required whenever APP_ENV is not "local" - the deployed Ollama serves
+  # embeddings only, so there is no local chat model to fall back to.
+  GROVE_API_KEY: <secret-group>
 
 ## should be used in case of multiple sidecar containers
 # sidecarContainers:

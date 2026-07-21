@@ -1,84 +1,111 @@
-from bson import ObjectId
-
 from db.client import get_db
 
 BASE = "/api/v1/wallet-requests"
 
+PAYEE = "11111111-1111-1111-1111-111111111111"
+PAYER = "22222222-2222-2222-2222-222222222222"
+
+# Mirrors one Leafy Pay request. The collection is keyed by `requestReference`, Leafy Pay's own:
+# this store replicates requests, it does not mint them.
 REQUEST_PAYLOAD = {
-    "requesterPartyRef": "11111111-1111-1111-1111-111111111111",
+    "requestReference": "rtp-test-0001",
+    "requesterPartyRef": PAYEE,
     "requesterName": "Amara Okafor",
-    "requesterDigest": "a" * 64,
-    "targetDigest": "b" * 64,
+    "payerPartyRef": PAYER,
+    "payerCounterpartyRef": "arr-0001",
     "amount": 25.5,
     "currency": "EUR",
     "note": "Dinner split",
+    "status": "presented",
 }
 
 
-def _cleanup(request_id):
-    get_db().delete_one("walletRequests", {"_id": ObjectId(request_id)})
+def _cleanup(reference):
+    get_db().delete_one("walletRequests", {"requestReference": reference})
 
 
-def test_request_crud_lifecycle(client):
-    created = client.post(f"{BASE}", json=REQUEST_PAYLOAD)
-    assert created.status_code == 201
+def test_request_is_mirrored_and_readable_from_both_boxes(client):
+    created = client.post(BASE, json=REQUEST_PAYLOAD)
+    assert created.status_code == 200
     body = created.json()
-    request_id = body["_id"]
-    assert body["status"] == "pending"
-    assert body["requestReference"]
+    assert body["status"] == "presented"
+    assert body["localSyncStatus"] == "synced"
+    assert body["createdAt"] is not None
     assert body["resolvedAt"] is None
-    assert body["leafyPayTransferReference"] is None
 
     try:
-        # The target's inbox: they find this by digesting their own session email.
-        inbox = client.get(
-            f"{BASE}", params={"targetDigest": REQUEST_PAYLOAD["targetDigest"], "status": "pending"}
-        )
+        inbox = client.get(BASE, params={"payerPartyRef": PAYER})
         assert inbox.status_code == 200
-        assert any(r["_id"] == request_id for r in inbox.json())
+        assert any(r["requestReference"] == REQUEST_PAYLOAD["requestReference"] for r in inbox.json())
 
-        outbox = client.get(
-            f"{BASE}", params={"requesterPartyRef": REQUEST_PAYLOAD["requesterPartyRef"]}
-        )
+        outbox = client.get(BASE, params={"requesterPartyRef": PAYEE})
         assert outbox.status_code == 200
-        assert any(r["_id"] == request_id for r in outbox.json())
+        assert any(r["requestReference"] == REQUEST_PAYLOAD["requestReference"] for r in outbox.json())
+    finally:
+        _cleanup(REQUEST_PAYLOAD["requestReference"])
 
-        paid = client.patch(
-            f"{BASE}/{request_id}",
-            json={"status": "paid", "leafyPayTransferReference": "tx-ref-1"},
+
+def test_rewriting_a_request_converges_instead_of_duplicating(client):
+    """The app re-posts every request it reads from Leafy Pay, so writes must be idempotent."""
+    client.post(BASE, json=REQUEST_PAYLOAD)
+    try:
+        settled = client.post(
+            BASE,
+            json={
+                **REQUEST_PAYLOAD,
+                "status": "payment_settled",
+                "leafyPayTransferReference": "exec-1",
+            },
         )
-        assert paid.status_code == 200
-        assert paid.json()["status"] == "paid"
-        assert paid.json()["leafyPayTransferReference"] == "tx-ref-1"
-        assert paid.json()["resolvedAt"] is not None
+        assert settled.status_code == 200
+        assert settled.json()["status"] == "payment_settled"
 
-        # Resolving twice would let a second transfer settle the same request.
-        replayed = client.patch(f"{BASE}/{request_id}", json={"status": "declined"})
-        assert replayed.status_code == 409
+        stored = client.get(BASE, params={"requesterPartyRef": PAYEE}).json()
+        matching = [r for r in stored if r["requestReference"] == REQUEST_PAYLOAD["requestReference"]]
+        assert len(matching) == 1
+        assert matching[0]["leafyPayTransferReference"] == "exec-1"
     finally:
-        _cleanup(request_id)
+        _cleanup(REQUEST_PAYLOAD["requestReference"])
 
 
-def test_pending_request_is_not_in_another_targets_inbox(client):
-    created = client.post(f"{BASE}", json=REQUEST_PAYLOAD)
-    request_id = created.json()["_id"]
+def test_request_is_not_in_another_partys_inbox(client):
+    client.post(BASE, json=REQUEST_PAYLOAD)
     try:
-        inbox = client.get(f"{BASE}", params={"targetDigest": "c" * 64})
-        assert all(r["_id"] != request_id for r in inbox.json())
+        inbox = client.get(BASE, params={"payerPartyRef": "33333333-3333-3333-3333-333333333333"})
+        assert all(r["requestReference"] != REQUEST_PAYLOAD["requestReference"] for r in inbox.json())
     finally:
-        _cleanup(request_id)
+        _cleanup(REQUEST_PAYLOAD["requestReference"])
 
 
-def test_empty_patch_returns_400(client):
-    created = client.post(f"{BASE}", json=REQUEST_PAYLOAD)
-    request_id = created.json()["_id"]
+def test_queued_request_is_findable_by_its_sync_status(client):
+    """A request composed offline is replayed into Leafy Pay on reconnect, so it must be findable."""
+    queued = {
+        **REQUEST_PAYLOAD,
+        "requestReference": "local-test-0001",
+        "payerPartyRef": "",
+        "status": "created",
+        "localSyncStatus": "local_pending",
+    }
+    client.post(BASE, json=queued)
     try:
-        assert client.patch(f"{BASE}/{request_id}", json={}).status_code == 400
+        pending = client.get(BASE, params={"localSyncStatus": "local_pending"})
+        assert any(r["requestReference"] == "local-test-0001" for r in pending.json())
     finally:
-        _cleanup(request_id)
+        _cleanup("local-test-0001")
+
+
+def test_orphaned_request_can_be_pruned(client):
+    created = client.post(BASE, json=REQUEST_PAYLOAD)
+    request_id = created.json()["_id"]
+    assert client.delete(f"{BASE}/{request_id}").status_code == 204
+    remaining = client.get(BASE, params={"requesterPartyRef": PAYEE}).json()
+    assert all(r["requestReference"] != REQUEST_PAYLOAD["requestReference"] for r in remaining)
 
 
 def test_non_positive_amount_is_rejected(client):
-    response = client.post(f"{BASE}", json={**REQUEST_PAYLOAD, "amount": 0})
-    assert response.status_code == 422
+    assert client.post(BASE, json={**REQUEST_PAYLOAD, "amount": 0}).status_code == 422
 
+
+def test_status_outside_the_leafy_pay_lifecycle_is_rejected(client):
+    """The replica cannot invent a status Leafy Pay does not have."""
+    assert client.post(BASE, json={**REQUEST_PAYLOAD, "status": "paid"}).status_code == 422

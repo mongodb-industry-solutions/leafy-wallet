@@ -125,7 +125,6 @@ npm run setup:key:rsa   # writes backend/keys/private.pem
 |----------|-------|
 | `MONGODB_URI` | Connection string for the **Leafy Wallet** database (distinct from Leafy Pay) |
 | `DATABASE_NAME` | Leafy Wallet database name |
-| `LOOKUP_DIGEST_KEY` | 32-byte hex key; must be identical to the frontend value below |
 
 ### 5.3 Leafy Wallet frontend — `leafy-wallet/frontend/.env.local`
 
@@ -134,23 +133,18 @@ CLIENT_ID=<from frontend/.env.local.example>
 CLIENT_SECRET=<from frontend/.env.local.example>
 PSP_BASE_URL=http://host.docker.internal:8081
 PSP_FRONTEND_URL=http://localhost:8080
-APP_BASE_URL=http://localhost:3000
-REDIRECT_URI=http://localhost:3000/api/auth/callback
-LOOKUP_DIGEST_KEY=<32-byte hex; identical to the backend value>
 ```
 
-Generate a `LOOKUP_DIGEST_KEY` value with:
-
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
+The redirect URI is derived as `<APP_BASE_URL>/api/auth/callback`, and `APP_BASE_URL` itself
+defaults to `http://localhost:3000` - set neither unless the app is served from another origin.
 
 Notes:
 
 - `PSP_BASE_URL` must use `host.docker.internal`, not `localhost`. Server-side calls run inside the
   wallet container, where `localhost` refers to the container itself.
-- `LOOKUP_DIGEST_KEY` must be identical in the frontend and backend files, otherwise contact and request
-  digests will not resolve.
+- The OAuth client registered in Leafy Pay must allow the scopes the wallet asks for at login
+  (`frontend/src/lib/auth/env.js`), including `read:rtp` and `write:rtp` for payment requests.
+  Leafy Pay rejects the whole login with `invalid_scope` if any requested scope is not registered.
 - The two `MONGODB_URI` values point to different databases and are configured independently.
 
 ---

@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHash, randomBytes } from 'crypto'
-import { createRemoteJWKSet, jwtVerify, customFetch } from 'jose'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { ENV } from './env'
 
 let jwksCache = null
@@ -20,17 +20,8 @@ function oidcConfig() {
 }
 
 function jwks(jwksUri) {
-  // jose fetches the JWKS with its own fetch, which would miss PSP_DEV_COOKIE and hit the corp gate.
-  // Route it through pspFetch so the JWKS request carries the same cookie as every other Leafy Pay call.
-  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri), { [customFetch]: pspFetch })
+  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri))
   return jwksCache
-}
-
-// Attaches PSP_DEV_COOKIE (a copied corp-SSO session, dev-only) so server-side calls pass the gate.
-function pspFetch(url, init = {}) {
-  const cookie = ENV.pspDevCookie()
-  const headers = cookie ? { ...init.headers, Cookie: cookie } : init.headers
-  return fetch(url, { ...init, headers })
 }
 
 const b64url = (buf) => buf.toString('base64url')

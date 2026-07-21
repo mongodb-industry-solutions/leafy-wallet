@@ -4,12 +4,11 @@ import { useState } from 'react'
 import { resolveRequest } from '@/lib/wallet/actions'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 
-const OFFLINE_PAY_ERROR = 'You need to be online to pay a request.'
+const OFFLINE_ERROR = 'You need to be online to answer a request.'
 
 /**
- * Actions for the payment requests in the notifications feed. Paying moves real money, so it needs
- * the network - `tryPay` gates on that and the panel hands off to the full review flow. Declining
- * only rewrites a record and works offline.
+ * Actions for the requests in the notifications feed. Both need the network: Leafy Pay owns the
+ * request, so paying moves money there and declining is a transition only it can make.
  * @returns {{busyId: string|null, error: string, tryPay: () => boolean, handleDecline: (reference: string) => Promise<void>}}
  */
 export function useRequestActions() {
@@ -21,7 +20,7 @@ export function useRequestActions() {
   function tryPay() {
     setError('')
     if (!isOnline) {
-      setError(OFFLINE_PAY_ERROR)
+      setError(OFFLINE_ERROR)
       return false
     }
     return true
@@ -29,8 +28,12 @@ export function useRequestActions() {
 
   async function handleDecline(reference) {
     setError('')
+    if (!isOnline) {
+      setError(OFFLINE_ERROR)
+      return
+    }
     setBusyId(reference)
-    const res = await resolveRequest(reference, 'declined', isOnline)
+    const res = await resolveRequest(reference, 'declined')
     setBusyId(null)
     if (res.ok) refresh(['requests'])
     else setError(res.error)

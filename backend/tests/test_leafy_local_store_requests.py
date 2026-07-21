@@ -4,9 +4,9 @@ objectbox-sync-server leafy-local-store). Not part of CI - these are for
 local regression-checking only, and skip cleanly if the service isn't
 reachable.
 
-Records created here sync into the live walletRequests/walletContacts Atlas
-collections, so each test cleans up via DELETE, propagating the deletion
-through ObjectBox Sync back to Atlas too.
+Leafy Pay owns requests; this store holds the replica plus any composed offline.
+Records created here sync into the live Atlas collections, so each test cleans up
+via DELETE, propagating the deletion through ObjectBox Sync back to Atlas too.
 """
 
 import uuid
@@ -32,11 +32,10 @@ def _unique(prefix):
 
 def _create_request(**overrides):
     payload = {
-        "requestReference": _unique("test-req"),
+        "requestReference": f"local-{uuid.uuid4()}",
         "requesterPartyRef": _unique("test-requester"),
         "requesterName": "Amara Okafor",
-        "requesterDigest": _unique("digest-amara"),
-        "targetDigest": _unique("digest-luis"),
+        "payerCounterpartyRef": _unique("test-arr"),
         "amount": 25.5,
         "note": "Dinner split",
         **overrides,
@@ -60,28 +59,25 @@ def test_health_reports_request_count():
     assert "request_count" in response.json()
 
 
-def test_created_request_starts_pending(request_fixture):
+def test_request_composed_offline_is_queued_for_replay(request_fixture):
     body, _ = request_fixture
-    assert body["status"] == "pending"
+    # Leafy Pay has not seen it yet, so it carries Leafy Pay's own opening status and no payer:
+    # only Leafy Pay can resolve the contact into the party who will be asked to pay.
+    assert body["localSyncStatus"] == "local_pending"
+    assert body["status"] == "created"
+    assert body["payerPartyRef"] == ""
     assert body["amount"] == 25.5
     assert body["currency"] == "EUR"
     assert body["leafyPayTransferReference"] is None
     assert body["resolvedAt"] is None
 
 
-def test_request_is_listed_for_its_target_digest_only(request_fixture):
-    body, payload = request_fixture
-
-    inbox = httpx.get(
-        f"{BASE}/local/v1/requests",
-        params={"targetDigest": payload["targetDigest"], "status": "pending"},
+def test_queued_requests_are_findable_by_sync_status(request_fixture):
+    _, payload = request_fixture
+    queued = httpx.get(
+        f"{BASE}/local/v1/requests", params={"localSyncStatus": "local_pending"}
     ).json()
-    assert any(r["requestReference"] == payload["requestReference"] for r in inbox)
-
-    stranger = httpx.get(
-        f"{BASE}/local/v1/requests", params={"targetDigest": _unique("digest-stranger")}
-    ).json()
-    assert all(r["requestReference"] != payload["requestReference"] for r in stranger)
+    assert any(r["requestReference"] == payload["requestReference"] for r in queued)
 
 
 def test_request_is_listed_in_its_requesters_outbox(request_fixture):
@@ -91,43 +87,44 @@ def test_request_is_listed_in_its_requesters_outbox(request_fixture):
     ).json()
     assert any(r["requestReference"] == payload["requestReference"] for r in outbox)
 
-
-def test_resolving_a_request_records_the_transfer(request_fixture):
-    body, _ = request_fixture
-    resolved = httpx.put(
-        f"{BASE}/local/v1/requests/{body['id']}",
-        json={"status": "paid", "leafyPayTransferReference": "test-transfer-ref"},
-    )
-    assert resolved.status_code == 200
-    assert resolved.json()["status"] == "paid"
-    assert resolved.json()["leafyPayTransferReference"] == "test-transfer-ref"
-    assert resolved.json()["resolvedAt"] is not None
+    stranger = httpx.get(
+        f"{BASE}/local/v1/requests", params={"requesterPartyRef": _unique("test-stranger")}
+    ).json()
+    assert all(r["requestReference"] != payload["requestReference"] for r in stranger)
 
 
-def test_a_resolved_request_cannot_be_resolved_again(request_fixture):
-    body, _ = request_fixture
-    assert httpx.put(f"{BASE}/local/v1/requests/{body['id']}", json={"status": "declined"}).status_code == 200
-    replayed = httpx.put(f"{BASE}/local/v1/requests/{body['id']}", json={"status": "paid"})
-    assert replayed.status_code == 409
+def test_queued_request_reaches_nobodys_inbox(request_fixture):
+    """A queued request has no payer yet, so it must not surface as money anyone owes.
+
+    Only Leafy Pay can resolve the contact into a party, so rows carrying a payer arrive by sync
+    from Atlas (covered in test_leafy_local_store_sync.py), never from this endpoint.
+    """
+    body, payload = request_fixture
+    assert body["payerPartyRef"] == ""
+
+    inbox = httpx.get(
+        f"{BASE}/local/v1/requests", params={"payerPartyRef": payload["requesterPartyRef"]}
+    ).json()
+    assert all(r["requestReference"] != payload["requestReference"] for r in inbox)
 
 
-def test_resolve_requires_a_status(request_fixture):
-    body, _ = request_fixture
-    assert httpx.put(f"{BASE}/local/v1/requests/{body['id']}", json={}).status_code == 400
-
-
-def test_create_requires_a_target_digest():
-    created, _ = _create_request(targetDigest=None)
+def test_create_requires_the_contact_being_asked():
+    created, _ = _create_request(payerCounterpartyRef=None)
     assert created.status_code in (400, 500)
 
 
-def test_resolving_an_unknown_request_returns_404():
-    assert httpx.put(f"{BASE}/local/v1/requests/999999", json={"status": "paid"}).status_code == 404
+def test_replayed_request_can_be_dropped(request_fixture):
+    """Once Leafy Pay holds the real request, the local stand-in is deleted, not resolved."""
+    body, payload = request_fixture
+    assert httpx.delete(f"{BASE}/local/v1/requests/{body['id']}").status_code == 204
+    remaining = httpx.get(
+        f"{BASE}/local/v1/requests", params={"requesterPartyRef": payload["requesterPartyRef"]}
+    ).json()
+    assert all(r["requestReference"] != payload["requestReference"] for r in remaining)
 
 
-def test_contact_lookup_digest_round_trips():
-    """A contact synced down from Atlas keeps the digest a request is addressed to."""
-    digest = _unique("digest-luis")
+def test_contact_round_trips_with_only_a_masked_hint():
+    """Contacts keep the mask Leafy Pay returns and never the address it was resolved from."""
     created = httpx.post(
         f"{BASE}/local/v1/contacts",
         json={
@@ -136,17 +133,18 @@ def test_contact_lookup_digest_round_trips():
             "counterpartyLabel": "Luis",
             "counterpartyLookupType": "email",
             "counterpartyLookupHint": "l***@back.es",
-            "counterpartyLookupDigest": digest,
         },
     )
     assert created.status_code == 201
     try:
-        assert created.json()["counterpartyLookupDigest"] == digest
+        body = created.json()
+        assert body["counterpartyLookupHint"] == "l***@back.es"
+        assert "counterpartyLookupDigest" not in body
     finally:
-        httpx.delete(f"{BASE}/local/v1/contacts/{created.json()['id']}")
+        httpx.delete(f"{BASE}/local/v1/contacts/{body['id']}")
 
 
-def test_phone_contact_stores_a_null_digest():
+def test_phone_contact_round_trips():
     created = httpx.post(
         f"{BASE}/local/v1/contacts",
         json={
@@ -154,13 +152,13 @@ def test_phone_contact_stores_a_null_digest():
             "counterpartyArrangementReference": _unique("test-arr"),
             "counterpartyLabel": "Carlos",
             "counterpartyLookupType": "phone",
-            "counterpartyLookupHint": "***678",
-            "counterpartyLookupDigest": None,
+            "counterpartyLookupHint": "+34 6** *** 678",
         },
     )
     assert created.status_code == 201
     try:
-        assert created.json()["counterpartyLookupDigest"] is None
+        assert created.json()["counterpartyLookupType"] == "phone"
+        assert created.json()["counterpartyLookupHint"] == "+34 6** *** 678"
     finally:
         httpx.delete(f"{BASE}/local/v1/contacts/{created.json()['id']}")
 

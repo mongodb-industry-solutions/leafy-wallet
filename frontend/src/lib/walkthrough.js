@@ -119,8 +119,13 @@ export const WALKTHROUGH = {
       },
       {
         icon: Send,
-        title: 'Delivered through the cloud',
-        body: 'When both people are online, the request travels through Atlas to the other wallet, carrying its note and context along as one flexible document.',
+        title: 'Delivered by the bank',
+        body: 'Back online, the request goes to Leafy Pay as a real request to pay. It lands in the other person’s wallet and the money only moves once they approve it.',
+      },
+      {
+        icon: Database,
+        title: 'Kept close by',
+        body: 'A copy of every request rides down through Atlas onto the phone, so the list is still there to read the next time the signal is not.',
       },
     ],
   },

@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { classifyNotes } from '@/lib/wallet/categories'
+import { assertEmbeddingsReady } from '../helpers/model'
+
+beforeAll(async () => {
+  await assertEmbeddingsReady()
+})
 
 // nomic-embed embeddings and the nearest-category match are deterministic, so these mappings are
 // stable and can be asserted exactly. This is the real check that spending categorization works,

@@ -6,15 +6,17 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest run tests/unit"
+    "test:unit": "vitest run tests/unit",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@dicebear/core": "^9.4.2",
     "@dicebear/open-peeps": "^9.4.2",
+    "@langchain/anthropic": "^1.5.1",
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
     "@langchain/mcp-adapters": "^1.1.3",
