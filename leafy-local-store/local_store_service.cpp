@@ -722,7 +722,7 @@ std::vector<float> embed_with_voyage(const std::string& text) {
         return {};
     }
 
-    httplib::Client client("https://api.voyageai.com");
+    httplib::Client client("https://ai.mongodb.com");
     client.set_connection_timeout(30);
     client.set_read_timeout(30);
 
