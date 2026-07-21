@@ -659,9 +659,21 @@ const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::payerCounterpartyRef(15);
 
+// ─── Embedding provider ─────────────────────────────────────────────────
+// Ollama on a developer machine, Voyage once deployed, since no Ollama container is
+// deployed. The two models have different vector widths, so each environment keeps
+// its own Atlas database and its own on-device store.
+
+std::string env_or(const char* name, const std::string& fallback) {
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : fallback;
+}
+
+const bool IS_LOCAL = env_or("APP_ENV", "local") == "local";
+
 // ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
 
-constexpr int EMBEDDING_DIMENSIONS = 768;
+const int EMBEDDING_DIMENSIONS = IS_LOCAL ? 768 : 1024;
 
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
@@ -791,18 +803,13 @@ OBX_model* create_obx_model() {
     return model;
 }
 
-// ─── Ollama embedding client ────────────────────────────────────────────
-// Re-implements backend/services/ollama.py's get_embedding() contract in
+// ─── Embedding client ───────────────────────────────────────────────────
+// Re-implements backend/services/embeddings.py's get_embedding() contract in
 // C++, since this service can't import the Python module. Same graceful
-// degradation: returns an empty vector (not a thrown error) on failure, so
-// a down Ollama doesn't block writing the underlying transaction.
+// degradation: returns an empty vector (not a thrown error) on failure, so an
+// unreachable provider doesn't block writing the underlying transaction.
 
-std::string env_or(const char* name, const std::string& fallback) {
-    const char* value = std::getenv(name);
-    return value ? std::string(value) : fallback;
-}
-
-std::vector<float> get_embedding(const std::string& text) {
+std::vector<float> embed_with_ollama(const std::string& text) {
     static const std::string base_url = env_or("OLLAMA_BASE_URL", "http://ollama:11434");
     static const std::string model_name = env_or("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text");
 
@@ -825,6 +832,44 @@ std::vector<float> get_embedding(const std::string& text) {
         std::cerr << "Failed to parse Ollama embedding response: " << e.what() << std::endl;
         return {};
     }
+}
+
+std::vector<float> embed_with_voyage(const std::string& text) {
+    static const std::string api_key = env_or("VOYAGE_API_KEY", "");
+    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-4-lite");
+
+    if (api_key.empty()) {
+        std::cerr << "VOYAGE_API_KEY is not set; continuing without noteEmbedding" << std::endl;
+        return {};
+    }
+
+    httplib::Client client("https://api.voyageai.com");
+    client.set_connection_timeout(30);
+    client.set_read_timeout(30);
+
+    json body = {{"model", model_name},
+                 {"input", json::array({text})},
+                 {"input_type", "document"},
+                 {"output_dimension", EMBEDDING_DIMENSIONS}};
+    httplib::Headers headers = {{"Authorization", "Bearer " + api_key}};
+    auto response = client.Post("/v1/embeddings", headers, body.dump(), "application/json");
+
+    if (!response || response->status != 200) {
+        std::cerr << "Voyage embedding request failed; continuing without noteEmbedding" << std::endl;
+        return {};
+    }
+
+    try {
+        auto parsed = json::parse(response->body);
+        return parsed.at("data").at(0).at("embedding").get<std::vector<float>>();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to parse Voyage embedding response: " << e.what() << std::endl;
+        return {};
+    }
+}
+
+std::vector<float> get_embedding(const std::string& text) {
+    return IS_LOCAL ? embed_with_ollama(text) : embed_with_voyage(text);
 }
 
 // ─── ObjectBox store + sync ─────────────────────────────────────────────

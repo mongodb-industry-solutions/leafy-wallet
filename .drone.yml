@@ -101,13 +101,13 @@ steps:
       namespace: industrysolutions
       release: leafy-wallet-frontend
       values_files: ["environment/staging.yaml"]
-      # sidecarContainers indices follow environment/staging.yaml: 0 backend, 1 ollama,
-      # 2 leafy-local-store, 3 objectbox-sync-server.
+      # sidecarContainers indices follow environment/staging.yaml: 0 backend,
+      # 1 leafy-local-store, 2 objectbox-sync-server.
       values:
         - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
         - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-frontend"
         - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
-        - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
+        - "sidecarContainers[1].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
         - "ingress.enabled=true"
         - "ingress.hosts[0]=leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com"
         - "mesh.enabled=true"
@@ -119,18 +119,14 @@ steps:
         - "sidecarContainers[0].resources.limits.memory=1024Mi"
         - "sidecarContainers[0].resources.requests.cpu=100m"
         - "sidecarContainers[0].resources.requests.memory=256Mi"
-        - "sidecarContainers[1].resources.limits.cpu=1000m"
-        - "sidecarContainers[1].resources.limits.memory=2Gi"
-        - "sidecarContainers[1].resources.requests.cpu=200m"
-        - "sidecarContainers[1].resources.requests.memory=1Gi"
+        - "sidecarContainers[1].resources.limits.cpu=500m"
+        - "sidecarContainers[1].resources.limits.memory=512Mi"
+        - "sidecarContainers[1].resources.requests.cpu=100m"
+        - "sidecarContainers[1].resources.requests.memory=256Mi"
         - "sidecarContainers[2].resources.limits.cpu=500m"
-        - "sidecarContainers[2].resources.limits.memory=512Mi"
+        - "sidecarContainers[2].resources.limits.memory=1024Mi"
         - "sidecarContainers[2].resources.requests.cpu=100m"
         - "sidecarContainers[2].resources.requests.memory=256Mi"
-        - "sidecarContainers[3].resources.limits.cpu=500m"
-        - "sidecarContainers[3].resources.limits.memory=1024Mi"
-        - "sidecarContainers[3].resources.requests.cpu=100m"
-        - "sidecarContainers[3].resources.requests.memory=256Mi"
       api_server: https://api.staging.corp.mongodb.com
       kubernetes_token:
         from_secret: staging_kubernetes_token
@@ -245,11 +241,13 @@ steps:
       namespace: industrysolutions
       release: leafy-wallet-frontend
       values_files: ["environment/production.yaml"]
+      # sidecarContainers indices follow environment/production.yaml: 0 backend,
+      # 1 leafy-local-store, 2 objectbox-sync-server.
       values:
         - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
         - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-frontend"
         - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
-        - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
+        - "sidecarContainers[1].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
         - "ingress.enabled=true"
         - "ingress.hosts[0]=leafy-wallet-frontend.industrysolutions.prod.corp.mongodb.com"
         - "mesh.enabled=true"
@@ -261,18 +259,14 @@ steps:
         - "sidecarContainers[0].resources.limits.memory=1024Mi"
         - "sidecarContainers[0].resources.requests.cpu=150m"
         - "sidecarContainers[0].resources.requests.memory=256Mi"
-        - "sidecarContainers[1].resources.limits.cpu=1000m"
-        - "sidecarContainers[1].resources.limits.memory=2Gi"
-        - "sidecarContainers[1].resources.requests.cpu=200m"
-        - "sidecarContainers[1].resources.requests.memory=1Gi"
+        - "sidecarContainers[1].resources.limits.cpu=500m"
+        - "sidecarContainers[1].resources.limits.memory=512Mi"
+        - "sidecarContainers[1].resources.requests.cpu=150m"
+        - "sidecarContainers[1].resources.requests.memory=256Mi"
         - "sidecarContainers[2].resources.limits.cpu=500m"
-        - "sidecarContainers[2].resources.limits.memory=512Mi"
+        - "sidecarContainers[2].resources.limits.memory=1024Mi"
         - "sidecarContainers[2].resources.requests.cpu=150m"
         - "sidecarContainers[2].resources.requests.memory=256Mi"
-        - "sidecarContainers[3].resources.limits.cpu=500m"
-        - "sidecarContainers[3].resources.limits.memory=1024Mi"
-        - "sidecarContainers[3].resources.requests.cpu=150m"
-        - "sidecarContainers[3].resources.requests.memory=256Mi"
       api_server: https://api.prod.corp.mongodb.com
       kubernetes_token:
         from_secret: prod_kubernetes_token

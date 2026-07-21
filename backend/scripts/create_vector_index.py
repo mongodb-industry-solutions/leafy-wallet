@@ -12,7 +12,7 @@ import time
 from pymongo.operations import SearchIndexModel
 
 from db.mdb import MongoDBConnector
-from services.ollama import get_embedding
+from services.embeddings import get_embedding
 
 # (collection, index name, embedded field). The index filters on
 # `ownerPartyRef` so a search can be scoped to a single user.

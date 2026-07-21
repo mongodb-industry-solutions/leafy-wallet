@@ -1,7 +1,5 @@
 import 'server-only'
-
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-const EMBED_MODEL = process.env.OLLAMA_EMBEDDING_MODEL ?? 'nomic-embed-text'
+import { embed } from '@/lib/ai/embeddings'
 
 // Spending categories, each anchored by a short descriptor that the embedding matches notes against.
 // "Other" catches empty notes and anything that lands closest to it.
@@ -26,18 +24,6 @@ export const emojiForCategory = (label) => EMOJI_BY_LABEL.get(label) ?? '💸'
 // Category vectors are embedded once; note -> category is memoized so repeat queries don't re-embed.
 let categoryVectorsPromise = null
 const noteCategoryCache = new Map()
-
-/** Embed one or more strings with Ollama's embedding model. Returns a vector per input. */
-async function embed(inputs) {
-  const res = await fetch(`${OLLAMA_URL}/api/embed`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: EMBED_MODEL, input: inputs }),
-  })
-  if (!res.ok) throw new Error(`Embedding request failed: ${res.status}`)
-  const data = await res.json()
-  return data.embeddings ?? []
-}
 
 /** Cosine similarity of two equal-length vectors. */
 function cosine(a, b) {

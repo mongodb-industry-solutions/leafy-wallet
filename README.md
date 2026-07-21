@@ -107,10 +107,11 @@ PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
 SESSION_SECRET="<random-string>"
 ```
 
-Deployed environments additionally set `APP_ENV` (`staging`/`prod`) and `GROVE_API_KEY`, plus the
-URLs that only default correctly on localhost - see [`environment/`](environment/). `APP_ENV` is what
-sends the assistant's chat to MongoDB's Grove gateway; embeddings stay on Ollama in every
-environment, since they have to run on the device for offline search.
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`), `GROVE_API_KEY` and
+`VOYAGE_API_KEY`, plus the URLs that only default correctly on localhost - see
+[`environment/`](environment/). `APP_ENV` is what moves the assistant's chat to MongoDB's Grove
+gateway and embeddings to Voyage, so no Ollama container is deployed. The two embedding models have
+different vector widths (768 local, 1024 deployed), so each environment uses its own Atlas database.
 
 ```bash
 # backend/.env

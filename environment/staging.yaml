@@ -11,7 +11,6 @@ env:
   AWS_REGION: us-east-1
   BACKEND_URL: http://localhost:8000
   LOCAL_STORE_URL: http://localhost:8090
-  OLLAMA_BASE_URL: http://localhost:11434
   APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
   PSP_BASE_URL: http://sec-fsi-pci-dss-backend-web-app:80
   PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
@@ -24,13 +23,17 @@ envSecrets:
   CLIENT_SECRET: leafy-wallet-kanopy
   SESSION_SECRET: leafy-wallet-kanopy
   GROVE_API_KEY: leafy-wallet-kanopy
+  VOYAGE_API_KEY: leafy-wallet-kanopy
 
 # Order matters: .drone.yml overrides these by index.
 sidecarContainers:
   - name: backend
     image: 795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:latest
-    containerPort: 8000
+    ports:
+      - containerPort: 8000
     env:
+      - name: APP_ENV
+        value: staging
       - name: MONGODB_URI
         valueFrom:
           secretKeyRef:
@@ -41,29 +44,24 @@ sidecarContainers:
           secretKeyRef:
             name: leafy-wallet-kanopy
             key: DATABASE_NAME
-      - name: OLLAMA_BASE_URL
-        value: http://localhost:11434
-
-  - name: ollama
-    image: ollama/ollama:0.32.0
-    command: ["/bin/sh", "-c"]
-    args:
-      - |
-        ollama serve &
-        until ollama list >/dev/null 2>&1; do sleep 1; done
-        ollama pull nomic-embed-text
-        wait
-    volumeMounts:
-      - name: ollama-models
-        mountPath: /root/.ollama
+      - name: VOYAGE_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: leafy-wallet-kanopy
+            key: VOYAGE_API_KEY
 
   - name: leafy-local-store
     image: 795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:latest
     env:
-      - name: OLLAMA_BASE_URL
-        value: http://localhost:11434
+      - name: APP_ENV
+        value: staging
       - name: SYNC_SERVER_URL
         value: ws://localhost:9999
+      - name: VOYAGE_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: leafy-wallet-kanopy
+            key: VOYAGE_API_KEY
     volumeMounts:
       - name: local-store-data
         mountPath: /app/local-store-db
@@ -101,8 +99,6 @@ sidecarContainers:
 
 # objectbox-model comes from a ConfigMap created by hand; recreate it when the schema changes.
 extraVolumes:
-  - name: ollama-models
-    emptyDir: {}
   - name: local-store-data
     emptyDir: {}
   - name: sync-server-data

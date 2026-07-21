@@ -33,7 +33,7 @@ class WalletTransactionCreate(BaseModel):
     write path.
 
     `noteEmbedding` is absent on purpose: it's generated server-side by
-    Ollama from `note` (see services/ollama.py), never supplied by the
+    the embedding provider from `note` (see services/embeddings.py), never supplied by the
     client. `_id`/`createdAt`/`settledAt` are also server-managed, same
     reasoning as WalletContactCreate.
     """

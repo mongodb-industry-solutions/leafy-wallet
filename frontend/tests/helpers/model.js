@@ -33,10 +33,20 @@ async function assertOllamaHas(model) {
 }
 
 /**
- * Preflight for the category evals. Embeddings run on the device for offline search, so they are on
- * Ollama in every environment - APP_ENV never moves them.
+ * Preflight for the category evals: Ollama locally, Voyage once APP_ENV says the code is deployed.
  */
-export const assertEmbeddingsReady = () => assertOllamaHas(EMBED_MODEL)
+export async function assertEmbeddingsReady() {
+  if (APP_ENV !== 'local') {
+    if (!process.env.VOYAGE_API_KEY) {
+      throw new Error(
+        `\n\n  APP_ENV is "${APP_ENV}" so embeddings run on Voyage, but VOYAGE_API_KEY is unset.\n` +
+          `  Set it, or unset APP_ENV to embed with the local model instead.\n`,
+      )
+    }
+    return
+  }
+  await assertOllamaHas(EMBED_MODEL)
+}
 
 /**
  * Preflight for the AI evals: fail loudly when the model the graph would pick isn't reachable, so a

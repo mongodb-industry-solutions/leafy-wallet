@@ -1,7 +1,7 @@
 from pymongo.errors import OperationFailure
 
 from db.utils import with_str_id
-from services.ollama import get_embedding
+from services.embeddings import get_embedding
 
 COLLECTION = "walletTransactions"
 NOTE_EMBEDDING_INDEX = "noteEmbedding_vector_index"
