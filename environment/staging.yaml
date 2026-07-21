@@ -13,8 +13,8 @@ env:
   LOCAL_STORE_URL: http://localhost:8090
   OLLAMA_BASE_URL: http://localhost:11434
   APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
-  PSP_BASE_URL: <leafy-pay-api-base-url>
-  PSP_FRONTEND_URL: <leafy-pay-hosted-login-url>
+  PSP_BASE_URL: https://sec-fsi-pci-dss-backend.industrysolutions.staging.corp.mongodb.com
+  PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
 # Secret name only; set the values with `helm ksec set leafy-wallet-kanopy ...`.
 envSecrets:
