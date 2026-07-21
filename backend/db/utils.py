@@ -7,7 +7,7 @@ def parse_object_id(id_str: str) -> ObjectId:
     """Parse a path-param string into a Mongo ObjectId, or 404 if malformed."""
     try:
         return ObjectId(id_str)
-    except (InvalidId, TypeError):
+    except InvalidId:
         raise HTTPException(status_code=404, detail="Not found")
 
 

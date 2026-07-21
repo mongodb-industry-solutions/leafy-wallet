@@ -25,7 +25,7 @@ export function pushSpendingChart(charts, direction, rows) {
 export function formatSpending(rows, direction) {
   const label = direction === 'received' ? 'received' : 'sent'
   const verb = direction === 'received' ? 'received from' : 'sent to'
-  const currency = rows[0]?.currency ?? 'EUR'
+  const currency = rows[0].currency ?? 'EUR'
   const total = rows.reduce((sum, r) => sum + r.total, 0)
   const lines = rows.map((r) => `${verb} ${r.contact}: ${money(r.total, r.currency)} across ${r.count} payment(s)`)
   return [`Total ${label}: ${money(total, currency)} across ${rows.length} contact(s).`, ...lines].join('\n')
@@ -41,7 +41,7 @@ export function pushCategoryChart(charts, rows) {
 
 /** Text form of a by-category spending breakdown, leading with the pre-computed total. */
 export function formatCategory(rows) {
-  const currency = rows[0]?.currency ?? 'EUR'
+  const currency = rows[0].currency ?? 'EUR'
   const total = rows.reduce((sum, r) => sum + r.total, 0)
   const lines = rows.map((r) => `${r.emoji} ${r.category}: ${money(r.total, currency)} across ${r.count} payment(s)`)
   return [`Total spent: ${money(total, currency)} across ${rows.length} categories.`, ...lines].join('\n')

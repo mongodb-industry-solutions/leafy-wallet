@@ -119,7 +119,7 @@ function toAccountView(a) {
 export async function getAccounts(isOnline = true) {
   if (!isOnline) {
     const cached = await listLocalAccounts().catch(() => [])
-    return (cached ?? []).map((a) =>
+    return cached.map((a) =>
       toAccountView({
         reference: a.accountReference,
         label: a.label,
@@ -169,7 +169,7 @@ async function resolveContacts(owner, { backfill = false } = {}) {
     listBeneficiaries().catch(() => []),
     owner ? listContactEnrichment(owner).catch(() => []) : [],
   ])
-  const atlasByRef = new Map((enrichment ?? []).map((e) => [e.counterpartyArrangementReference, e]))
+  const atlasByRef = new Map(enrichment.map((e) => [e.counterpartyArrangementReference, e]))
 
   if (backfill && owner) {
     const missing = beneficiaries.filter((b) => !atlasByRef.has(b.reference))
@@ -202,7 +202,7 @@ async function resolveContacts(owner, { backfill = false } = {}) {
 /** Contacts held on the device, synced down from Atlas. The only source when offline. */
 async function localContacts(owner) {
   const contacts = await listLocalContacts().catch(() => [])
-  return (contacts ?? [])
+  return contacts
     .filter((c) => !owner || c.ownerPartyRef === owner)
     .map((c) => ({
       reference: c.counterpartyArrangementReference,
@@ -333,7 +333,7 @@ async function localTransactions(owner) {
   ])
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
 
-  const rows = (transactions ?? [])
+  const rows = transactions
     .filter((t) => !owner || t.ownerPartyRef === owner)
     .map((t) => {
       const createdAt = t.createdAt ? new Date(t.createdAt).toISOString() : null
@@ -372,7 +372,7 @@ export async function getTransactions(isOnline = true) {
     bothRequestBoxes(),
   ])
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
-  const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
+  const enrichByRef = new Map(enrichment.map((e) => [e.leafyPayTransferReference, e]))
 
   // Leafy Pay owns settlement, so any enrichment still marked pending against a completed transfer
   // is stale - settling can outlast the send flow's watcher.
@@ -546,7 +546,7 @@ export async function markTransferSettled(reference, status) {
 export async function replayPendingSends() {
   const owner = await ownerRef()
   const transactions = await listLocalTransactions().catch(() => [])
-  const pending = (transactions ?? []).filter(
+  const pending = transactions.filter(
     (t) => t.localSyncStatus === LOCAL_PENDING && (!owner || t.ownerPartyRef === owner),
   )
 
@@ -602,22 +602,22 @@ export async function reconcileWithLeafyPay() {
         listRequestDocs({ requesterPartyRef: owner }).catch(() => []),
         listRequestDocs({ payerPartyRef: owner }).catch(() => []),
       ])
-    const requestDocs = [...(raised ?? []), ...(received ?? [])]
+    const requestDocs = [...raised, ...received]
     const transferRefs = new Set(transfers.map((t) => t.reference))
     const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
     const requestRefs = new Set(requests.map((r) => r.reference))
-    const enrichedRefs = new Set((txDocs ?? []).map((d) => d.leafyPayTransferReference))
+    const enrichedRefs = new Set(txDocs.map((d) => d.leafyPayTransferReference))
     // A request's settlement is a real payment Leafy Pay's history leaves out, so its enrichment
     // has no transfer to match and must not be mistaken for an orphan.
     const requestPaymentRefs = new Set(requests.map((r) => r.executionReference).filter(Boolean))
 
-    const orphanTransactions = (txDocs ?? []).filter(
+    const orphanTransactions = txDocs.filter(
       (d) =>
         !String(d.leafyPayTransferReference ?? '').startsWith(LOCAL_REFERENCE_PREFIX) &&
         !transferRefs.has(d.leafyPayTransferReference) &&
         !requestPaymentRefs.has(d.leafyPayTransferReference),
     )
-    const orphanContacts = (contactDocs ?? []).filter(
+    const orphanContacts = contactDocs.filter(
       (d) => !beneficiaryRefs.has(d.counterpartyArrangementReference),
     )
     const orphanRequests = requestDocs.filter(
@@ -677,7 +677,7 @@ export async function searchTransactions(q, isOnline = true, limit = 10) {
   ])
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
 
-  return (hits ?? []).map((t) => {
+  return hits.map((t) => {
     const status = t.leafyPayStatus === SETTLED_STATUS ? 'completed' : t.leafyPayStatus
     return toTransactionRow({
       reference: t.leafyPayTransferReference,
@@ -713,7 +713,7 @@ export async function getSpendingByContact(isOnline = true, direction = 'sent') 
   ])
   const labelByRef = new Map(contacts.map((c) => [c.reference, c.label]))
 
-  return (rows ?? []).map((r) => ({
+  return rows.map((r) => ({
     contact: labelByRef.get(r.counterpartyArrangementReference) || 'Leafy Pay user',
     total: r.total,
     count: r.count,
@@ -931,8 +931,8 @@ export async function getRequests(isOnline = true) {
         contact,
       })
     }
-    incoming = (inbox ?? []).filter((r) => isAwaitingPayer(r.status)).map((r) => view(r, true))
-    outgoing = (outbox ?? []).map((r) => view(r, false))
+    incoming = inbox.filter((r) => isAwaitingPayer(r.status)).map((r) => view(r, true))
+    outgoing = outbox.map((r) => view(r, false))
   }
 
   const sortNewestFirst = (rows) =>
@@ -952,7 +952,7 @@ export async function replayPendingRequests() {
 
   let replayed = 0
   let failed = 0
-  for (const r of (queued ?? []).filter((x) => !owner || x.requesterPartyRef === owner)) {
+  for (const r of queued.filter((x) => !owner || x.requesterPartyRef === owner)) {
     const sent = await createRequest({
       counterpartyArrangementReference: r.payerCounterpartyRef,
       amount: r.amount,
@@ -1053,7 +1053,7 @@ export async function getChats(isOnline = true) {
   const owner = await ownerRef()
   if (!owner) return []
   const chats = await (isOnline ? listChatDocs(owner) : listLocalChats(owner)).catch(() => [])
-  return (chats ?? [])
+  return chats
     .map((c) => ({
       id: c.chatReference,
       reference: c.chatReference,

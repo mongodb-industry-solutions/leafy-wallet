@@ -44,7 +44,7 @@ async def _embed_with_voyage(client: httpx.AsyncClient, text: str) -> list[float
             "model": VOYAGE_EMBEDDING_MODEL,
             "input": [text],
             "input_type": "document",
-            "output_dimension": embedding_dimensions(),
+            "output_dimension": VOYAGE_DIMENSIONS,
         },
     )
     response.raise_for_status()

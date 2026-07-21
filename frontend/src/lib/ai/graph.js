@@ -115,19 +115,16 @@ export function recoverToolCalls(content, toolNames) {
     const key = `${name}:${JSON.stringify(args)}`
     if (seen.has(key)) return
     seen.add(key)
-    calls.push({ name, args: args ?? {}, id: `rec_${calls.length}`, type: 'tool_call' })
+    calls.push({ name, args, id: `rec_${calls.length}`, type: 'tool_call' })
   }
 
   // JSON forms: {"name":..,"arguments":..} or a bare args object after the tool's name.
-  if (content.includes('{')) {
-    for (const { value, start } of extractJsonObjects(content)) {
-      if (!value || typeof value !== 'object') continue
-      if (typeof value.name === 'string') {
-        add(value.name, value.arguments ?? value.parameters ?? {})
-      } else {
-        const preceding = content.slice(0, start).match(/([a-z_][a-z0-9_]*)\s*\(?\s*$/i)
-        if (preceding) add(preceding[1], value)
-      }
+  for (const { value, start } of extractJsonObjects(content)) {
+    if (typeof value.name === 'string') {
+      add(value.name, value.arguments ?? value.parameters ?? {})
+    } else {
+      const preceding = content.slice(0, start).match(/([a-z_][a-z0-9_]*)\s*\(?\s*$/i)
+      if (preceding) add(preceding[1], value)
     }
   }
 
@@ -177,7 +174,7 @@ export function compileGraph(tools, { isOnline }) {
       if (APP_ENV !== 'local') throw e
       reply = await model.invoke(messages)
     }
-    // Salvage a tool call written as prose. Only the local model does this; Claude never needs it.
+    // Salvage a tool call written as prose, which is how the local model often emits one.
     if (!reply.tool_calls?.length) {
       const recovered = recoverToolCalls(reply.content, toolNames)
       if (recovered.length) return { messages: [new AIMessage({ content: '', tool_calls: recovered })] }
@@ -204,10 +201,10 @@ export function compileGraph(tools, { isOnline }) {
  * server; offline: the on-device store) and compiles the graph over it. Async, and the tools are
  * imported lazily, so the server-only data layer never loads until a real turn runs.
  * @param {boolean} isOnline - Passed to the tools, which pick their own source from it.
- * @param {object[]} [drafts] - Collects any payment the model drafts for confirmation.
- * @param {object[]} [charts] - Collects any spending breakdown a tool produces for inline display.
+ * @param {object[]} drafts - Collects any payment the model drafts for confirmation.
+ * @param {object[]} charts - Collects any spending breakdown a tool produces for inline display.
  */
-export async function buildGraph(isOnline, drafts = [], charts = []) {
+export async function buildGraph(isOnline, drafts, charts) {
   const { walletTools } = await import('./tools')
   const tools = await walletTools(isOnline, drafts, charts)
   return compileGraph(tools, { isOnline })

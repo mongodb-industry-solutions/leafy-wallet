@@ -69,7 +69,7 @@ export async function exchangeCode(code, codeVerifier) {
     code_verifier: codeVerifier,
     client_id: ENV.clientId(),
   })
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -90,7 +90,7 @@ export async function refreshTokens(refreshToken) {
     refresh_token: refreshToken,
     client_id: ENV.clientId(),
   })
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -113,16 +113,13 @@ export class OAuthUpstreamError extends Error {
   }
 }
 
-function backchannelEndpoint(cfg) {
-  return cfg.backchannel_authentication_endpoint ?? cfg.token_endpoint.replace(/\/token$/, '/bc-authorize')
-}
 
 /** Initiate the CIBA backchannel request and return { auth_req_id, expires_in, interval }. */
 export async function backchannelAuthorize({ loginHintToken, scope, bindingMessage }) {
   const cfg = oidcConfig()
   const body = new URLSearchParams({ login_hint_token: loginHintToken, scope, client_id: ENV.clientId() })
   if (bindingMessage) body.set('binding_message', bindingMessage)
-  const res = await pspFetch(backchannelEndpoint(cfg), {
+  const res = await fetch(cfg.backchannel_authentication_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -141,7 +138,7 @@ export async function backchannelAuthorize({ loginHintToken, scope, bindingMessa
  */
 export async function cibaTokenPoll(authReqId) {
   const cfg = oidcConfig()
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({
@@ -170,7 +167,7 @@ export async function cibaTokenPoll(authReqId) {
 /** Best-effort token revocation. */
 export async function revoke(token) {
   const cfg = oidcConfig()
-  await pspFetch(cfg.revocation_endpoint, {
+  await fetch(cfg.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({ token }),
@@ -185,7 +182,7 @@ export async function revoke(token) {
 export async function fetchUserinfo(accessToken) {
   try {
     const cfg = oidcConfig()
-    const res = await pspFetch(cfg.userinfo_endpoint, {
+    const res = await fetch(cfg.userinfo_endpoint, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })

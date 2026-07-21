@@ -11,8 +11,8 @@ const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings'
 const VOYAGE_MODEL = process.env.VOYAGE_EMBEDDING_MODEL ?? 'voyage-3-large'
 const VOYAGE_KEY = process.env.VOYAGE_API_KEY ?? ''
 
-/** Vector width of the active provider. Must match the ObjectBox HNSW index and the Atlas index. */
-const EMBEDDING_DIMENSIONS = APP_ENV === 'local' ? 768 : 1024
+// Must match the deployed Atlas vector index. The on-device width is owned by leafy-local-store.
+const VOYAGE_DIMENSIONS = 1024
 
 async function embedWithOllama(inputs) {
   const res = await fetch(`${OLLAMA_URL}/api/embed`, {
@@ -36,7 +36,7 @@ async function embedWithVoyage(inputs) {
       model: VOYAGE_MODEL,
       input: inputs,
       input_type: 'document',
-      output_dimension: EMBEDDING_DIMENSIONS,
+      output_dimension: VOYAGE_DIMENSIONS,
     }),
   })
   if (!res.ok) throw new Error(`Embedding request failed: ${res.status}`)

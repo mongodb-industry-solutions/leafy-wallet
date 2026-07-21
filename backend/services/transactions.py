@@ -65,7 +65,7 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
 
 
 class SemanticSearchUnavailable(Exception):
-    """Raised when Ollama or Atlas Vector Search can't currently serve a search.
+    """Raised when the embedding provider or Atlas Vector Search cannot serve a search.
 
     Kept as a plain exception (not `HTTPException`) so this function stays
     usable from both the REST route (which translates it to a 503) and the

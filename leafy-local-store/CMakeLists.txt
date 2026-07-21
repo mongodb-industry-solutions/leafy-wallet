@@ -49,7 +49,6 @@ target_include_directories(local_store_service PRIVATE
     ${objectbox_SOURCE_DIR}/include
     ${httplib_SOURCE_DIR}
     ${json_SOURCE_DIR}/single_include
-    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(local_store_service PRIVATE
