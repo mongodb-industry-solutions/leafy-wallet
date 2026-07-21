@@ -12,7 +12,7 @@ env:
   BACKEND_URL: http://localhost:8000
   LOCAL_STORE_URL: http://localhost:8090
   OLLAMA_BASE_URL: http://localhost:11434
-  APP_BASE_URL: https://leafy-wallet.industrysolutions.staging.corp.mongodb.com
+  APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
   PSP_BASE_URL: <leafy-pay-api-base-url>
   PSP_FRONTEND_URL: <leafy-pay-hosted-login-url>
 
