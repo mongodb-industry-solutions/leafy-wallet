@@ -35,13 +35,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# 4. cpp-httplib needs OpenSSL for HTTPS client calls (we call Ollama over plain
-# HTTP, but the header still expects the symbols unless CPPHTTPLIB_OPENSSL_SUPPORT
-# is left undefined — simplest to just not define it and skip linking OpenSSL).
+# 4. OpenSSL, so httplib can reach Voyage over HTTPS when deployed. Ollama is plain
+# HTTP, but the deployed provider is not, so the client needs TLS either way.
+find_package(OpenSSL REQUIRED)
 
 add_executable(local_store_service
     local_store_service.cpp
 )
+
+target_compile_definitions(local_store_service PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
 target_include_directories(local_store_service PRIVATE
     ${objectbox_SOURCE_DIR}/include
@@ -52,6 +54,8 @@ target_include_directories(local_store_service PRIVATE
 
 target_link_libraries(local_store_service PRIVATE
     objectbox-sync
+    OpenSSL::SSL
+    OpenSSL::Crypto
     pthread
     dl
 )

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from db.client import get_db
 from db.mdb import MongoDBConnector
 from db.utils import parse_object_id, with_str_id
-from services.ollama import get_embedding
+from services.embeddings import get_embedding
 from services.transactions import SemanticSearchUnavailable
 from services.transactions import list_transactions as list_transactions_service
 from services.transactions import search_transactions as search_transactions_service
