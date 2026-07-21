@@ -17,7 +17,7 @@ env:
   PSP_BASE_URL: https://sec-fsi-pci-dss-backend.industrysolutions.staging.corp.mongodb.com
   PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
-# Secret names only, never values. Set them with `helm ksec set leafy-wallet-kanopy ...`.
+# Secret names only
 envSecrets:
   MONGODB_URI: leafy-wallet-kanopy
   DATABASE_NAME: leafy-wallet-kanopy
