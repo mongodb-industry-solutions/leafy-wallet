@@ -7,7 +7,6 @@ services:
     ports:
       - "11434:11434"
     healthcheck:
-      # Fast checks only during startup (so dependents unblock quickly), then quiet once healthy.
       test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 5s
@@ -25,18 +24,16 @@ services:
       - OLLAMA_HOST=ollama:11434
     entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
+  # Falls back to the public trial image; point OBJECTBOX_SYNC_IMAGE at a licensed one in .env.
   objectbox-sync-server:
-    # Defaults to ObjectBox's public trial image so a fresh clone runs with no extra steps. The trial
-    # stops accepting transactions after a fixed window; with a licensed build, load it and point
-    # OBJECTBOX_SYNC_IMAGE at it in a root .env (see README).
     image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync-server-trial}
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - backend/.env
     ports:
-      - "9980:9980"  # Admin UI - activate the trial license here
-      - "9999:9999"  # Sync protocol port for leafy-local-store
+      - "9980:9980"
+      - "9999:9999"
     volumes:
       - ./objectbox-sync-server:/data
     working_dir: /data

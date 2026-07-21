@@ -13,12 +13,10 @@ env:
   LOCAL_STORE_URL: http://localhost:8090
   OLLAMA_BASE_URL: http://localhost:11434
   APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
-  # Server to server, so it stays in-cluster and never crosses the ingress.
   PSP_BASE_URL: http://sec-fsi-pci-dss-backend-web-app:80
-  # Public: the browser navigates here to log in.
   PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
-# Secret name only; set the values with `helm ksec set leafy-wallet-kanopy ...`.
+# Secret names only, never values. Set them with `helm ksec set leafy-wallet-kanopy ...`.
 envSecrets:
   MONGODB_URI: leafy-wallet-kanopy
   DATABASE_NAME: leafy-wallet-kanopy
@@ -46,7 +44,6 @@ sidecarContainers:
       - name: OLLAMA_BASE_URL
         value: http://localhost:11434
 
-  # Embeddings only; the chat model is behind Grove.
   - name: ollama
     image: ollama/ollama:0.32.0
     command: ["/bin/sh", "-c"]
@@ -71,12 +68,11 @@ sidecarContainers:
       - name: local-store-data
         mountPath: /app/local-store-db
 
-  # Licensed build, pushed to ECR by hand (not built by CI).
   - name: objectbox-sync-server
     image: 795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-objectbox-sync:2026-07-14
     args:
       - --model
-      - /data/objectbox-model.json
+      - /model/objectbox-model.json
       - --unsecured-no-authentication
       - --admin-bind
       - 0.0.0.0:9980
@@ -99,7 +95,11 @@ sidecarContainers:
     volumeMounts:
       - name: sync-server-data
         mountPath: /data
+      - name: objectbox-model
+        mountPath: /model
+        readOnly: true
 
+# objectbox-model comes from a ConfigMap created by hand; recreate it when the schema changes.
 extraVolumes:
   - name: ollama-models
     emptyDir: {}
@@ -107,6 +107,9 @@ extraVolumes:
     emptyDir: {}
   - name: sync-server-data
     emptyDir: {}
+  - name: objectbox-model
+    configMap:
+      name: leafy-wallet-objectbox-model
 
 serviceAccount:
   enabled: true
