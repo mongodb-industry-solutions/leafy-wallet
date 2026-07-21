@@ -64,7 +64,6 @@ steps:
       event:
         - push
 
-  # The on-device store. Its Dockerfile builds the C++ service, so the context is its own directory.
   - name: publish-local-store
     image: plugins/kaniko-ecr
     resources:
@@ -102,10 +101,9 @@ steps:
       namespace: industrysolutions
       release: leafy-wallet-frontend
       values_files: ["environment/staging.yaml"]
+      # sidecarContainers indices follow environment/staging.yaml: 0 backend, 1 ollama,
+      # 2 leafy-local-store, 3 objectbox-sync-server.
       values:
-        # Pin the CI-built images to this commit. Indices follow environment/staging.yaml:
-        # 0 backend, 1 ollama, 2 leafy-local-store, 3 objectbox-sync-server. Ollama and the sync
-        # server are not built here (public image / licensed image pushed by hand).
         - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
         - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-frontend"
         - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
@@ -113,27 +111,22 @@ steps:
         - "ingress.enabled=true"
         - "ingress.hosts[0]=leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com"
         - "mesh.enabled=true"
-        # Frontend
         - "resources.limits.cpu=500m"
         - "resources.limits.memory=1024Mi"
         - "resources.requests.cpu=100m"
         - "resources.requests.memory=256Mi"
-        # backend
         - "sidecarContainers[0].resources.limits.cpu=500m"
         - "sidecarContainers[0].resources.limits.memory=1024Mi"
         - "sidecarContainers[0].resources.requests.cpu=100m"
         - "sidecarContainers[0].resources.requests.memory=256Mi"
-        # ollama - loads the embedding model into memory, so it needs the most headroom here
         - "sidecarContainers[1].resources.limits.cpu=1000m"
         - "sidecarContainers[1].resources.limits.memory=2Gi"
         - "sidecarContainers[1].resources.requests.cpu=200m"
         - "sidecarContainers[1].resources.requests.memory=1Gi"
-        # leafy-local-store
         - "sidecarContainers[2].resources.limits.cpu=500m"
         - "sidecarContainers[2].resources.limits.memory=512Mi"
         - "sidecarContainers[2].resources.requests.cpu=100m"
         - "sidecarContainers[2].resources.requests.memory=256Mi"
-        # objectbox-sync-server
         - "sidecarContainers[3].resources.limits.cpu=500m"
         - "sidecarContainers[3].resources.limits.memory=1024Mi"
         - "sidecarContainers[3].resources.requests.cpu=100m"
