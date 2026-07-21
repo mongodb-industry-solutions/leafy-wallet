@@ -36,14 +36,14 @@ server**
   - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
 
 - **AI**:
-  - Embeddings: [Ollama](https://ollama.com/) (nomic-embed-text) locally, [Voyage](https://www.voyageai.com/) when deployed
+  - Embeddings: [Ollama](https://ollama.com/) (nomic-embed-text) locally, [Voyage AI on Atlas](https://www.mongodb.com/docs/voyageai/) when deployed
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - A MongoDB Atlas cluster (M0 or higher)
 - A running Ollama with the embedding model pulled (the repo's Docker Compose handles this)
-- Deployed only: `APP_ENV` and `VOYAGE_API_KEY`, which switch embeddings to Voyage
+- Deployed only: `APP_ENV` and `VOYAGE_API_KEY` (an Atlas-managed key, not a voyageai.com one)
 
 ### Add environment variables
 

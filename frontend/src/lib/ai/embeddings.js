@@ -7,7 +7,7 @@ const APP_ENV = process.env.APP_ENV ?? 'local'
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_EMBEDDING_MODEL ?? 'nomic-embed-text'
 
-const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings'
+const VOYAGE_URL = 'https://ai.mongodb.com/v1/embeddings'
 const VOYAGE_MODEL = process.env.VOYAGE_EMBEDDING_MODEL ?? 'voyage-3-large'
 const VOYAGE_KEY = process.env.VOYAGE_API_KEY ?? ''
 
