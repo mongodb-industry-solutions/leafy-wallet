@@ -1,0 +1,233 @@
+{
+  "info": {
+    "_postman_id": "dc641d93-c527-495e-8f5d-ba8f90a36a0e",
+    "name": "leafy-local-store",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "56616467",
+    "_collection_link": "https://go.postman.co/collection/56616467-dc641d93-c527-495e-8f5d-ba8f90a36a0e?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create a transaction",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"leafyPayTransferReference\": \"postman-test-001\",\n  \"ownerPartyRef\": \"party-postman-test\",\n  \"counterpartyArrangementReference\": \"arr-postman-test\",\n  \"amount\": 25.0,\n  \"currency\": \"USD\",\n  \"direction\": \"sent\",\n  \"note\": \"Lunch with a friend\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/transactions/send",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "transactions",
+            "send"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List Local Transactions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "transactions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Semantic search",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/transactions/search?q=rent&ownerPartyRef=party-local-search&limit=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "transactions",
+            "search"
+          ],
+          "query": [
+            {
+              "key": "q",
+              "value": "rent"
+            },
+            {
+              "key": "ownerPartyRef",
+              "value": "party-local-search"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create contacts",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ownerPartyRef\": \"party-postman-test\",\n  \"counterpartyArrangementReference\": \"arr-contact-postman\",\n  \"counterpartyLabel\": \"Test Contact delete\",\n  \"counterpartyLookupType\": \"email\",\n  \"counterpartyLookupHint\": \"t***@example.com\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/contacts",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "contacts"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get contacts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/contacts",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "contacts"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete a transaction",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/transactions/77",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "transactions",
+            "77"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete a contact",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/contacts/13",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "contacts",
+            "13"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create a chat",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Splitting dinner with Maria\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/local/v1/chats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "local",
+            "v1",
+            "chats"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": ""
+    }
+  ]
+}

@@ -140,7 +140,9 @@ run_kingfisher_scan() {
     # Run kingfisher on only git-tracked files, using NUL-delimited paths
     # to handle filenames with spaces/special chars, and -- to prevent
     # filenames starting with - from being interpreted as options
-    if kingfisher_output=$(git ls-files -z 2>/dev/null | xargs -0 kingfisher scan --git-history none -- 2>&1); then
+    # Filter to files that still exist: ls-files also lists tracked files deleted from the
+    # working tree, and kingfisher errors out on a missing path.
+    if kingfisher_output=$(git ls-files -z 2>/dev/null | while IFS= read -r -d '' f; do [ -f "$f" ] && printf '%s\0' "$f"; done | xargs -0 kingfisher scan --git-history none -- 2>&1); then
         kingfisher_exit_code=0
     else
         kingfisher_exit_code=$?
@@ -198,9 +200,10 @@ MONGODB_PATTERN='(mongodb(\+srv)?://[^:]+:[^@]+@)'
 # Pattern 2a: Variables ending with _API_KEY, _SECRET, etc.
 # Matches: VAR_API_KEY="value" or VAR_API_KEY=value (value at least 4 chars, allows -_ and other chars)
 # Handles both quoted and unquoted values
-API_KEY_PATTERN_A='([A-Z_]+(API_KEY|SECRET|PASSWORD|TOKEN|PRIVATE_KEY|ACCESS_KEY|SECRET_KEY|AUTH_TOKEN|SESSION_KEY)\s*=\s*(["\x27][^"\x27]{4,}["\x27]|[^"\x27\s\n]{4,}))'
+# Values starting with "<" are documentation placeholders (e.g. SECRET="<random-string>") and are not flagged.
+API_KEY_PATTERN_A='([A-Z_]+(API_KEY|SECRET|PASSWORD|TOKEN|PRIVATE_KEY|ACCESS_KEY|SECRET_KEY|AUTH_TOKEN|SESSION_KEY)\s*=\s*(["\x27][^"\x27<][^"\x27]{3,}["\x27]|[^"\x27\s\n<][^"\x27\s\n]{3,}))'
 # Pattern 2b: Standalone KEY=, SECRET=, PASSWORD=, TOKEN= (as whole words, not part of another word)
-API_KEY_PATTERN_B='\b(KEY|SECRET|PASSWORD|TOKEN|PRIVATE_KEY|ACCESS_KEY|SECRET_KEY|AUTH_TOKEN|SESSION_KEY)\s*=\s*(["\x27][^"\x27]{4,}["\x27]|[^"\x27\s\n]{4,})'
+API_KEY_PATTERN_B='\b(KEY|SECRET|PASSWORD|TOKEN|PRIVATE_KEY|ACCESS_KEY|SECRET_KEY|AUTH_TOKEN|SESSION_KEY)\s*=\s*(["\x27][^"\x27<][^"\x27]{3,}["\x27]|[^"\x27\s\n<][^"\x27\s\n]{3,})'
 # Combine both API key patterns
 API_KEY_PATTERN="($API_KEY_PATTERN_A|$API_KEY_PATTERN_B)"
 
@@ -289,8 +292,12 @@ if [ -n "$FILES_WITH_ISSUES" ]; then
         done
     else
         # Count occurrences
-        mongodb_count=$(grep -c -E "$MONGODB_PATTERN" "$file" 2>/dev/null || echo "0")
-        api_key_count=$(grep -c -E "$API_KEY_PATTERN" "$file" 2>/dev/null || echo "0")
+        # `|| true`, not `|| echo 0`: grep -c already prints "0" on no match (while exiting 1),
+        # so the echo would produce "0\n0" and break the arithmetic below.
+        mongodb_count=$(grep -c -E "$MONGODB_PATTERN" "$file" 2>/dev/null || true)
+        api_key_count=$(grep -c -E "$API_KEY_PATTERN" "$file" 2>/dev/null || true)
+        mongodb_count=${mongodb_count:-0}
+        api_key_count=${api_key_count:-0}
         total_count=$((mongodb_count + api_key_count))
         
         if [ "$mongodb_count" -gt 0 ] && [ "$api_key_count" -gt 0 ]; then

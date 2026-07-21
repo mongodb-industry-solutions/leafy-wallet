@@ -2,7 +2,6 @@ import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 class MongoDBConnector:
@@ -20,7 +19,9 @@ class MongoDBConnector:
         self.uri = uri or os.getenv("MONGODB_URI")
         self.database_name = database_name or os.getenv("DATABASE_NAME")
         self.appname = appname or os.getenv("APP_NAME")
-        self.client = MongoClient(self.uri, appname=self.appname)
+        # tz_aware=True: without it, pymongo decodes BSON dates as naive
+        # datetimes, silently dropping the UTC tzinfo we write them with.
+        self.client = MongoClient(self.uri, appname=self.appname, tz_aware=True)
         self.db = self.client[self.database_name]
 
     def get_collection(self, collection_name):
@@ -69,3 +70,8 @@ class MongoDBConnector:
         collection = self.get_collection(collection_name)
         result = collection.delete_many(query)
         return result.deleted_count
+
+    def aggregate(self, collection_name, pipeline):
+        """Run an aggregation pipeline against a collection."""
+        collection = self.get_collection(collection_name)
+        return list(collection.aggregate(pipeline))

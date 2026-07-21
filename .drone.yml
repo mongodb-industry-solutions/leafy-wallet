@@ -1,0 +1,290 @@
+---
+kind: pipeline
+type: kubernetes
+name: staging-combined
+
+trigger:
+  branch:
+    - staging
+
+steps:
+  - name: publish-backend
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-backend
+      dockerfile: Dockerfile.backend
+      context: .
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  - name: publish-frontend
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-frontend
+      dockerfile: Dockerfile.frontend
+      context: .
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  # The on-device store. Its Dockerfile builds the C++ service, so the context is its own directory.
+  - name: publish-local-store
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-local-store
+      dockerfile: leafy-local-store/Dockerfile
+      context: leafy-local-store
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  - name: deploy-combined-staging
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos: [mongodb=https://10gen.github.io/helm-charts]
+      namespace: industrysolutions
+      release: leafy-wallet
+      values_files: ["environment/staging.yaml"]
+      values:
+        # Pin the CI-built images to this commit. Indices follow environment/staging.yaml:
+        # 0 backend, 1 ollama, 2 leafy-local-store, 3 objectbox-sync-server. Ollama and the sync
+        # server are not built here (public image / licensed image pushed by hand).
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-frontend"
+        - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
+        - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=leafy-wallet.industrysolutions.staging.corp.mongodb.com"
+        - "mesh.enabled=true"
+        # Frontend
+        - "resources.limits.cpu=500m"
+        - "resources.limits.memory=1024Mi"
+        - "resources.requests.cpu=100m"
+        - "resources.requests.memory=256Mi"
+        # backend
+        - "sidecarContainers[0].resources.limits.cpu=500m"
+        - "sidecarContainers[0].resources.limits.memory=1024Mi"
+        - "sidecarContainers[0].resources.requests.cpu=100m"
+        - "sidecarContainers[0].resources.requests.memory=256Mi"
+        # ollama - loads the embedding model into memory, so it needs the most headroom here
+        - "sidecarContainers[1].resources.limits.cpu=1000m"
+        - "sidecarContainers[1].resources.limits.memory=2Gi"
+        - "sidecarContainers[1].resources.requests.cpu=200m"
+        - "sidecarContainers[1].resources.requests.memory=1Gi"
+        # leafy-local-store
+        - "sidecarContainers[2].resources.limits.cpu=500m"
+        - "sidecarContainers[2].resources.limits.memory=512Mi"
+        - "sidecarContainers[2].resources.requests.cpu=100m"
+        - "sidecarContainers[2].resources.requests.memory=256Mi"
+        # objectbox-sync-server
+        - "sidecarContainers[3].resources.limits.cpu=500m"
+        - "sidecarContainers[3].resources.limits.memory=1024Mi"
+        - "sidecarContainers[3].resources.requests.cpu=100m"
+        - "sidecarContainers[3].resources.requests.memory=256Mi"
+      api_server: https://api.staging.corp.mongodb.com
+      kubernetes_token:
+        from_secret: staging_kubernetes_token
+    when:
+      branch:
+        - staging
+      event:
+        - push
+
+---
+kind: pipeline
+type: kubernetes
+name: production-combined
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  - name: publish-backend-prod
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-backend
+      dockerfile: Dockerfile.backend
+      context: .
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  - name: publish-frontend-prod
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-frontend
+      dockerfile: Dockerfile.frontend
+      context: .
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  - name: publish-local-store-prod
+    image: plugins/kaniko-ecr
+    resources:
+      requests:
+        cpu: 1000
+        memory: 2048Mi
+      limits:
+        cpu: 2000
+        memory: 4096Mi
+    settings:
+      compressed_caching: false
+      snapshot_mode: redo
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/leafy-wallet-local-store
+      dockerfile: leafy-local-store/Dockerfile
+      context: leafy-local-store
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+    when:
+      event:
+        - push
+
+  - name: deploy-combined-prod
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos: [mongodb=https://10gen.github.io/helm-charts]
+      namespace: industrysolutions
+      release: leafy-wallet
+      values_files: ["environment/production.yaml"]
+      values:
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-frontend"
+        - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
+        - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=leafy-wallet.industrysolutions.prod.corp.mongodb.com"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=500m"
+        - "resources.limits.memory=1024Mi"
+        - "resources.requests.cpu=150m"
+        - "resources.requests.memory=256Mi"
+        - "sidecarContainers[0].resources.limits.cpu=500m"
+        - "sidecarContainers[0].resources.limits.memory=1024Mi"
+        - "sidecarContainers[0].resources.requests.cpu=150m"
+        - "sidecarContainers[0].resources.requests.memory=256Mi"
+        - "sidecarContainers[1].resources.limits.cpu=1000m"
+        - "sidecarContainers[1].resources.limits.memory=2Gi"
+        - "sidecarContainers[1].resources.requests.cpu=200m"
+        - "sidecarContainers[1].resources.requests.memory=1Gi"
+        - "sidecarContainers[2].resources.limits.cpu=500m"
+        - "sidecarContainers[2].resources.limits.memory=512Mi"
+        - "sidecarContainers[2].resources.requests.cpu=150m"
+        - "sidecarContainers[2].resources.requests.memory=256Mi"
+        - "sidecarContainers[3].resources.limits.cpu=500m"
+        - "sidecarContainers[3].resources.limits.memory=1024Mi"
+        - "sidecarContainers[3].resources.requests.cpu=150m"
+        - "sidecarContainers[3].resources.requests.memory=256Mi"
+      api_server: https://api.prod.corp.mongodb.com
+      kubernetes_token:
+        from_secret: prod_kubernetes_token
+    when:
+      branch:
+        - main
+      event:
+        - push

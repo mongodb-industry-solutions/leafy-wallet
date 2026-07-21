@@ -1,153 +1,269 @@
-# Demo Template: Python Backend with Next.js Frontend
+# Leafy Wallet
 
-This repository provides a template for creating a web application with a Python backend and a Next.js frontend. The backend is managed using uv for dependency management, while the frontend is built with Next.js, offering a modern React-based user interface.
+**Leafy Wallet is an offline-first personal wallet demo**, showcasing the integration of MongoDB's powerful features tailored specifically for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). The app keeps working with no connection at all: balances, activity, contacts, and even the AI assistant read from an on-device [ObjectBox](https://objectbox.io/) store, and everything syncs quietly to [MongoDB Atlas](https://www.mongodb.com/atlas) the moment the connection returns. It is designed to demonstrate how modern, customer-focused financial applications can treat connectivity as an enhancement rather than a requirement.
 
-## Table of Contents
+Leafy Wallet also features **Leafy**, an AI-powered assistant that answers questions about balances, spending, and past payments, and can draft payments for the user to confirm. The assistant runs entirely on a local [Ollama](https://ollama.com/) model routed through [LangGraph](https://www.langchain.com/langgraph), so it works online and offline alike.
 
-- [Demo Template: Python Backend with Next.js Frontend](#demo-template-python-backend-with-nextjs-frontend)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-  - [Getting Started](#getting-started)
-    - [Create a New Repository](#create-a-new-repository)
-    - [GitHub Desktop Setup](#github-desktop-setup)
-    - [Backend Setup](#backend-setup)
-  - [DEMO README](#demo-readme)
+## Components and Features:
 
-## Features
+Leafy Wallet is composed of several interconnected features that demonstrate the capabilities of a modern offline-first wallet. Users can:
 
-- Python backend with a RESTful API powered by [FastAPI](https://fastapi.tiangolo.com/)
-- Next.js frontend for a responsive user interface
-- Dependency management with uv ([More info](https://docs.astral.sh/uv/))
-- Easy setup and configuration
+1. **Sign in with SSO**
+   - Real authorization-code + PKCE flow against the Leafy Pay payment service provider.
+   - No credential ever touches the app; a passwordless (FaceID-style) re-entry path is included.
+
+2. **Check balances and activity**
+   - Balances and the full transaction history render from the on-device store instantly.
+   - Each row carries its own settlement status, updated as transfers settle.
+
+3. **Send and request money**
+   - Sends execute real Leafy Pay transfers with a full review step (amount, recipient, note, source account).
+   - Offline sends queue on the device and replay automatically on reconnect.
+   - Requests are real Leafy Pay requests-to-pay: the payer approves in-app and Leafy Pay moves the money.
+
+4. **Manage contacts**
+   - Add contacts by a registered Leafy Pay email or phone number; removing one also cleans up its Atlas replica.
+
+5. **Receive notifications**
+   - Money received and incoming payment requests, with swipe-to-clear and a full review flow for paying a request.
+
+6. **Chat with the Leafy assistant**
+   - Natural-language questions over the user's own data, streamed with a typewriter effect.
+   - Spending questions render an inline per-contact breakdown chart.
+   - Payment drafts appear as confirmation cards; nothing moves without the user's tap.
+
+7. **Toggle the connection**
+   - A presenter control simulates going offline and back online, driving the whole offline story.
+
+## Where Does MongoDB Shine?
+
+> **[Diagram placeholder: system-architecture]**
+> _Intended diagram: all six services as boxes (frontend, backend, leafy-local-store, objectbox-sync-server, ollama, MongoDB Atlas plus the external Leafy Pay PSP), with arrows showing the online path (frontend to backend to Atlas, frontend to Leafy Pay), the offline path (frontend to leafy-local-store), and the sync path (leafy-local-store to objectbox-sync-server to Atlas)._
+
+### 1. **Offline sync with ObjectBox and Atlas**
+Wallet records written on the device (chats, requests, queued sends) stream up to Atlas through the ObjectBox Sync connector in the background, and Atlas-side changes stream back down. No spinners, no manual retry. On every login the wallet also reconciles against Leafy Pay: enrichment rows for transfers or beneficiaries that no longer exist there are pruned, and transfers made outside the app are adopted, so the offline copy always mirrors the real ledger.
+
+> **[Diagram placeholder: sync-path]**
+> _Intended diagram: LocalChat / LocalChatMessage / LocalRequest entities on the device flowing through the sync server into their Atlas collections and back, with the MongoDB connector in the middle._
+
+### 2. **Multi-document ACID transactions**
+Transfers and their enrichment records stay consistent even when several offline writes land at once on reconnect. No double-spends, no drift.
+
+### 3. **Atlas Vector Search, online and on-device**
+Transaction notes are embedded (via a local embedding model) and searchable by meaning: Atlas `$vectorSearch` when online, ObjectBox's HNSW index on the device when offline. The same natural query works in either mode.
+
+### 4. **A LangGraph agent over local AI, through MCP**
+The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
+
+## Tech Stack
+
+- **Database**:
+  - [MongoDB Atlas](https://www.mongodb.com/atlas/database)
+  - [ObjectBox](https://objectbox.io/) (on-device) with the [ObjectBox Sync Server](https://sync.objectbox.io/)
+
+- **Web Framework**:
+  - [Next.js](https://nextjs.org/) (App Router)
+
+- **Backend**:
+  - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
+
+- **AI**:
+  - [Ollama](https://ollama.com/) (qwen2.5:3b chat model, nomic-embed-text embeddings)
+  - [LangGraph](https://www.langchain.com/langgraph)
+
+- **Styling**:
+  - [Tailwind CSS](https://tailwindcss.com/) v4
+  - [LeafyGreen UI](https://github.com/mongodb/leafygreen-ui) accents
+
+## Leafy Pay dependency
+
+**The demo needs a running Leafy Pay instance.** Leafy Pay is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
+
+To run the demo outside MongoDB:
+
+1. Run Leafy Pay locally, or deploy it to your own infrastructure.
+2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
+3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
+
 
 ## Prerequisites
 
-Before you begin, ensure you have met the following requirements:
+- [Docker](https://www.docker.com/) with Docker Compose
+- A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
+- A running Leafy Pay instance (see the section above).
 
-- Python >=3.13,<3.14 - If you are Mac user, you can install Python 3.13 using this [link](https://www.python.org/downloads/).
-- Node.js 22 or higher
-- uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
+> **_Note:_** After cloning, run `./setup-hooks.sh` once. It installs a pre-commit hook (`security_check.sh`) that scans staged files for credentials before every commit.
 
-## Getting Started
+### Add environment variables
 
-Follow these steps to set up the project locally.
+> **_Note:_** Create a `.env.local` file within the `/frontend` directory and a `.env` file within the `/backend` directory. Ask the demo owner for the values.
 
-### Create a New Repository
+```bash
+# frontend/.env.local - everything else has a working local default
+CLIENT_ID="<leafy-pay-oauth-client-id>"
+CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
+PSP_BASE_URL="<leafy-pay-api-base-url>"
+PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
+SESSION_SECRET="<random-string>"
+```
 
-1. Navigate to the repository template on GitHub and click on **Use this template**.
-2. Create a new repository.
-3. **Do not** check the "Include all branches" option.
-4. Define a repository name following the naming convention: `<industry>-<project_name>-<highlighted_feature>`. For example, `fsi-leafybank-ai-personal-assistant` (use hyphens to separate words).
-   - The **industry** and **project name** are required; you can be creative with the highlighted feature.
-5. Provide a clear description for the repository, such as: "A repository template to easily create new demos by following the same structure."
-6. Set the visibility to **Internal**.
-7. Click **Create repository**.
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`) and `GROVE_API_KEY`, plus the
+URLs that only default correctly on localhost - see [`environment/`](environment/). `APP_ENV` is what
+sends the assistant's chat to MongoDB's Grove gateway; embeddings stay on Ollama in every
+environment, since they have to run on the device for offline search.
 
-### GitHub Desktop Setup
+```bash
+# backend/.env
+MONGODB_URI="<your-atlas-connection-string>"
+DATABASE_NAME="<your-database-name>"
+```
 
-1. Install GitHub Desktop if you haven't already. You can download it from [GitHub Desktop's official website](https://desktop.github.com/).
-2. Open GitHub Desktop and sign in to your GitHub account.
-3. Clone the newly created repository:
-   - Click on **File** > **Clone Repository**.
-   - Select your repository from the list and click **Clone**.
-4. Create your first branch:
-   - In the GitHub Desktop interface, click on the **Current Branch** dropdown.
-   - Select **New Branch** and name it `feature/branch01`.
-   - Click **Create Branch**.
+## Run with Docker
 
-### Backend Setup
+Make sure to run this on the root directory.
 
-1. (Optional) Set your project description and author information in the `pyproject.toml` file:
-   ```toml
-   description = "Your Description"
-   authors = ["Your Name <you@example.com>"]
-2. Open the project in your preferred IDE (the standard for the team is Visual Studio Code).
-3. Open the Terminal within Visual Studio Code.
-4. Ensure you are in the root project directory where the `makefile` is located.
-5. Execute the following commands:
-  - uv initialization
-    ````bash
-    make uv_init
-    ````
-  - uv sync
-    ````bash
-    make uv_sync
-    ````
-6. Verify that the `.venv` folder has been generated within the `/backend` directory.
+1. To run with Docker use the following command:
+```
+make build
+```
+2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
+   and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
+3. Open the app at http://localhost:3000 and sign in with SSO as one of the demo users below.
+4. To delete the containers and images run:
+```
+make clean
+```
 
-### Running Backend Locally
+### Demo users
 
-After setting up the backend dependencies, you can run the development server:
+The demo revolves around three identities, seeded in MongoDB's shared Leafy Pay environment. Login is by email only:
 
-1. Navigate to the backend directory:
+| Name | Email | Password |
+|---|---|---|
+| Amara Okafor | `amara.okafor@back.es` | `demo-password` |
+| Luis Fernandez | `luis.fernandez@back.es` | `demo-password` |
+| Priya Patel | `priya.patel@back.es` | `demo-password` |
+
+> **_Note:_** Running your own Leafy Pay? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains.
+
+The services and their ports:
+
+| Service | Port | Purpose |
+|---|---|---|
+| frontend | 3000 | The wallet UI and the AI chat route |
+| backend | 8000 | Atlas enrichment API (FastAPI) |
+| leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
+| objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
+| ollama | 11434 | Local chat + embedding models |
+
+## Repository Layout
+
+- `frontend/` contains the Next.js app. See the [frontend README](frontend/README.md).
+- `backend/` contains the FastAPI enrichment API. See the [backend README](backend/README.md).
+- `leafy-local-store/` contains the C++ ObjectBox service that plays the role of on-device storage.
+- `objectbox-sync-server/` contains the sync server model and data directory.
+
+## Common errors
+
+- **The first AI reply is slow or times out.** The chat model loads into memory on first use; the `ollama-pull` container warms it at startup, so wait for that container to exit before chatting.
+- **Chats or requests don't sync.** The sync server defaults to ObjectBox's public trial image, which
+  stops accepting transactions once the trial window closes - its logs then repeat
+  `State condition failed ... : trial`. Activate the trial at http://localhost:9980, or switch to a
+  licensed build (below).
+- **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
+
+## Deploying to Kanopy
+
+Kanopy is MongoDB's internal Kubernetes platform. Drone (CI) builds the images, pushes them to ECR,
+and Helm deploys them using the values in [`environment/`](environment/).
+[`KANOPY_DEPLOYMENT_README.md`](KANOPY_DEPLOYMENT_README.md) is the platform's generic guide; this
+section covers what is specific to Leafy Wallet.
+
+### What gets deployed
+
+Locally the demo runs five services. Kanopy's chart deploys one pod, so the frontend is the main
+container and the rest are sidecars sharing its network namespace - which is why every internal URL
+in `environment/*.yaml` is `localhost`.
+
+| Service | Port | Why it has to be deployed |
+|---|---|---|
+| frontend (Next.js) | 3000 | The app. Talks to Leafy Pay and to the backend. |
+| backend (FastAPI) | 8000 | Enrichment CRUD, Atlas `$vectorSearch`, and the MCP server the assistant reads through. |
+| ollama | 11434 | Embeddings only (`nomic-embed-text`, ~275MB, no GPU). |
+| leafy-local-store | 8090 | The on-device store. Every offline read comes from here. |
+| objectbox-sync-server | 9999 | Replicates that store to Atlas and back. |
+
+Two things are easy to get wrong:
+
+- **Ollama is still required**, even though the assistant's chat runs on Grove. Embeddings cannot move
+  to a gateway, because the device has to embed both the note and the search query with no network.
+  Only the chat model is dropped, which is what takes the image from ~4.7GB to ~275MB.
+- **The ObjectBox sync server is a licensed build**, distributed as a tarball rather than a public
+  image. `docker load` only populates the machine it runs on, so it must be pushed to ECR before
+  Kubernetes can pull it (see "ObjectBox Sync server image" above).
+
+### One-time setup
+
+1. **Choose the deployment type.** Copy `.drone-multicontainer-pods.yml` to `.drone.yml` - the
+   sidecar topology is the one `environment/*.yaml` is written for. Replace `<your-demo-name>` with
+   `leafy-wallet` throughout.
+
+2. **Create the Kubernetes secret.** Only its name (`leafy-wallet-kanopy`) is committed; the values
+   never enter git:
+
    ```bash
-   cd backend
+   helm ksec set leafy-wallet-kanopy \
+     MONGODB_URI="..." DATABASE_NAME="..." \
+     CLIENT_ID="..." CLIENT_SECRET="..." SESSION_SECRET="..." \
+     GROVE_API_KEY="..."
    ```
 
-2. Start the FastAPI development server:
+3. **Push the licensed sync server image** to ECR, then set the same address in
+   `environment/*.yaml`:
+
    ```bash
-   uv run uvicorn main:app --host 0.0.0.0 --port 8000
+   docker tag <loaded-image-name> \
+     275662791714.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-objectbox-sync:2026-07-14
+   docker push 275662791714.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-objectbox-sync:2026-07-14
    ```
 
-3. The backend API will be accessible at http://localhost:8000
+4. **Register the redirect URI** on the Leafy Pay OAuth client. It is derived as
+   `<APP_BASE_URL>/api/auth/callback`, so each environment's host needs its own entry, and the
+   client must be allowed the `read:rtp` and `write:rtp` scopes.
 
-**Note**: If port 8000 is already in use (e.g., by Docker containers), either stop the containers with `make clean` or use a different port like `--port 8001`.
+5. **Fill the remaining placeholders** in `environment/staging.yaml` and `environment/production.yaml`:
+   `PSP_BASE_URL`, `PSP_FRONTEND_URL`, and `ownership.driEmail`.
 
-### Frontend Setup
+### Deploying
 
-1. Navigate to the `frontend` folder.
-2. Install dependencies by running:
-```bash
-npm install
-```
-3. Start the frontend development server with:
-````bash
-npm run dev
-````
-4. The frontend will now be accessible at http://localhost:3000 by default, providing a user interface.
+Push to `staging` for the staging environment, `main` for production. Drone builds, pushes and
+deploys automatically.
 
-### Git Hooks Setup (Recommended)
+### Notes on the values files
 
-This repository includes a pre-commit hook that automatically scans for secrets and credentials before each commit, preventing accidental exposure of sensitive data.
+- `env:` holds plain, non-sensitive values (URLs, `APP_ENV`) and is committed as-is.
+- `envSecrets:` maps an environment variable to the **name** of a Kubernetes secret, never a value -
+  which is why these files are safe in git.
+- `extraVolumes` uses `emptyDir`, so a restart re-pulls the embedding model and re-imports from
+  Atlas. Atlas is the durable copy; switch to PVCs if that startup cost matters.
 
-**Setup (run once after cloning):**
+## ObjectBox Sync server image
 
-```bash
-chmod +x setup-hooks.sh
-./setup-hooks.sh
-```
-
-This configures Git to use the `.githooks` directory and enables the pre-commit security scanner.
-
-**What it does:**
-
-- Runs `security_check.sh` before every commit
-- Scans staged files for potential secrets (API keys, passwords, tokens, etc.)
-- Blocks the commit if security issues are detected
-
-**If a commit is blocked:**
-
-1. Review the security issues listed in the output
-2. Remove or properly secure the flagged credentials
-3. Re-stage your changes and commit again
-
-**Bypass (not recommended):**
+`docker-compose.yml` pulls ObjectBox's public **trial** sync server by default, so a fresh clone runs
+with no extra steps. A licensed build ships as a tarball rather than a public image, so it has to be
+loaded into your local Docker daemon once and then selected by name:
 
 ```bash
-git commit --no-verify
+docker load -i <objectbox-sync-server-docker.tar.gz>   # prints the image name it loaded
+echo 'OBJECTBOX_SYNC_IMAGE=<that image name>' >> .env  # root .env, gitignored
+docker compose up -d --force-recreate objectbox-sync-server
 ```
 
-### Kanopy Deployment
+`docker load` only populates the machine it runs on - it does not publish anywhere. To use a licensed
+build somewhere else (CI, a deployment), push it to a registry that host can pull from and set
+`OBJECTBOX_SYNC_IMAGE` to that address instead.
 
-For deploying your demo to Kanopy (MongoDB's internal Kubernetes platform), see the [KANOPY_DEPLOYMENT_README.md](KANOPY_DEPLOYMENT_README.md) for detailed instructions on:
+## 📄 License
 
-- Setting up Drone CI/CD pipeline
-- Configuring Kubernetes secrets
-- Choosing between separate pods vs multi-container deployments
-- Environment variables and secrets configuration
-- Resource management and troubleshooting
-
-## DEMO README
-
-<h1 style="color:red">REPLACE THE CONTENT OF THIS README WITH `README-demo.md` and DELETE THE `README-demo.md` FILE!!!!!!!!! </h1>
+See [LICENSE](LICENSE) file for details.

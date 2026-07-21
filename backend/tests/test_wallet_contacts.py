@@ -1,0 +1,77 @@
+BASE = "/api/v1/wallet-contacts"
+
+CONTACT_PAYLOAD = {
+    "ownerPartyRef": "11111111-1111-1111-1111-111111111111",
+    "counterpartyArrangementReference": "22222222-2222-2222-2222-222222222222",
+    "counterpartyLabel": "Jane Doe",
+    "counterpartyLookupType": "email",
+    "counterpartyLookupHint": "j***@example.com",
+}
+
+
+def test_contact_crud_lifecycle(client):
+    created = client.post(f"{BASE}", json=CONTACT_PAYLOAD)
+    assert created.status_code == 201
+    body = created.json()
+    contact_id = body["_id"]
+    assert body["counterpartyLabel"] == "Jane Doe"
+    assert body["createdAt"] == body["updatedAt"]
+
+    try:
+        listed = client.get(
+            f"{BASE}", params={"ownerPartyRef": CONTACT_PAYLOAD["ownerPartyRef"]}
+        )
+        assert listed.status_code == 200
+        assert any(c["_id"] == contact_id for c in listed.json())
+    finally:
+        deleted = client.delete(f"{BASE}/{contact_id}")
+        assert deleted.status_code == 204
+
+    gone = client.delete(f"{BASE}/{contact_id}")
+    assert gone.status_code == 404
+
+
+def test_list_contacts_q_filter_matches_label_case_insensitively(client):
+    other_payload = {
+        **CONTACT_PAYLOAD,
+        "counterpartyArrangementReference": "33333333-3333-3333-3333-333333333333",
+        "counterpartyLabel": "Bob Smith",
+    }
+    jane = client.post(f"{BASE}", json=CONTACT_PAYLOAD)
+    bob = client.post(f"{BASE}", json=other_payload)
+    assert jane.status_code == 201
+    assert bob.status_code == 201
+
+    try:
+        listed = client.get(
+            f"{BASE}", params={"ownerPartyRef": CONTACT_PAYLOAD["ownerPartyRef"], "q": "jane"}
+        )
+        assert listed.status_code == 200
+        labels = {c["counterpartyLabel"] for c in listed.json()}
+        assert "Jane Doe" in labels
+        assert "Bob Smith" not in labels
+    finally:
+        client.delete(f"{BASE}/{jane.json()['_id']}")
+        client.delete(f"{BASE}/{bob.json()['_id']}")
+
+
+def test_delete_contact_invalid_id_returns_404(client):
+    response = client.delete(f"{BASE}/not-a-valid-object-id")
+    assert response.status_code == 404
+
+
+def test_delete_unknown_contact_returns_404(client):
+    response = client.delete(f"{BASE}/64b7f0f1f0f1f0f1f0f1f0f1")
+    assert response.status_code == 404
+
+
+def test_create_contact_invalid_lookup_type_returns_422(client):
+    payload = {**CONTACT_PAYLOAD, "counterpartyLookupType": "sms"}
+    response = client.post(f"{BASE}", json=payload)
+    assert response.status_code == 422
+
+
+def test_create_contact_missing_required_field_returns_422(client):
+    payload = {k: v for k, v in CONTACT_PAYLOAD.items() if k != "ownerPartyRef"}
+    response = client.post(f"{BASE}", json=payload)
+    assert response.status_code == 422

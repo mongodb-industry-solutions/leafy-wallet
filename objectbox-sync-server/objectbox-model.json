@@ -1,0 +1,100 @@
+{
+  "modelVersionParserMinimum": 5,
+  "entities": [
+    {
+      "id": "1:7001000000000000",
+      "name": "walletTransactions",
+      "flags": 2,
+      "lastPropertyId": "14:7001000000000014",
+      "properties": [
+        { "id": "1:7001000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7001000000000002", "name": "leafyPayTransferReference", "type": 9 },
+        { "id": "3:7001000000000003", "name": "ownerPartyRef", "type": 9 },
+        { "id": "4:7001000000000004", "name": "counterpartyArrangementReference", "type": 9 },
+        { "id": "5:7001000000000005", "name": "amount", "type": 8 },
+        { "id": "6:7001000000000006", "name": "currency", "type": 9 },
+        { "id": "7:7001000000000007", "name": "note", "type": 9 },
+        { "id": "8:7001000000000008", "name": "noteEmbedding", "type": 28, "flags": 8, "indexId": "1:7001000000000100" },
+        { "id": "9:7001000000000009", "name": "direction", "type": 9 },
+        { "id": "10:7001000000000010", "name": "leafyPayStatus", "type": 9 },
+        { "id": "11:7001000000000011", "name": "localSyncStatus", "type": 9 },
+        { "id": "12:7001000000000012", "name": "createdAt", "type": 10 },
+        { "id": "13:7001000000000013", "name": "settledAt", "type": 10 }
+      ]
+    },
+    {
+      "id": "2:7002000000000000",
+      "name": "walletContacts",
+      "flags": 2,
+      "lastPropertyId": "10:7002000000000010",
+      "properties": [
+        { "id": "1:7002000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7002000000000002", "name": "ownerPartyRef", "type": 9 },
+        { "id": "3:7002000000000003", "name": "counterpartyArrangementReference", "type": 9 },
+        { "id": "4:7002000000000004", "name": "counterpartyLabel", "type": 9 },
+        { "id": "5:7002000000000005", "name": "counterpartyLookupType", "type": 9 },
+        { "id": "6:7002000000000006", "name": "counterpartyLookupHint", "type": 9 },
+        { "id": "7:7002000000000007", "name": "createdAt", "type": 10 },
+        { "id": "8:7002000000000008", "name": "updatedAt", "type": 10 }
+      ]
+    },
+    {
+      "id": "3:7003000000000000",
+      "name": "chats",
+      "flags": 2,
+      "lastPropertyId": "8:7003000000000008",
+      "properties": [
+        { "id": "1:7003000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7003000000000002", "name": "title", "type": 9 },
+        { "id": "3:7003000000000003", "name": "createdAt", "type": 10 },
+        { "id": "4:7003000000000004", "name": "updatedAt", "type": 10 },
+        { "id": "6:7003000000000006", "name": "localId", "type": 6 },
+        { "id": "7:7003000000000007", "name": "ownerPartyRef", "type": 9 },
+        { "id": "8:7003000000000008", "name": "chatReference", "type": 9 }
+      ]
+    },
+    {
+      "id": "4:7004000000000000",
+      "name": "chatMessages",
+      "flags": 2,
+      "lastPropertyId": "7:7004000000000007",
+      "properties": [
+        { "id": "1:7004000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "3:7004000000000003", "name": "role", "type": 9 },
+        { "id": "4:7004000000000004", "name": "text", "type": 9 },
+        { "id": "5:7004000000000005", "name": "createdAt", "type": 10 },
+        { "id": "7:7004000000000007", "name": "chatReference", "type": 9 }
+      ]
+    },
+    {
+      "id": "6:7006000000000000",
+      "name": "walletRequests",
+      "flags": 2,
+      "lastPropertyId": "15:7006000000000015",
+      "properties": [
+        { "id": "1:7006000000000001", "name": "id", "type": 6, "flags": 1 },
+        { "id": "2:7006000000000002", "name": "requestReference", "type": 9 },
+        { "id": "3:7006000000000003", "name": "requesterPartyRef", "type": 9 },
+        { "id": "4:7006000000000004", "name": "requesterName", "type": 9 },
+        { "id": "5:7006000000000005", "name": "localSyncStatus", "type": 9 },
+        { "id": "6:7006000000000006", "name": "payerPartyRef", "type": 9 },
+        { "id": "7:7006000000000007", "name": "amount", "type": 8 },
+        { "id": "8:7006000000000008", "name": "currency", "type": 9 },
+        { "id": "9:7006000000000009", "name": "note", "type": 9 },
+        { "id": "10:7006000000000010", "name": "status", "type": 9 },
+        { "id": "11:7006000000000011", "name": "leafyPayTransferReference", "type": 9 },
+        { "id": "12:7006000000000012", "name": "createdAt", "type": 10 },
+        { "id": "13:7006000000000013", "name": "resolvedAt", "type": 10 },
+        { "id": "15:7006000000000015", "name": "payerCounterpartyRef", "type": 9 }
+      ]
+    }
+  ],
+  "lastEntityId": "6:7006000000000000",
+  "lastIndexId": "1:7001000000000100",
+  "lastRelationId": "0:0",
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [7001000000000014, 7002000000000009, 7002000000000010, 7003000000000005, 7004000000000002, 7004000000000006, 7006000000000014],
+  "retiredRelationUids": [],
+  "version": 1
+}

@@ -1,71 +1,76 @@
-# Demo Template: Python Backend
+# Leafy Wallet Backend
 
-Python backend section built using [FastAPI](https://fastapi.tiangolo.com/). The backend is managed using uv for dependency management, offering a RESTful API.
+**Leafy Wallet Backend is the enrichment API for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It is a [FastAPI](https://fastapi.tiangolo.com/) service, managed with [uv](https://docs.astral.sh/uv/), that owns the wallet data living in [MongoDB Atlas](https://www.mongodb.com/atlas): contacts, payment requests, chats, and the metadata plus semantic-search index for transactions. Balances and real transfers live in Leafy Pay (the PSP), not here; this service holds no money-moving credentials.
 
-## Table of Contents
+## Components and Features:
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-  - [Backend Setup](#backend-setup)
-- [Running the Application](#running-the-application)
-- [API Documentation](#api-documentation)
-- [Contributing](#contributing)
-- [License](#license)
+1. **Wallet collections API**
+   - CRUD routers for contacts, requests, transactions enrichment, chats, and chat messages.
 
-## Features
+2. **Semantic search**
+   - Transaction notes are embedded through a local [Ollama](https://ollama.com/) model and searched with Atlas `$vectorSearch`.
 
-- Python backend with a RESTful API powered by FastAPI
-- Dependency management with uv ([More info](https://docs.astral.sh/uv/))
-- Easy setup and configuration
+3. **Spending summaries**
+   - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
+
+4. **Read-only 
+server**
+   - A mounted MCP app exposes the collections as read-only tools. The wallet's own assistant calls it for online reads, and any external MCP client can connect to the same endpoint.
+
+## Where Does MongoDB Shine?
+
+> **[Diagram placeholder: request-collection-map]**
+> _Intended diagram: each router prefix (/api/v1/wallet-contacts, /wallet-requests, /wallet-transactions, /chats, /chat-messages) mapped to its Atlas collection, with the /search endpoint pointing at the vector index and /summary at the aggregation pipeline._
+
+- **Flexible schema** lets enrichment documents evolve (notes, embeddings, settlement metadata) without migrations.
+- **Atlas Vector Search** powers meaning-based transaction search from a single index definition.
+- **Aggregation pipelines** compute spending-by-contact server-side, keeping arithmetic out of the LLM.
+- **The document model** mirrors the on-device ObjectBox entities one-to-one, which is what makes the sync story clean.
+
+## Tech Stack
+
+- **Database**:
+  - [MongoDB Atlas](https://www.mongodb.com/atlas/database) via [PyMongo](https://pymongo.readthedocs.io/)
+
+- **Web Framework**:
+  - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
+
+- **AI**:
+  - [Ollama](https://ollama.com/) embeddings (nomic-embed-text)
 
 ## Prerequisites
 
-Before you begin, ensure you have met the following requirements:
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- A MongoDB Atlas cluster (M0 or higher)
+- A running Ollama with the embedding model pulled (the repo's Docker Compose handles this)
 
-- Python 3.13 (but less than 3.14)
-- uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
+### Add environment variables
 
-For complete setup instructions, including how to create a new repository and clone it, please refer to the [parent README](../README.md).
+> **_Note:_** Create a `.env` file within the `/backend` directory.
 
-## Getting Started
+```bash
+MONGODB_URI="<your-atlas-connection-string>"
+DATABASE_NAME="<your-database-name>"
+OLLAMA_BASE_URL="http://localhost:11434"
+```
 
-Follow these steps to set up the backend project locally. For detailed instructions on creating a new repository and using GitHub Desktop, please refer to the [parent README](../README.md).
+## Running
 
-### Backend Setup
+The whole demo runs with Docker from the repository root. See [Run with Docker](../README.md#run-with-docker) in the main README. Once up, interactive API docs are served at http://localhost:8000/docs.
 
-1. (Optional) Set your project description and author information in the `pyproject.toml` file:
-   ```toml
-   description = "Your Description"
-   authors = ["Your Name <you@example.com>"]
-2. Open the project in your preferred IDE (the standard for the team is Visual Studio Code).
-3. Open the Terminal within Visual Studio Code.
-4. Ensure you are in the root project directory where the `makefile` is located.
-5. Execute the following commands:
-  - uv initialization
-    ````bash
-    make uv_init
-    ````
-  - uv sync
-    ````bash
-    make uv_sync
-    ````
-6. Verify that the `.venv` folder has been generated within the `/backend` directory.
+## Testing
 
-## Running the Application
+Integration tests run against the real Atlas cluster and skip themselves when it is unreachable:
 
-After setting up the backend dependencies, you can run the development server:
+```bash
+cd backend && uv run pytest
+```
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+## Common errors
 
-2. Start the FastAPI development server:
-   ```bash
-   uv run uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
+- Check that you've created a `.env` file with `MONGODB_URI` and `DATABASE_NAME`, and that your IP is on the Atlas network access list.
+- Vector search endpoints need the index to exist; run the provisioning script in `scripts/` if searches return nothing.
 
-3. The backend API will be accessible at http://localhost:8000
+## 📄 License
 
-**Note**: If port 8000 is already in use (e.g., by Docker containers), either stop the containers with `make clean` or use a different port like `--port 8001`.
+See [LICENSE](../LICENSE) file for details.

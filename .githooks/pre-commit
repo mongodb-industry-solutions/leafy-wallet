@@ -44,4 +44,27 @@ if [ $SCAN_RESULT -ne 0 ]; then
     exit 1
 fi
 
+# Run the full test suite (frontend AI evals + unit tests, backend pytest).
+TEST_SCRIPT="$REPO_ROOT/run_tests.sh"
+if [ ! -f "$TEST_SCRIPT" ]; then
+    echo "Warning: run_tests.sh not found; skipping tests."
+    exit 0
+fi
+if [ ! -x "$TEST_SCRIPT" ]; then
+    chmod +x "$TEST_SCRIPT"
+fi
+
+"$TEST_SCRIPT"
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "COMMIT BLOCKED: tests did not pass."
+    echo ""
+    echo "Fix the failing tests above (or start the services they need) before committing."
+    echo ""
+    echo "To bypass this check (NOT RECOMMENDED):"
+    echo "  git commit --no-verify"
+    echo ""
+    exit 1
+fi
+
 exit 0

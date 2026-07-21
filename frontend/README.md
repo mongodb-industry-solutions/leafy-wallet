@@ -1,87 +1,103 @@
-# Next.js Frontend
+# Leafy Wallet UI
+
+**Leafy Wallet UI is the graphical user interface for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It renders a mobile-style wallet inside a presenter "stage" that narrates the technology behind each screen, and it keeps working with no connection by reading the on-device store instead of the network.
+
+Beyond the UI, this half of the demo owns the SSO flow, the Server Actions that pick an online or offline data source per read, and the AI chat route that streams the Leafy assistant's replies from a local model.
+
+## Components and Features:
+
+1. **Sign in with SSO**
+   - Real authorization-code + PKCE handoff to Leafy Pay's hosted login.
+   - A passwordless (FaceID-style) re-entry path for returning users.
+
+2. **Home, Activity, and People tabs**
+   - Balances, transaction history with per-row settlement status, and a searchable contact list.
+
+3. **Send and request flows**
+   - Numpad, recipient picker, full review step, and a live settlement status on success.
+
+4. **Notifications**
+   - Money received and incoming requests; swipe-to-clear, clear all, and pay through the standard review screen.
+
+5. **The Leafy assistant**
+   - Streaming chat with a typewriter effect, inline spending charts, and payment draft cards.
+   - Chat history persisted per user, in Atlas online and on the device offline.
+
+6. **The presenter stage**
+   - Phone frame, connection toggle, and the "Under the hood" walkthrough panel with per-screen steps.
+
+## Where Does MongoDB Shine?
+
+Every read in `src/lib/wallet/actions.js` takes the connection state and picks its source: Leafy Pay and Atlas when online, the on-device ObjectBox store when offline. The UI never branches; the Server Action does.
+
+> **[Diagram placeholder: data-source-selection]**
+> _Intended diagram: a Server Action box in the middle, with the isOnline flag routing reads either to the backend/Atlas path or to the leafy-local-store path, and the same UI component consuming both._
+
+The AI chat is a single streaming route:
+
+> **[Diagram placeholder: ai-chat-stream]**
+> _Intended diagram: browser to POST /api/chat to LangGraph graph to Ollama, with the NDJSON events (token, draft, chart, error) flowing back to the browser as they are produced._
+
+- `POST /api/chat` streams NDJSON events: `token` (reply text), `draft` (a payment card to confirm), `chart` (a spending breakdown), and `error`.
+- The LangGraph graph and its wallet tools live in `src/lib/ai/`. Online, the read tools call the backend's MCP server (`/mcp`); offline they read the on-device store; balance and drafting stay native.
+
+## Tech Stack
+
+- **Web Framework**:
+  - [Next.js](https://nextjs.org/) App Router, JavaScript (not TypeScript)
+
+- **Styling**:
+  - [Tailwind CSS](https://tailwindcss.com/) v4
+  - shadcn-style primitives in `src/components/ui/`
+  - [LeafyGreen UI](https://github.com/mongodb/leafygreen-ui) for icons and the MongoDB mark
+
+- **AI**:
+  - [LangGraph](https://www.langchain.com/langgraph) with [@langchain/ollama](https://www.npmjs.com/package/@langchain/ollama)
+
+## Project Structure
+
+```
+src/
+├── app/                         # Routes: the stage page, auth routes, /api/chat
+├── components/
+│   ├── stage/                   # Phone frame, login screen, walkthrough panel
+│   ├── ui/                      # Flat, reusable primitives (Button, BottomSheet, SwipeableRow, ...)
+│   └── wallet/                  # App features: home, activity, send, people, assistant, shell
+└── lib/
+    ├── ai/                      # LangGraph graph + wallet tools
+    ├── auth/                    # OAuth PKCE, session, env access
+    ├── backend/enrichment.js    # Calls the FastAPI backend (Atlas enrichment data + search)
+    ├── local/LocalStoreClient.js# Calls leafy-local-store (on-device ObjectBox copy)
+    ├── wallet/actions.js        # Server Actions that pick online vs. offline sources
+    └── walkthrough.js           # Behind-the-scenes narration per screen
+```
+
+Key conventions:
+
+- App components each get their own folder with colocated hooks; `ui/` is flat.
+- Server Actions over API Routes for internal data operations. API Routes exist only where a real HTTP endpoint is required (OAuth callbacks, the streaming chat route).
+- Components stay UI-only; non-trivial state and effects move into a colocated hook.
 
 ## Prerequisites
 
-- Node.js 22 or higher
+> **_Note:_** Create a `.env.local` file within the `/frontend` directory. Ask the demo owner for the values; names are listed in the [root README](../README.md).
 
-## Getting Started 
+The UI depends on the backend services, which must be running to enable full functionality:
 
-1. Install dependencies by running:
-```bash
-npm install
-```
-2. Start the frontend development server with:
-````bash
-npm run dev
-````
-3. The frontend will now be accessible at http://localhost:3000 by default, providing a user interface to interact with the image vector search demo.
+- Backend enrichment API (Port **8000**)
+- leafy-local-store (Port **8090**)
+- Ollama (Port **11434**)
+  - *Needed for the Leafy assistant and semantic search embeddings.*
 
+## Running
 
-## Understanding Next.js
+The whole demo runs with Docker from the repository root. See [Run with Docker](../README.md#run-with-docker) in the main README.
 
-### Routes
+## Common errors
 
-In Next.js, routes are created inside the `app` directory. Here's a breakdown of how the routing works:
+- Check that you've created an `.env.local` file that contains the required environment variables.
+- If the assistant answers "fetch failed", the app can't reach Ollama; when running in Docker the compose file injects the in-network URL automatically.
 
-#### API Routes
+## 📄 License
 
-- The `api` folder is used for creating API routes.
-- We have two example routes for demonstrating how API routes work:
-
-  - **GET request to MongoDB**:  
-    [http://localhost:3000/api/mongodb](http://localhost:3000/api/mongodb)
-
-  - **Basic test route**:  
-    [http://localhost:3000/api/test](http://localhost:3000/api/test)
-
-#### Dynamic Routes
-
-- If you create a new folder inside the `app` directory, a route will be automatically created based on the folder name.
-- For example, creating a folder called `example` will make it accessible at:
-  [http://localhost:3000/example](http://localhost:3000/example)
-
-Each route includes a `layout.js` and `page.js` to define the structure and content.
-
-#### Root Route
-
-- The global root route (home page) is accessible at:
-  [http://localhost:3000](http://localhost:3000)
-
-This page is managed by the `layout.js` and `page.js` inside the `app` directory.
-
-
-### Components
-
-Components are located outside the `app` folder, inside the `components` directory.
-
-There are two example components:
-
-1. **MongoDB Leafy Green System Design**: Demonstrates how to integrate MongoDB with your component.
-2. **Test Component**: Shows how to create a simple test component that includes both a `.jsx` file and a `.module.css` file for styling.
-
-#### CSS
-
-Each component should have its own dedicated CSS file. For styling, we recommend using CSS Modules (e.g., `component.module.css`) to scope styles locally to the component.
-
-#### Images
-
-For adding images, we use `Image` from `next/image`, which is provided by Next.js. This component optimizes images for caching and better performance.
-
-- Images should be stored in the `public` folder inside the `frontend` directory.
-- Next.js automatically handles these images, making them easily accessible.
-
-For an example, check out the `test.jsx` component.
-
-### MongoDB Connections
-
-This template includes a `lib` folder with a utility for connecting to MongoDB. 
-
-Inside the `lib` folder, you’ll find a function called `connectToDatabase`. To use it, simply import the function and pass the necessary parameters to specify which database and collection you want to connect to.
-
-The `connectToDatabase` function manages the connection and can be reused across your application for efficient MongoDB interactions.
-
-### .env.local
-
-Next.js natively supports `.env.local` files, so you don't need to install additional libraries like `dotenv`. Simply create a `.env.local` file, and Next.js will automatically detect and load it.
-
-Make sure to place the `.env.local` file inside the `frontend` folder for proper configuration.
+See [LICENSE](../LICENSE) file for details.
