@@ -100,7 +100,7 @@ steps:
       chart_version: 4.30.0
       add_repos: [mongodb=https://10gen.github.io/helm-charts]
       namespace: industrysolutions
-      release: leafy-wallet
+      release: leafy-wallet-frontend
       values_files: ["environment/staging.yaml"]
       values:
         # Pin the CI-built images to this commit. Indices follow environment/staging.yaml:
@@ -111,7 +111,7 @@ steps:
         - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
         - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
         - "ingress.enabled=true"
-        - "ingress.hosts[0]=leafy-wallet.industrysolutions.staging.corp.mongodb.com"
+        - "ingress.hosts[0]=leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com"
         - "mesh.enabled=true"
         # Frontend
         - "resources.limits.cpu=500m"
@@ -250,7 +250,7 @@ steps:
       chart_version: 4.30.0
       add_repos: [mongodb=https://10gen.github.io/helm-charts]
       namespace: industrysolutions
-      release: leafy-wallet
+      release: leafy-wallet-frontend
       values_files: ["environment/production.yaml"]
       values:
         - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
@@ -258,7 +258,7 @@ steps:
         - "sidecarContainers[0].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-backend:git-${DRONE_COMMIT_SHA:0:7}"
         - "sidecarContainers[2].image=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-local-store:git-${DRONE_COMMIT_SHA:0:7}"
         - "ingress.enabled=true"
-        - "ingress.hosts[0]=leafy-wallet.industrysolutions.prod.corp.mongodb.com"
+        - "ingress.hosts[0]=leafy-wallet-frontend.industrysolutions.prod.corp.mongodb.com"
         - "mesh.enabled=true"
         - "resources.limits.cpu=500m"
         - "resources.limits.memory=1024Mi"
