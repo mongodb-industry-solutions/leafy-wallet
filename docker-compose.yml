@@ -26,7 +26,10 @@ services:
     entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
   objectbox-sync-server:
-    image: objectboxio/sync:sync-server-2026-07-14
+    # Defaults to ObjectBox's public trial image so a fresh clone runs with no extra steps. The trial
+    # stops accepting transactions after a fixed window; with a licensed build, load it and point
+    # OBJECTBOX_SYNC_IMAGE at it in a root .env (see README).
+    image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync-server-trial}
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
