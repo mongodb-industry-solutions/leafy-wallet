@@ -836,7 +836,7 @@ std::vector<float> embed_with_ollama(const std::string& text) {
 
 std::vector<float> embed_with_voyage(const std::string& text) {
     static const std::string api_key = env_or("VOYAGE_API_KEY", "");
-    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-4-lite");
+    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-3-large");
 
     if (api_key.empty()) {
         std::cerr << "VOYAGE_API_KEY is not set; continuing without noteEmbedding" << std::endl;

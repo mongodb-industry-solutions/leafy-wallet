@@ -29,10 +29,7 @@ const GROVE_MODEL = process.env.GROVE_CHAT_MODEL ?? 'claude-haiku-4-5'
 // The assistant answers in a sentence or two, so this only has to clear the longest reply.
 const GROVE_MAX_TOKENS = 4096
 
-/**
- * The chat model for a turn: Grove once deployed, local Ollama otherwise. Embeddings never come
- * through here - they run on the device for offline search, so they stay on Ollama everywhere.
- */
+/** The chat model for a turn: Grove once deployed, local Ollama otherwise. */
 function chatModel() {
   if (APP_ENV === 'local') {
     return new ChatOllama({
