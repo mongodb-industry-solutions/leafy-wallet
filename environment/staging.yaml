@@ -13,7 +13,9 @@ env:
   LOCAL_STORE_URL: http://localhost:8090
   OLLAMA_BASE_URL: http://localhost:11434
   APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
-  PSP_BASE_URL: https://sec-fsi-pci-dss-backend.industrysolutions.staging.corp.mongodb.com
+  # Server to server, so it stays in-cluster and never crosses the ingress.
+  PSP_BASE_URL: http://sec-fsi-pci-dss-backend-web-app:80
+  # Public: the browser navigates here to log in.
   PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
 # Secret name only; set the values with `helm ksec set leafy-wallet-kanopy ...`.

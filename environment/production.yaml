@@ -13,6 +13,8 @@ env:
   LOCAL_STORE_URL: http://localhost:8090
   OLLAMA_BASE_URL: http://localhost:11434
   APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.prod.corp.mongodb.com
+  # Both point at the staging Leafy Pay, the only one where this OAuth client is registered. That is
+  # why this is the public host and not the in-cluster service: in prod that would be a different PSP.
   PSP_BASE_URL: https://sec-fsi-pci-dss-backend.industrysolutions.staging.corp.mongodb.com
   PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
