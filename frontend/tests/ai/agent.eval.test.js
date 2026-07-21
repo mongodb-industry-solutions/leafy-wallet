@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { assertOllamaReady } from '../helpers/ollama'
+import { assertModelReady } from '../helpers/model'
 import { runTurn } from '../helpers/runTurn'
 
 // End-to-end evals: the real LangGraph graph and the real local model (stub tools) decide what to
@@ -8,7 +8,7 @@ import { runTurn } from '../helpers/runTurn'
 const called = (calls, name) => calls.some((c) => c.name === name)
 
 beforeAll(async () => {
-  await assertOllamaReady()
+  await assertModelReady()
 })
 
 describe('Leafy assistant · reading money', () => {

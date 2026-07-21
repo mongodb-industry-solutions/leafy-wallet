@@ -19,10 +19,10 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 3. **Send and request money**
    - Sends execute real Leafy Pay transfers with a full review step (amount, recipient, note, source account).
    - Offline sends queue on the device and replay automatically on reconnect.
-   - Requests are addressed with a privacy-preserving blind index, so no raw email is ever stored.
+   - Requests are real Leafy Pay requests-to-pay: the payer approves in-app and Leafy Pay moves the money.
 
 4. **Manage contacts**
-   - Add contacts by a registered Leafy Pay email; removing one also cleans up its Atlas replica.
+   - Add contacts by a registered Leafy Pay email or phone number; removing one also cleans up its Atlas replica.
 
 5. **Receive notifications**
    - Money received and incoming payment requests, with swipe-to-clear and a full review flow for paying a request.
@@ -83,9 +83,8 @@ To run the demo outside MongoDB:
 
 1. Run Leafy Pay locally, or deploy it to your own infrastructure.
 2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
-3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`) in that instance.
+3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
 
-> **_Note:_** You may notice a `PSP_DEV_COOKIE` variable in the code and env examples. That cookie is a MongoDB-internal bypass for the corporate gate that sits in front of our shared Leafy Pay environment. It is not part of the demo's design and is not needed when you run Leafy Pay yourself. It will be removed from the code once this demo is deployed to MongoDB's staging infrastructure; until then, simply leave it unset.
 
 ## Prerequisites
 
@@ -100,18 +99,18 @@ To run the demo outside MongoDB:
 > **_Note:_** Create a `.env.local` file within the `/frontend` directory and a `.env` file within the `/backend` directory. Ask the demo owner for the values.
 
 ```bash
-# frontend/.env.local
+# frontend/.env.local - everything else has a working local default
 CLIENT_ID="<leafy-pay-oauth-client-id>"
 CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
 PSP_BASE_URL="<leafy-pay-api-base-url>"
 PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
-APP_BASE_URL="http://localhost:3000"
-REDIRECT_URI="http://localhost:3000/api/auth/callback"
 SESSION_SECRET="<random-string>"
-BACKEND_URL="http://localhost:8000"
-PSP_DEV_COOKIE=""   # MongoDB-internal only, leave unset when running your own Leafy Pay
-LOOKUP_DIGEST_KEY="<random-string-for-blind-indexes>"
 ```
+
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`) and `GROVE_API_KEY`, plus the
+URLs that only default correctly on localhost - see [`environment/`](environment/). `APP_ENV` is what
+sends the assistant's chat to MongoDB's Grove gateway; embeddings stay on Ollama in every
+environment, since they have to run on the device for offline search.
 
 ```bash
 # backend/.env
@@ -127,7 +126,8 @@ Make sure to run this on the root directory.
 ```
 make build
 ```
-2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
+2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
+   and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
 3. Open the app at http://localhost:3000 and sign in with SSO as one of the demo users below.
 4. To delete the containers and images run:
 ```
@@ -166,9 +166,103 @@ The services and their ports:
 ## Common errors
 
 - **The first AI reply is slow or times out.** The chat model loads into memory on first use; the `ollama-pull` container warms it at startup, so wait for that container to exit before chatting.
-- **Chats or requests don't sync.** Make sure the ObjectBox Sync trial license was activated at http://localhost:9980.
+- **Chats or requests don't sync.** The sync server defaults to ObjectBox's public trial image, which
+  stops accepting transactions once the trial window closes - its logs then repeat
+  `State condition failed ... : trial`. Activate the trial at http://localhost:9980, or switch to a
+  licensed build (below).
 - **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
-- **Payment requests never arrive.** `LOOKUP_DIGEST_KEY` must be set and identical across environments that should exchange requests.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
+
+## Deploying to Kanopy
+
+Kanopy is MongoDB's internal Kubernetes platform. Drone (CI) builds the images, pushes them to ECR,
+and Helm deploys them using the values in [`environment/`](environment/).
+[`KANOPY_DEPLOYMENT_README.md`](KANOPY_DEPLOYMENT_README.md) is the platform's generic guide; this
+section covers what is specific to Leafy Wallet.
+
+### What gets deployed
+
+Locally the demo runs five services. Kanopy's chart deploys one pod, so the frontend is the main
+container and the rest are sidecars sharing its network namespace - which is why every internal URL
+in `environment/*.yaml` is `localhost`.
+
+| Service | Port | Why it has to be deployed |
+|---|---|---|
+| frontend (Next.js) | 3000 | The app. Talks to Leafy Pay and to the backend. |
+| backend (FastAPI) | 8000 | Enrichment CRUD, Atlas `$vectorSearch`, and the MCP server the assistant reads through. |
+| ollama | 11434 | Embeddings only (`nomic-embed-text`, ~275MB, no GPU). |
+| leafy-local-store | 8090 | The on-device store. Every offline read comes from here. |
+| objectbox-sync-server | 9999 | Replicates that store to Atlas and back. |
+
+Two things are easy to get wrong:
+
+- **Ollama is still required**, even though the assistant's chat runs on Grove. Embeddings cannot move
+  to a gateway, because the device has to embed both the note and the search query with no network.
+  Only the chat model is dropped, which is what takes the image from ~4.7GB to ~275MB.
+- **The ObjectBox sync server is a licensed build**, distributed as a tarball rather than a public
+  image. `docker load` only populates the machine it runs on, so it must be pushed to ECR before
+  Kubernetes can pull it (see "ObjectBox Sync server image" above).
+
+### One-time setup
+
+1. **Choose the deployment type.** Copy `.drone-multicontainer-pods.yml` to `.drone.yml` - the
+   sidecar topology is the one `environment/*.yaml` is written for. Replace `<your-demo-name>` with
+   `leafy-wallet` throughout.
+
+2. **Create the Kubernetes secret.** Only its name (`leafy-wallet-kanopy`) is committed; the values
+   never enter git:
+
+   ```bash
+   helm ksec set leafy-wallet-kanopy \
+     MONGODB_URI="..." DATABASE_NAME="..." \
+     CLIENT_ID="..." CLIENT_SECRET="..." SESSION_SECRET="..." \
+     GROVE_API_KEY="..."
+   ```
+
+3. **Push the licensed sync server image** to ECR, then set the same address in
+   `environment/*.yaml`:
+
+   ```bash
+   docker tag <loaded-image-name> \
+     275662791714.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-objectbox-sync:2026-07-14
+   docker push 275662791714.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/leafy-wallet-objectbox-sync:2026-07-14
+   ```
+
+4. **Register the redirect URI** on the Leafy Pay OAuth client. It is derived as
+   `<APP_BASE_URL>/api/auth/callback`, so each environment's host needs its own entry, and the
+   client must be allowed the `read:rtp` and `write:rtp` scopes.
+
+5. **Fill the remaining placeholders** in `environment/staging.yaml` and `environment/production.yaml`:
+   `PSP_BASE_URL`, `PSP_FRONTEND_URL`, and `ownership.driEmail`.
+
+### Deploying
+
+Push to `staging` for the staging environment, `main` for production. Drone builds, pushes and
+deploys automatically.
+
+### Notes on the values files
+
+- `env:` holds plain, non-sensitive values (URLs, `APP_ENV`) and is committed as-is.
+- `envSecrets:` maps an environment variable to the **name** of a Kubernetes secret, never a value -
+  which is why these files are safe in git.
+- `extraVolumes` uses `emptyDir`, so a restart re-pulls the embedding model and re-imports from
+  Atlas. Atlas is the durable copy; switch to PVCs if that startup cost matters.
+
+## ObjectBox Sync server image
+
+`docker-compose.yml` pulls ObjectBox's public **trial** sync server by default, so a fresh clone runs
+with no extra steps. A licensed build ships as a tarball rather than a public image, so it has to be
+loaded into your local Docker daemon once and then selected by name:
+
+```bash
+docker load -i <objectbox-sync-server-docker.tar.gz>   # prints the image name it loaded
+echo 'OBJECTBOX_SYNC_IMAGE=<that image name>' >> .env  # root .env, gitignored
+docker compose up -d --force-recreate objectbox-sync-server
+```
+
+`docker load` only populates the machine it runs on - it does not publish anywhere. To use a licensed
+build somewhere else (CI, a deployment), push it to a registry that host can pull from and set
+`OBJECTBOX_SYNC_IMAGE` to that address instead.
 
 ## 📄 License
 

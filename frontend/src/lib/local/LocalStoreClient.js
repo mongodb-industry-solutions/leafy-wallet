@@ -107,28 +107,35 @@ export async function createLocalChatMessage(chatReference, { role, text }) {
   return call('POST', `/chats/${encodeURIComponent(chatReference)}/messages`, { role, text })
 }
 
-/** Payment requests held on device. Pass `targetDigest` for an inbox, `requesterPartyRef` for an outbox. */
-export async function listLocalRequests({ targetDigest, requesterPartyRef, status } = {}) {
+/**
+ * Payment requests held on device, synced down from Atlas. Pass `payerPartyRef` for an inbox,
+ * `requesterPartyRef` for an outbox, `localSyncStatus` to find the ones queued while offline.
+ */
+export async function listLocalRequests({
+  payerPartyRef,
+  requesterPartyRef,
+  status,
+  localSyncStatus,
+} = {}) {
   const query = new URLSearchParams({
-    ...(targetDigest ? { targetDigest } : {}),
+    ...(payerPartyRef ? { payerPartyRef } : {}),
     ...(requesterPartyRef ? { requesterPartyRef } : {}),
     ...(status ? { status } : {}),
+    ...(localSyncStatus ? { localSyncStatus } : {}),
   }).toString()
   return call('GET', `/requests${query ? `?${query}` : ''}`)
 }
 
 /**
- * Raise a request while offline. Needs no replay - Sync carrying it to Atlas is the delivery.
- * @param {object} request - `{ requestReference, requesterPartyRef, requesterName, requesterDigest, targetDigest, amount, currency, note }`.
+ * Queue a request raised while offline. The store stamps it `local_pending`; the caller supplies the
+ * stand-in `requestReference`, which the replay swaps for Leafy Pay's once there's a connection.
+ * @param {object} request - `{ requestReference, requesterPartyRef, requesterName, payerCounterpartyRef, amount, currency, note }`.
  */
 export async function createLocalRequest(request) {
   return call('POST', '/requests', request)
 }
 
-/** Resolve a local request by its ObjectBox id. Rejects a replay with 409. */
-export async function resolveLocalRequest(id, { status, leafyPayTransferReference }) {
-  return call('PUT', `/requests/${encodeURIComponent(id)}`, {
-    status,
-    ...(leafyPayTransferReference ? { leafyPayTransferReference } : {}),
-  })
+/** Drop a queued request once Leafy Pay holds the real one. Propagates through Sync. */
+export async function deleteLocalRequest(id) {
+  return call('DELETE', `/requests/${encodeURIComponent(id)}`)
 }

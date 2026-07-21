@@ -1,10 +1,10 @@
 import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
-// Tests run in plain Node against a local Ollama - no Next.js, no Docker, no database. The `@` alias
-// mirrors jsconfig, and `server-only` is stubbed so server modules (e.g. the MCP result parser) can
-// be imported directly. The AI evals call a real model, so timeouts are generous and files run one
-// at a time to avoid several graphs hammering one local model at once.
+// Tests run in plain Node - no Next.js, no Docker, no database. The `@` alias mirrors jsconfig, and
+// `server-only` is stubbed so server modules (e.g. the MCP result parser) can be imported directly.
+// The AI evals call a real model - local Ollama by default, or Grove with APP_ENV and GROVE_API_KEY
+// set - so timeouts are generous and files run one at a time rather than hammering one local model.
 export default defineConfig({
   resolve: {
     alias: {

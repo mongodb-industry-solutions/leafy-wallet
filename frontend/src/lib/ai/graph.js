@@ -1,4 +1,5 @@
 import { ChatOllama } from '@langchain/ollama'
+import { ChatAnthropic } from '@langchain/anthropic'
 import { StateGraph, MessagesAnnotation } from '@langchain/langgraph'
 import { ToolNode } from '@langchain/langgraph/prebuilt'
 import { SystemMessage, AIMessage } from '@langchain/core/messages'
@@ -14,6 +15,53 @@ const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2.5:7b'
 const NUM_CTX = 8192
 // Fixed seed so a turn is as reproducible as the runtime allows.
 const SEED = 42
+
+// "local" on a developer machine, "staging"/"prod" once deployed (see environment/*.yaml). Not
+// NODE_ENV: Next pins that to `production` in any built image, including the local Docker one.
+const APP_ENV = process.env.APP_ENV ?? 'local'
+
+// Grove is MongoDB's gateway to hosted Claude, used where no Ollama chat model runs.
+const GROVE_KEY = process.env.GROVE_API_KEY ?? ''
+const GROVE_URL =
+  process.env.GROVE_BASE_URL ??
+  'https://grove-gateway-prod.azure-api.net/grove-foundry-prod/anthropic'
+const GROVE_MODEL = process.env.GROVE_CHAT_MODEL ?? 'claude-haiku-4-5'
+// The assistant answers in a sentence or two, so this only has to clear the longest reply.
+const GROVE_MAX_TOKENS = 4096
+
+/**
+ * The chat model for a turn: Grove once deployed, local Ollama otherwise. Embeddings never come
+ * through here - they run on the device for offline search, so they stay on Ollama everywhere.
+ */
+function chatModel() {
+  if (APP_ENV === 'local') {
+    return new ChatOllama({
+      baseUrl: OLLAMA_URL,
+      model: CHAT_MODEL,
+      numCtx: NUM_CTX,
+      temperature: 0,
+      seed: SEED,
+      // qwen3 reasons in a <think> block by default, which adds latency and can leak into the reply;
+      // turn it off so it answers directly. Non-thinking models (qwen2.5) ignore this.
+      ...(CHAT_MODEL.startsWith('qwen3') ? { think: false } : {}),
+    })
+  }
+  // Fail loudly: no Ollama is deployed, so there is nothing to fall back to.
+  if (!GROVE_KEY) {
+    throw new Error(
+      `APP_ENV is "${APP_ENV}" but GROVE_API_KEY is not set - the assistant has no model to call.`,
+    )
+  }
+  return new ChatAnthropic({
+    model: GROVE_MODEL,
+    temperature: 0,
+    maxTokens: GROVE_MAX_TOKENS,
+    anthropicApiUrl: GROVE_URL,
+    apiKey: GROVE_KEY,
+    // Grove authenticates with `api-key`, not Anthropic's own `x-api-key` header.
+    clientOptions: { defaultHeaders: { 'api-key': GROVE_KEY } },
+  })
+}
 
 /**
  * Pull JSON objects out of a string by scanning for balanced top-level braces. Used to recover a
@@ -119,27 +167,20 @@ export function recoverToolCalls(content, toolNames) {
  */
 export function compileGraph(tools, { isOnline }) {
   const toolNames = tools.map((t) => t.name)
-  const model = new ChatOllama({
-    baseUrl: OLLAMA_URL,
-    model: CHAT_MODEL,
-    numCtx: NUM_CTX,
-    temperature: 0,
-    seed: SEED,
-    // qwen3 reasons in a <think> block by default, which adds latency and can leak into the reply;
-    // turn it off so it answers directly. Non-thinking models (qwen2.5) ignore this.
-    ...(CHAT_MODEL.startsWith('qwen3') ? { think: false } : {}),
-  }).bindTools(tools)
+  const model = chatModel().bindTools(tools)
 
   async function callModel(state) {
     const system = new SystemMessage(isOnline ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}\n\n${OFFLINE_NOTE}`)
     const messages = [system, ...state.messages]
-    // One retry: a local model call can drop its stream mid-flight, which is transient.
     let reply
     try {
       reply = await model.invoke(messages)
-    } catch {
+    } catch (e) {
+      // A local model call can drop mid-flight; the Anthropic SDK already retries its own transport.
+      if (APP_ENV !== 'local') throw e
       reply = await model.invoke(messages)
     }
+    // Salvage a tool call written as prose. Only the local model does this; Claude never needs it.
     if (!reply.tool_calls?.length) {
       const recovered = recoverToolCalls(reply.content, toolNames)
       if (recovered.length) return { messages: [new AIMessage({ content: '', tool_calls: recovered })] }

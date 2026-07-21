@@ -138,7 +138,6 @@ struct LocalContact {
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
     // Blind index of the contact's email; empty for contacts saved by phone.
-    std::string counterpartyLookupDigest;
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 2; }
@@ -152,7 +151,6 @@ struct LocalContact {
             auto offsetLabel = fbb.CreateString(object.counterpartyLabel);
             auto offsetLookupType = fbb.CreateString(object.counterpartyLookupType);
             auto offsetLookupHint = fbb.CreateString(object.counterpartyLookupHint);
-            auto offsetLookupDigest = fbb.CreateString(object.counterpartyLookupDigest);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
@@ -163,7 +161,6 @@ struct LocalContact {
             fbb.AddOffset(14, offsetLookupHint);            // 6: counterpartyLookupHint
             fbb.AddElement(16, object.createdAt);           // 7: createdAt
             fbb.AddElement(18, object.updatedAt);           // 8: updatedAt
-            fbb.AddOffset(22, offsetLookupDigest);          // 10: counterpartyLookupDigest
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -187,7 +184,6 @@ struct LocalContact {
             readString(14, out.counterpartyLookupHint);
             out.createdAt = table->GetField<int64_t>(16, 0);
             out.updatedAt = table->GetField<int64_t>(18, 0);
-            readString(22, out.counterpartyLookupDigest);
         }
 
         static LocalContact fromFlatBuffer(const void* data, size_t size) {
@@ -424,23 +420,24 @@ struct LocalAccountBalance {
     };
 };
 
-// Mirrors backend/schemas/wallet_requests.py's WalletRequestCreate/Out. Unlike a transaction it
-// needs no local_pending replay: nothing moves until it's paid, so Sync is the whole delivery.
+// Mirrors backend/schemas/wallet_requests.py. Leafy Pay owns requests; this is the offline replica.
+// One composed with no connection is stored local_pending and replayed on reconnect, like a send.
 
 struct LocalRequest {
     int64_t id = 0;
     std::string requestReference;
     std::string requesterPartyRef;
     std::string requesterName;
-    std::string requesterDigest;
-    std::string targetDigest;
+    std::string localSyncStatus;             // synced | local_pending
+    std::string payerPartyRef;               // empty until Leafy Pay resolves the payer
     double amount = 0;
     std::string currency;
     std::string note;                        // empty = absent
-    std::string status;                      // pending | paid | declined | cancelled
-    std::string leafyPayTransferReference;   // empty = absent (set when paid)
+    std::string status;                      // Leafy Pay's RTP lifecycle status, verbatim
+    std::string leafyPayTransferReference;   // empty = absent (set when the payer approves)
     int64_t createdAt = 0;                   // epoch millis
     int64_t resolvedAt = 0;                  // 0 = absent
+    std::string payerCounterpartyRef;        // the requester's saved contact for the payer
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 6; }
@@ -452,20 +449,21 @@ struct LocalRequest {
             auto offsetReference = fbb.CreateString(object.requestReference);
             auto offsetRequesterParty = fbb.CreateString(object.requesterPartyRef);
             auto offsetRequesterName = fbb.CreateString(object.requesterName);
-            auto offsetRequesterDigest = fbb.CreateString(object.requesterDigest);
-            auto offsetTargetDigest = fbb.CreateString(object.targetDigest);
+            auto offsetLocalSyncStatus = fbb.CreateString(object.localSyncStatus);
+            auto offsetPayerParty = fbb.CreateString(object.payerPartyRef);
             auto offsetCurrency = fbb.CreateString(object.currency);
             auto offsetNote = fbb.CreateString(object.note);
             auto offsetStatus = fbb.CreateString(object.status);
             auto offsetTransferRef = fbb.CreateString(object.leafyPayTransferReference);
+            auto offsetPayerCounterparty = fbb.CreateString(object.payerCounterpartyRef);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
             fbb.AddOffset(6, offsetReference);              // 2: requestReference
             fbb.AddOffset(8, offsetRequesterParty);         // 3: requesterPartyRef
             fbb.AddOffset(10, offsetRequesterName);         // 4: requesterName
-            fbb.AddOffset(12, offsetRequesterDigest);       // 5: requesterDigest
-            fbb.AddOffset(14, offsetTargetDigest);          // 6: targetDigest
+            fbb.AddOffset(12, offsetLocalSyncStatus);       // 5: localSyncStatus
+            fbb.AddOffset(14, offsetPayerParty);            // 6: payerPartyRef
             fbb.AddElement(16, object.amount);              // 7: amount
             fbb.AddOffset(18, offsetCurrency);              // 8: currency
             fbb.AddOffset(20, offsetNote);                  // 9: note
@@ -473,6 +471,7 @@ struct LocalRequest {
             fbb.AddOffset(24, offsetTransferRef);           // 11: leafyPayTransferReference
             fbb.AddElement(26, object.createdAt);           // 12: createdAt
             fbb.AddElement(28, object.resolvedAt);          // 13: resolvedAt
+            fbb.AddOffset(32, offsetPayerCounterparty);     // 15: payerCounterpartyRef
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -492,8 +491,8 @@ struct LocalRequest {
             readString(6, out.requestReference);
             readString(8, out.requesterPartyRef);
             readString(10, out.requesterName);
-            readString(12, out.requesterDigest);
-            readString(14, out.targetDigest);
+            readString(12, out.localSyncStatus);
+            readString(14, out.payerPartyRef);
             out.amount = table->GetField<double>(16, 0);
             readString(18, out.currency);
             readString(20, out.note);
@@ -501,6 +500,7 @@ struct LocalRequest {
             readString(24, out.leafyPayTransferReference);
             out.createdAt = table->GetField<int64_t>(26, 0);
             out.resolvedAt = table->GetField<int64_t>(28, 0);
+            readString(32, out.payerCounterpartyRef);
         }
 
         static LocalRequest fromFlatBuffer(const void* data, size_t size) {
@@ -528,7 +528,6 @@ struct LocalContact_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalContact, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalContact, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupDigest;
 };
 
 const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::id(1);
@@ -539,7 +538,6 @@ const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counter
 const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupHint(6);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::createdAt(7);
 const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::updatedAt(8);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupDigest(10);
 
 struct LocalTransaction_ {
     static const obx::Property<LocalTransaction, OBXPropertyType_Long> id;
@@ -632,8 +630,8 @@ struct LocalRequest_ {
     static const obx::Property<LocalRequest, OBXPropertyType_String> requestReference;
     static const obx::Property<LocalRequest, OBXPropertyType_String> requesterPartyRef;
     static const obx::Property<LocalRequest, OBXPropertyType_String> requesterName;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> requesterDigest;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> targetDigest;
+    static const obx::Property<LocalRequest, OBXPropertyType_String> localSyncStatus;
+    static const obx::Property<LocalRequest, OBXPropertyType_String> payerPartyRef;
     static const obx::Property<LocalRequest, OBXPropertyType_Double> amount;
     static const obx::Property<LocalRequest, OBXPropertyType_String> currency;
     static const obx::Property<LocalRequest, OBXPropertyType_String> note;
@@ -643,14 +641,15 @@ struct LocalRequest_ {
     // BSON ISODate; Long would map to a plain Int64.
     static const obx::Property<LocalRequest, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalRequest, OBXPropertyType_Date> resolvedAt;
+    static const obx::Property<LocalRequest, OBXPropertyType_String> payerCounterpartyRef;
 };
 
 const obx::Property<LocalRequest, OBXPropertyType_Long> LocalRequest_::id(1);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requestReference(2);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterPartyRef(3);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterName(4);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterDigest(5);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::targetDigest(6);
+const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::localSyncStatus(5);
+const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::payerPartyRef(6);
 const obx::Property<LocalRequest, OBXPropertyType_Double> LocalRequest_::amount(7);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::currency(8);
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::note(9);
@@ -658,6 +657,7 @@ const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::status(
 const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::leafyPayTransferReference(11);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt(12);
 const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
+const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::payerCounterpartyRef(15);
 
 // ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
 
@@ -710,7 +710,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupHint", OBXPropertyType_String, 6, 7002000000000006ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 7, 7002000000000007ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
-    obx_model_property(model, "counterpartyLookupDigest", OBXPropertyType_String, 10, 7002000000000010ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
     // Entity 3: chats - a conversation. Entity name is the target MongoDB
@@ -774,8 +773,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "requestReference", OBXPropertyType_String, 2, 7006000000000002ULL);
     obx_model_property(model, "requesterPartyRef", OBXPropertyType_String, 3, 7006000000000003ULL);
     obx_model_property(model, "requesterName", OBXPropertyType_String, 4, 7006000000000004ULL);
-    obx_model_property(model, "requesterDigest", OBXPropertyType_String, 5, 7006000000000005ULL);
-    obx_model_property(model, "targetDigest", OBXPropertyType_String, 6, 7006000000000006ULL);
+    obx_model_property(model, "localSyncStatus", OBXPropertyType_String, 5, 7006000000000005ULL);
+    obx_model_property(model, "payerPartyRef", OBXPropertyType_String, 6, 7006000000000006ULL);
     obx_model_property(model, "amount", OBXPropertyType_Double, 7, 7006000000000007ULL);
     obx_model_property(model, "currency", OBXPropertyType_String, 8, 7006000000000008ULL);
     obx_model_property(model, "note", OBXPropertyType_String, 9, 7006000000000009ULL);
@@ -783,7 +782,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "leafyPayTransferReference", OBXPropertyType_String, 11, 7006000000000011ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7006000000000012ULL);
     obx_model_property(model, "resolvedAt", OBXPropertyType_Date, 13, 7006000000000013ULL);
-    obx_model_entity_last_property_id(model, 14, 7006000000000014ULL);
+    obx_model_property(model, "payerCounterpartyRef", OBXPropertyType_String, 15, 7006000000000015ULL);
+    obx_model_entity_last_property_id(model, 15, 7006000000000015ULL);
 
     obx_model_last_entity_id(model, 6, 7006000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
@@ -917,8 +917,6 @@ json contact_to_json(const LocalContact& c) {
         {"counterpartyLabel", c.counterpartyLabel},
         {"counterpartyLookupType", c.counterpartyLookupType},
         {"counterpartyLookupHint", c.counterpartyLookupHint},
-        {"counterpartyLookupDigest",
-         c.counterpartyLookupDigest.empty() ? json(nullptr) : json(c.counterpartyLookupDigest)},
         {"createdAt", c.createdAt},
         {"updatedAt", c.updatedAt},
     };
@@ -930,8 +928,9 @@ json request_to_json(const LocalRequest& r) {
         {"requestReference", r.requestReference},
         {"requesterPartyRef", r.requesterPartyRef},
         {"requesterName", r.requesterName},
-        {"requesterDigest", r.requesterDigest},
-        {"targetDigest", r.targetDigest},
+        {"localSyncStatus", r.localSyncStatus},
+        {"payerPartyRef", r.payerPartyRef},
+        {"payerCounterpartyRef", r.payerCounterpartyRef},
         {"amount", r.amount},
         {"currency", r.currency},
         {"note", r.note.empty() ? json(nullptr) : json(r.note)},
@@ -1276,9 +1275,6 @@ int main(int argc, char* argv[]) {
             c.counterpartyLookupType = body.at("counterpartyLookupType").get<std::string>();
             c.counterpartyLookupHint = body.at("counterpartyLookupHint").get<std::string>();
             // Explicitly null for phone contacts, so is_null rather than value() (which throws).
-            if (body.contains("counterpartyLookupDigest") && !body.at("counterpartyLookupDigest").is_null()) {
-                c.counterpartyLookupDigest = body.at("counterpartyLookupDigest").get<std::string>();
-            }
             c.createdAt = now_epoch_millis();
             c.updatedAt = c.createdAt;
 
@@ -1495,21 +1491,25 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    // Filtered by targetDigest (a target's inbox) or requesterPartyRef (an outbox); no filter
-    // returns everything, matching /contacts and /transactions.
+    // Filtered by payerPartyRef (an inbox) or requesterPartyRef (an outbox), matching /contacts
+    // and /transactions. localSyncStatus finds the ones composed offline, for the replay.
     svr.Get("/local/v1/requests", [](const httplib::Request& req, httplib::Response& res) {
         try {
-            const std::string targetDigest = req.has_param("targetDigest") ? req.get_param_value("targetDigest") : "";
+            const std::string payerPartyRef =
+                req.has_param("payerPartyRef") ? req.get_param_value("payerPartyRef") : "";
             const std::string requesterPartyRef =
                 req.has_param("requesterPartyRef") ? req.get_param_value("requesterPartyRef") : "";
             const std::string status = req.has_param("status") ? req.get_param_value("status") : "";
+            const std::string localSyncStatus =
+                req.has_param("localSyncStatus") ? req.get_param_value("localSyncStatus") : "";
 
             auto box = store->box<LocalRequest>();
             json results = json::array();
             for (const auto& r : box.getAll()) {
-                if (!targetDigest.empty() && r->targetDigest != targetDigest) continue;
+                if (!payerPartyRef.empty() && r->payerPartyRef != payerPartyRef) continue;
                 if (!requesterPartyRef.empty() && r->requesterPartyRef != requesterPartyRef) continue;
                 if (!status.empty() && r->status != status) continue;
+                if (!localSyncStatus.empty() && r->localSyncStatus != localSyncStatus) continue;
                 results.push_back(request_to_json(*r));
             }
             res.set_content(results.dump(), "application/json");
@@ -1534,7 +1534,7 @@ int main(int argc, char* argv[]) {
         }
 
         for (const char* field : {"requestReference", "requesterPartyRef", "requesterName",
-                                   "requesterDigest", "targetDigest", "amount"}) {
+                                   "payerCounterpartyRef", "amount"}) {
             if (!body.contains(field)) {
                 bad_request(std::string("Missing required field: ") + field);
                 return;
@@ -1546,14 +1546,16 @@ int main(int argc, char* argv[]) {
             r.requestReference = body.at("requestReference").get<std::string>();
             r.requesterPartyRef = body.at("requesterPartyRef").get<std::string>();
             r.requesterName = body.at("requesterName").get<std::string>();
-            r.requesterDigest = body.at("requesterDigest").get<std::string>();
-            r.targetDigest = body.at("targetDigest").get<std::string>();
+            r.payerCounterpartyRef = body.at("payerCounterpartyRef").get<std::string>();
             r.amount = body.at("amount").get<double>();
             r.currency = body.value("currency", "EUR");
             if (body.contains("note") && !body.at("note").is_null()) {
                 r.note = body.at("note").get<std::string>();
             }
-            r.status = "pending";
+            // Leafy Pay has not seen it, so no payer is resolved yet. Enters at Leafy Pay's own
+            // opening status; the replay creates the real request and drops this stand-in.
+            r.status = "created";
+            r.localSyncStatus = "local_pending";
             r.createdAt = now_epoch_millis();
 
             auto box = store->box<LocalRequest>();
@@ -1567,53 +1569,8 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    // One-shot, like the backend: a second payment must not settle the same request.
-    svr.Put(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        json body;
-        try {
-            body = json::parse(req.body);
-        } catch (const std::exception& e) {
-            res.status = 400;
-            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(),
-                            "application/json");
-            return;
-        }
-        if (!body.contains("status")) {
-            res.status = 400;
-            res.set_content(json{{"error", "Missing required field: status"}}.dump(), "application/json");
-            return;
-        }
-
-        try {
-            obx_id id = std::stoll(req.matches[1]);
-            auto box = store->box<LocalRequest>();
-            auto existing = box.get(id);
-            if (!existing) {
-                res.status = 404;
-                res.set_content(json{{"error", "Request not found"}}.dump(), "application/json");
-                return;
-            }
-            if (existing->status != "pending") {
-                res.status = 409;
-                res.set_content(json{{"error", "Request is already resolved"}}.dump(), "application/json");
-                return;
-            }
-
-            LocalRequest r = *existing;
-            r.status = body.at("status").get<std::string>();
-            if (body.contains("leafyPayTransferReference") && !body.at("leafyPayTransferReference").is_null()) {
-                r.leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
-            }
-            r.resolvedAt = now_epoch_millis();
-            box.put(r);
-
-            res.set_content(request_to_json(r).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
-        }
-    });
-
+    // How the replay retires a stand-in once Leafy Pay has the real request. Resolving one
+    // (pay/decline/cancel) is Leafy Pay's call and never happens here.
     svr.Delete(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         try {
             obx_id id = std::stoll(req.matches[1]);

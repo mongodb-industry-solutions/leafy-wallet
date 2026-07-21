@@ -26,7 +26,10 @@ services:
     entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
   objectbox-sync-server:
-    image: objectboxio/sync-server-trial
+    # Defaults to ObjectBox's public trial image so a fresh clone runs with no extra steps. The trial
+    # stops accepting transactions after a fixed window; with a licensed build, load it and point
+    # OBJECTBOX_SYNC_IMAGE at it in a root .env (see README).
+    image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync-server-trial}
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
@@ -45,7 +48,8 @@ services:
           --unsecured-no-authentication \
           --admin-bind 0.0.0.0:9980 \
           --mongo-url "$$MONGODB_URI" \
-          --mongo-db "$$DATABASE_NAME"
+          --mongo-db "$$DATABASE_NAME" \
+          --mongo-initial-import
     restart: always
   leafy-local-store:
     build:

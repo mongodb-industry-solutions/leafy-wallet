@@ -33,7 +33,7 @@ import pytest
 from db.client import get_db
 
 LOCAL_BASE = "http://localhost:8090"
-SYNC_TIMEOUT_S = 20
+SYNC_TIMEOUT_S = 45  # generous: propagation is normally sub-second, but the full suite loads Atlas
 SYNC_POLL_INTERVAL_S = 0.5
 
 

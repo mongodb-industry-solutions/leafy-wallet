@@ -3,33 +3,38 @@
 import { randomUUID } from 'crypto'
 import { getSession } from '@/lib/auth/session'
 import {
+  acceptRtpRequest,
+  cancelRtpRequest,
   createBeneficiary,
+  createRtpRequest,
   listAccounts,
   listBeneficiaries,
+  listRtpRequests,
   listTransactions,
+  presentRtpRequest,
+  rejectRtpRequest,
   removeBeneficiary,
   sendToBeneficiary,
 } from '@/lib/psp/PspClient'
 import { classifyNotes, emojiForCategory } from '@/lib/wallet/categories'
 import {
   createContactEnrichment,
-  createRequestDoc,
   createTransactionEnrichment,
   deleteContactEnrichment,
+  deleteRequestDoc,
   deleteTransactionEnrichment,
   listContactEnrichment,
-  listIncomingRequests,
-  listOutgoingRequests,
+  listRequestDocs,
   createChatDoc,
   createChatMessageDoc,
   deleteChatDoc,
   listChatDocs,
   listChatMessageDocs,
   listTransactionEnrichment,
-  resolveRequestDoc,
   searchTransactionEnrichment,
   spendingByContactEnrichment,
   updateTransactionEnrichment,
+  upsertRequestDoc,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
@@ -37,6 +42,7 @@ import {
   createLocalChatMessage,
   createLocalRequest,
   deleteLocalChat,
+  deleteLocalRequest,
   deleteLocalTransaction,
   listLocalAccounts,
   listLocalChatMessages,
@@ -46,42 +52,34 @@ import {
   listLocalTransactions,
   localSpendingByContact,
   queueLocalSend,
-  resolveLocalRequest,
   searchLocalTransactions,
 } from '@/lib/local/LocalStoreClient'
-import { lookupDigest } from './digest'
+import { detectLookupType } from './contacts'
+import { isAwaitingPayer, toRequestPaymentRows, toRequestStatus } from './requests'
 import { avatarFor, formatDate, formatMoney } from './format'
 import { DEMO_USERS } from '@/lib/demo-users'
 
-// Demo-user avatars keyed by email blind index. A contact/transaction/request that resolves to a
-// demo user then shows the same pinned illustration regardless of the alias the user saved it under
-// (the name is editable, the email digest is stable).
-let demoAvatarsByDigest = null
-function demoAvatarByDigest(digest) {
-  if (!digest) return undefined
-  if (!demoAvatarsByDigest) {
-    demoAvatarsByDigest = new Map(DEMO_USERS.map((u) => [lookupDigest(u.email), { seed: u.seed, bg: u.bg }]))
-  }
-  return demoAvatarsByDigest.get(digest)
-}
-
-// Backfilled contacts keep no digest and only a first-char-masked email hint ("p***@back.es"), so we
-// fall back to matching that hint's (first local char + domain) against the demo users. Only matches
-// when exactly one demo user fits, so it never guesses between two similar addresses.
+// Contacts keep only a masked hint of the address they were found by, so a demo user is recognized
+// by matching it back. Only when exactly one fits, so it never guesses between similar entries.
 function demoAvatarByHint(hint) {
-  const at = hint?.indexOf('@') ?? -1
-  if (at <= 0) return undefined // not an email hint (e.g. phone) or malformed
-  const firstChar = hint[0].toLowerCase()
-  const domain = hint.slice(at + 1).toLowerCase()
+  const value = hint?.trim().toLowerCase()
+  if (!value) return undefined
+  const at = value.indexOf('@')
   const matches = DEMO_USERS.filter((u) => {
-    const [local, dom] = u.email.toLowerCase().split('@')
-    return local[0] === firstChar && dom === domain
+    if (at > 0) {
+      const [local, domain] = u.email.toLowerCase().split('@')
+      return local[0] === value[0] && domain === value.slice(at + 1)
+    }
+    // Phone hint: Leafy Pay keeps the country/area prefix and the last three digits.
+    const digits = value.replace(/\D/g, '')
+    const own = u.phone?.replace(/\D/g, '') ?? ''
+    return digits.length >= 4 && own.startsWith(digits.slice(0, -3)) && own.endsWith(digits.slice(-3))
   })
   return matches.length === 1 ? { seed: matches[0].seed, bg: matches[0].bg } : undefined
 }
 
-// Requests carry no hint and a digest that predates the current key, but `requesterName` is the
-// requester's real profile name (not a user-editable local alias), so it's a reliable key here.
+// An incoming request carries no hint, but Leafy Pay returns the requester's real profile name,
+// which is not a user-editable alias and so is a reliable key.
 function demoAvatarByName(name) {
   const key = name?.trim().toLowerCase()
   const user = key ? DEMO_USERS.find((u) => u.name.toLowerCase() === key) : undefined
@@ -158,7 +156,7 @@ function toContactView(b) {
     reference: b.reference,
     name: b.label,
     lookupHint: b.lookupHint,
-    ...(demoAvatarByDigest(b.lookupDigest) ?? demoAvatarByHint(b.lookupHint) ?? avatarFor(b.reference ?? b.label)),
+    ...(demoAvatarByHint(b.lookupHint) ?? avatarFor(b.reference ?? b.label)),
   }
 }
 
@@ -197,7 +195,6 @@ async function resolveContacts(owner, { backfill = false } = {}) {
       label: atlas?.counterpartyLabel || b.label,
       lookupType: atlas?.counterpartyLookupType || b.lookupType,
       lookupHint: atlas?.counterpartyLookupHint || b.lookupHint,
-      lookupDigest: atlas?.counterpartyLookupDigest ?? null,
     }
   })
 }
@@ -212,7 +209,6 @@ async function localContacts(owner) {
       label: c.counterpartyLabel,
       lookupType: c.counterpartyLookupType,
       lookupHint: c.counterpartyLookupHint,
-      lookupDigest: c.counterpartyLookupDigest ?? null,
     }))
 }
 
@@ -229,29 +225,27 @@ export async function getContacts(isOnline = true) {
 }
 
 /**
- * Add a contact: resolve a registered Leafy Pay email into a saved beneficiary (source of truth),
- * then mirror it to the Atlas walletContacts replica. Fails cleanly if no registered user/merchant
- * matches the given email.
- *
- * The only moment we hold the address, so the blind index is derived here and the address discarded.
+ * Add a contact by a registered Leafy Pay email or phone, then mirror it to Atlas. A miss reads the
+ * same whether nobody matched or they were already saved; the address is discarded after the lookup.
  * @param {{lookupValue: string, label?: string}} input
  * @returns {Promise<{ok: boolean, contact?: object, error?: string}>}
  */
 export async function addContact({ lookupValue, label = '' } = {}) {
   const value = String(lookupValue ?? '').trim()
-  if (!value) return { ok: false, error: 'Enter an email' }
+  if (!value) return { ok: false, error: 'Enter an email or phone number' }
+  const lookupType = detectLookupType(value)
 
   let result
   try {
-    result = await createBeneficiary({ lookupType: 'email', lookupValue: value, label: label.trim() })
+    result = await createBeneficiary({ lookupType, lookupValue: value, label: label.trim() })
   } catch {
     return { ok: false, error: 'Could not add contact. Please try again.' }
   }
   if (!result.found) {
-    return { ok: false, error: 'No Leafy Pay user is registered with that email.' }
+    const what = lookupType === 'email' ? 'that email' : 'that phone number'
+    return { ok: false, error: `No Leafy Pay user is registered with ${what}.` }
   }
   const beneficiary = result.beneficiary
-  const digest = lookupDigest(value)
 
   const owner = await ownerRef()
   if (owner) {
@@ -262,14 +256,13 @@ export async function addContact({ lookupValue, label = '' } = {}) {
         counterpartyLabel: beneficiary.label,
         counterpartyLookupType: beneficiary.lookupType,
         counterpartyLookupHint: beneficiary.lookupHint,
-        counterpartyLookupDigest: digest,
       })
     } catch {
       return { ok: false, error: 'Could not save the contact - is the backend running?' }
     }
   }
 
-  return { ok: true, contact: toContactView({ ...beneficiary, lookupDigest: digest }) }
+  return { ok: true, contact: toContactView(beneficiary) }
 }
 
 /**
@@ -309,12 +302,15 @@ const LOCAL_REFERENCE_PREFIX = 'local-'
 // `walletTransactions.leafyPayStatus` for a transfer Leafy Pay reports as `completed`.
 const SETTLED_STATUS = 'settled'
 
-/** Shape one transaction row for the UI, from either source. */
-function toTransactionRow({ reference, counterpartyRef, contact, isReceived, magnitude, currency, note, createdAt, status, isPending }) {
+/**
+ * Shape one transaction row for the UI, from either source. `fallbackName` covers a counterparty
+ * with no saved contact: paying a request does not require having saved the requester.
+ */
+function toTransactionRow({ reference, counterpartyRef, contact, fallbackName, isReceived, magnitude, currency, note, createdAt, status, isPending }) {
   return {
     id: reference,
     reference,
-    name: contact?.label || 'Leafy Pay user',
+    name: contact?.label || fallbackName || 'Leafy Pay user',
     lookupHint: contact?.lookupHint || '',
     note: note || 'No note',
     amount: isReceived ? magnitude : -magnitude,
@@ -323,7 +319,9 @@ function toTransactionRow({ reference, counterpartyRef, contact, isReceived, mag
     createdAt,
     status,
     isPending,
-    ...(demoAvatarByDigest(contact?.lookupDigest) ?? demoAvatarByHint(contact?.lookupHint) ?? avatarFor(counterpartyRef ?? reference)),
+    ...(demoAvatarByHint(contact?.lookupHint) ??
+      demoAvatarByName(fallbackName) ??
+      avatarFor(counterpartyRef ?? reference)),
   }
 }
 
@@ -360,16 +358,18 @@ async function localTransactions(owner) {
 /**
  * The user's transactions: Leafy Pay (base transfer, source of truth) read in parallel with the Atlas
  * enrichment (note) and the resolved contacts (Atlas aliases), merged by `leafyPayTransferReference`.
+ * Payments that settled a request are folded in too, since Leafy Pay's history leaves them out.
  * Every row gets a non-empty name and note. Sorted newest first.
  * @param {boolean} [isOnline]
  */
 export async function getTransactions(isOnline = true) {
   const owner = await ownerRef()
   if (!isOnline) return localTransactions(owner)
-  const [transactions, contacts, enrichment] = await Promise.all([
+  const [transactions, contacts, enrichment, requests] = await Promise.all([
     listTransactions(),
     resolveContacts(owner),
     owner ? listTransactionEnrichment(owner).catch(() => []) : [],
+    bothRequestBoxes(),
   ])
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
   const enrichByRef = new Map((enrichment ?? []).map((e) => [e.leafyPayTransferReference, e]))
@@ -407,6 +407,19 @@ export async function getTransactions(isOnline = true) {
       isPending: t.status !== 'completed',
     })
   })
+
+  const known = new Set(transactions.map((t) => t.reference))
+  for (const row of toRequestPaymentRows(requests, known)) {
+    const enrich = enrichByRef.get(row.reference)
+    rows.push(
+      toTransactionRow({
+        ...row,
+        contact: contactByRef.get(row.counterpartyRef),
+        note: enrich?.note || row.note,
+        isPending: row.status !== 'completed',
+      }),
+    )
+  }
 
   rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
   return rows
@@ -483,16 +496,21 @@ export async function sendMoney({
 }
 
 /**
- * Settlement status of a sent transfer, read from the transaction list (the dedicated status endpoint is
- * session-only, so we resolve it from the OAuth-visible transactions). `pending` while still settling.
- * @param {string} reference - The transfer reference returned by `sendMoney`.
+ * Settlement status of a sent transfer, read from the transaction list (the status endpoint is
+ * session-only). A payment that settled a request is absent there, so it falls back to the request.
+ * @param {string} reference - The transfer reference returned by `sendMoney` or `payRequest`.
  * @returns {Promise<{status: 'completed'|'pending'|'failed'|'unknown'}>}
  */
 export async function getTransferStatus(reference) {
   if (!reference) return { status: 'unknown' }
   const transactions = await listTransactions()
   const match = transactions.find((t) => t.reference === reference)
-  if (!match) return { status: 'pending' }
+  if (!match) {
+    const request = (await bothRequestBoxes()).find((r) => r.executionReference === reference)
+    if (request?.status === 'payment_settled') return { status: 'completed' }
+    if (request?.status === 'payment_failed') return { status: 'failed' }
+    return { status: 'pending' }
+  }
   if (match.status === 'completed') return { status: 'completed' }
   if (match.status === 'failed' || match.status === 'exception') return { status: 'failed' }
   return { status: 'pending' }
@@ -565,34 +583,45 @@ const toEnrichmentStatus = (status) => {
 
 /**
  * Converge the enrichment stores to Leafy Pay for the signed-in user. Leafy Pay is the source
- * of truth for money and beneficiaries: Atlas rows whose transfer or beneficiary no longer
- * exists there are orphans and get pruned, and transfers Leafy Pay has that the app never saw
- * (made elsewhere, or received) are adopted with a bare enrichment doc so they exist offline
- * too. Both directions sync down to the device copy. Queued offline sends don't exist in
- * Leafy Pay yet and are never touched.
- * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number, adoptedTransactions?: number}>}
+ * of truth for money, beneficiaries and requests: Atlas rows with nothing behind them there are
+ * pruned, and transfers the app never saw are adopted so they exist offline too. Both directions
+ * sync down to the device. Sends and requests still queued on the device are never touched.
+ * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number, prunedRequests?: number, adoptedTransactions?: number}>}
  */
 export async function reconcileWithLeafyPay() {
   const owner = await ownerRef()
   if (!owner) return { ok: false }
   try {
-    const [transfers, beneficiaries, txDocs, contactDocs] = await Promise.all([
-      listTransactions(),
-      listBeneficiaries(),
-      listTransactionEnrichment(owner).catch(() => []),
-      listContactEnrichment(owner).catch(() => []),
-    ])
+    const [transfers, beneficiaries, requests, txDocs, contactDocs, raised, received] =
+      await Promise.all([
+        listTransactions(),
+        listBeneficiaries(),
+        bothRequestBoxes(),
+        listTransactionEnrichment(owner).catch(() => []),
+        listContactEnrichment(owner).catch(() => []),
+        listRequestDocs({ requesterPartyRef: owner }).catch(() => []),
+        listRequestDocs({ payerPartyRef: owner }).catch(() => []),
+      ])
+    const requestDocs = [...(raised ?? []), ...(received ?? [])]
     const transferRefs = new Set(transfers.map((t) => t.reference))
     const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
+    const requestRefs = new Set(requests.map((r) => r.reference))
     const enrichedRefs = new Set((txDocs ?? []).map((d) => d.leafyPayTransferReference))
+    // A request's settlement is a real payment Leafy Pay's history leaves out, so its enrichment
+    // has no transfer to match and must not be mistaken for an orphan.
+    const requestPaymentRefs = new Set(requests.map((r) => r.executionReference).filter(Boolean))
 
     const orphanTransactions = (txDocs ?? []).filter(
       (d) =>
         !String(d.leafyPayTransferReference ?? '').startsWith(LOCAL_REFERENCE_PREFIX) &&
-        !transferRefs.has(d.leafyPayTransferReference),
+        !transferRefs.has(d.leafyPayTransferReference) &&
+        !requestPaymentRefs.has(d.leafyPayTransferReference),
     )
     const orphanContacts = (contactDocs ?? []).filter(
       (d) => !beneficiaryRefs.has(d.counterpartyArrangementReference),
+    )
+    const orphanRequests = requestDocs.filter(
+      (d) => d.localSyncStatus !== LOCAL_PENDING && !requestRefs.has(d.requestReference),
     )
     // Note stays empty on adoption: the transfer wasn't composed in this app, and Leafy Pay's
     // own note is portal boilerplate, not something worth embedding.
@@ -601,6 +630,8 @@ export async function reconcileWithLeafyPay() {
     await Promise.all([
       ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
       ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
+      ...orphanRequests.map((d) => deleteRequestDoc(d.id).catch(() => {})),
+      ...requests.map(mirrorRequest),
       ...foreignTransfers.map((t) =>
         createTransactionEnrichment({
           leafyPayTransferReference: t.reference,
@@ -618,6 +649,7 @@ export async function reconcileWithLeafyPay() {
       ok: true,
       prunedTransactions: orphanTransactions.length,
       prunedContacts: orphanContacts.length,
+      prunedRequests: orphanRequests.length,
       adoptedTransactions: foreignTransfers.length,
     }
   } catch {
@@ -717,31 +749,90 @@ export async function getSpendingByCategory(isOnline = true) {
 }
 
 /**
- * Shape a stored request doc into the UI row used by the inbox and the bell. Keyed by
- * `requestReference`: Atlas keys by `_id` and the device by an ObjectBox integer, so it's the only
- * id that survives the connection dropping between reading a request and acting on it.
+ * Shape a request into the UI row used by the inbox, the bell and the awaiting-payment list. Keyed
+ * by the Leafy Pay reference: the only id that survives the connection dropping mid-action. `name`
+ * is whoever the row is about - the requester incoming, the contact asked outgoing.
  */
-function toRequestView(r) {
-  const createdAt = typeof r.createdAt === 'number' ? new Date(r.createdAt).toISOString() : r.createdAt
+function toRequestView({ reference, name, amount, currency, note, status, createdAt, contact }) {
+  const iso = typeof createdAt === 'number' ? new Date(createdAt).toISOString() : createdAt
   return {
-    id: r.requestReference,
-    reference: r.requestReference,
-    name: r.requesterName,
-    amount: r.amount,
-    currency: r.currency,
-    note: r.note || 'No note',
-    status: r.status,
-    date: formatDate(createdAt),
-    createdAt,
-    ...(demoAvatarByDigest(r.requesterDigest) ??
-      demoAvatarByName(r.requesterName) ??
-      avatarFor(r.requesterDigest ?? r.requestReference)),
+    id: reference,
+    reference,
+    name: name || 'Leafy Pay user',
+    amount,
+    currency,
+    note: note || 'No note',
+    status: toRequestStatus(status),
+    date: formatDate(iso),
+    createdAt: iso,
+    ...(demoAvatarByHint(contact?.lookupHint) ?? demoAvatarByName(name) ?? avatarFor(reference)),
+  }
+}
+
+/** Leafy Pay's record, shaped for the Atlas replica that Sync carries down to the device. */
+function toRequestDoc(request) {
+  const isResolved = toRequestStatus(request.status) !== 'pending'
+  return {
+    requestReference: request.reference,
+    requesterPartyRef: request.payeePartyRef,
+    requesterName: request.payeeName,
+    payerPartyRef: request.payerPartyRef,
+    payerCounterpartyRef: request.payerCounterpartyRef,
+    amount: request.amount,
+    currency: request.currency,
+    note: request.note || null,
+    status: request.status,
+    localSyncStatus: 'synced',
+    leafyPayTransferReference: request.executionReference,
+    createdAt: request.createdAt,
+    resolvedAt: isResolved ? request.updatedAt : null,
   }
 }
 
 /**
- * Raise a payment request against a saved contact, addressed to its stored blind index. Leafy Pay
- * is not involved until the target pays.
+ * Both request boxes, each row tagged with which side the user is on. Resolves empty rather than
+ * throwing: requests enrich the transaction list, they never gate it.
+ */
+async function bothRequestBoxes() {
+  const [inbox, outbox] = await Promise.all([
+    listRtpRequests('inbox').catch(() => []),
+    listRtpRequests('outbox').catch(() => []),
+  ])
+  return [
+    ...inbox.map((r) => ({ ...r, isIncoming: true })),
+    ...outbox.map((r) => ({ ...r, isIncoming: false })),
+  ]
+}
+
+/** Write Leafy Pay's view of a request into Atlas, so the device has it with no connection. */
+async function mirrorRequest(request) {
+  return upsertRequestDoc(toRequestDoc(request)).catch(() => {})
+}
+
+// Leafy Pay's RTP error codes that mean something a person can act on; anything else is a retry.
+const RTP_ERRORS = {
+  no_payout_account: 'You need an active account before you can request money.',
+  no_funding_account: 'You need an active account to pay this request.',
+  insufficient_funds: 'Not enough available balance to pay this request.',
+  not_payer: 'This request is not addressed to you.',
+  invalid_state: 'This request is no longer pending.',
+  not_found: 'This request no longer exists.',
+}
+
+/** Turn a Leafy Pay error body into something worth showing, or fall back to the caller's wording. */
+function rtpErrorMessage(error, fallback) {
+  try {
+    const code = JSON.parse(error?.body ?? '{}').error
+    if (RTP_ERRORS[code]) return RTP_ERRORS[code]
+  } catch {
+    /* not a JSON error body; fall through to the caller's wording */
+  }
+  return fallback
+}
+
+/**
+ * Raise a payment request against a saved contact. The payer sees it whether or not they saved this
+ * user back, and presenting is what delivers it. Offline it is buffered and replayed on reconnect.
  * @param {{counterpartyArrangementReference: string, amount: number, note?: string, isOnline?: boolean}} input
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
@@ -750,149 +841,205 @@ export async function createRequest({ counterpartyArrangementReference, amount, 
     return { ok: false, error: 'A contact and an amount are required' }
   }
   const session = await getSession()
-  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+  if (!session?.sub) return { ok: false, error: 'You need to be signed in' }
 
-  const contacts = isOnline ? await resolveContacts(session.sub) : await localContacts(session.sub)
-  const contact = contacts.find((c) => c.reference === counterpartyArrangementReference)
-  if (!contact) return { ok: false, error: 'Contact not found' }
-  if (!contact.lookupDigest) {
-    return { ok: false, error: `You can only request from contacts added by email.` }
-  }
-
-  const request = {
-    requesterPartyRef: session.sub,
-    requesterName: session.name || session.email,
-    requesterDigest: lookupDigest(session.email),
-    targetDigest: contact.lookupDigest,
-    amount,
-    currency: 'EUR',
-    note: note || null,
-  }
-
-  // No replay needed: Sync carrying the record to Atlas is the whole delivery.
   if (!isOnline) {
     try {
-      await createLocalRequest({ ...request, requestReference: randomUUID() })
+      await createLocalRequest({
+        requestReference: `${LOCAL_REFERENCE_PREFIX}${randomUUID()}`,
+        requesterPartyRef: session.sub,
+        requesterName: session.name || session.email || 'You',
+        payerCounterpartyRef: counterpartyArrangementReference,
+        amount,
+        currency: 'EUR',
+        note: note || null,
+      })
+      return { ok: true }
     } catch {
       return { ok: false, error: 'Could not save the request on this device.' }
     }
-    return { ok: true }
   }
 
   try {
-    await createRequestDoc(request)
-  } catch {
-    return { ok: false, error: 'Could not send the request - is the backend running?' }
+    const created = await createRtpRequest({
+      payerCounterpartyRef: counterpartyArrangementReference,
+      amount,
+      note,
+      idempotencyKey: randomUUID(),
+    })
+    // Leafy Pay accepts a contact it cannot resolve and leaves the request with no payer, where it
+    // would sit undeliverable. Reachable when a queued request is replayed after the contact is gone.
+    if (!created.payerPartyRef) {
+      await cancelRtpRequest(created.reference).catch(() => {})
+      return { ok: false, error: 'That contact is no longer saved, so the request was not sent.' }
+    }
+    await mirrorRequest(await presentRtpRequest(created.reference))
+  } catch (e) {
+    return { ok: false, error: rtpErrorMessage(e, 'Could not send the request. Please try again.') }
   }
   return { ok: true }
 }
 
 /**
- * The user's payment requests: `incoming` are addressed to them (matched by digesting their own
- * session email), `outgoing` are ones they raised.
+ * The user's requests: `incoming` are addressed to them, `outgoing` are ones they raised. Online
+ * they come from Leafy Pay and are mirrored to Atlas on the way past. Sorted newest first.
  * @param {boolean} [isOnline]
  * @returns {Promise<{incoming: object[], outgoing: object[]}>}
  */
 export async function getRequests(isOnline = true) {
-  const session = await getSession()
-  if (!session?.sub || !session?.email) return { incoming: [], outgoing: [] }
-  const digest = lookupDigest(session.email)
+  const owner = await ownerRef()
+  if (!owner) return { incoming: [], outgoing: [] }
 
-  const [incoming, outgoing] = isOnline
-    ? await Promise.all([
-        listIncomingRequests(digest).catch(() => []),
-        listOutgoingRequests(session.sub).catch(() => []),
-      ])
-    : await Promise.all([
-        listLocalRequests({ targetDigest: digest, status: 'pending' }).catch(() => []),
-        listLocalRequests({ requesterPartyRef: session.sub }).catch(() => []),
-      ])
+  const contacts = isOnline ? await resolveContacts(owner) : await localContacts(owner)
+  const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
+
+  let incoming
+  let outgoing
+  if (isOnline) {
+    const requests = await bothRequestBoxes()
+    await Promise.all(requests.map(mirrorRequest))
+    const view = (r) => {
+      const contact = r.isIncoming ? undefined : contactByRef.get(r.payerCounterpartyRef)
+      return toRequestView({
+        reference: r.reference,
+        name: r.isIncoming ? r.payeeName : contact?.label,
+        amount: r.amount,
+        currency: r.currency,
+        note: r.note,
+        status: r.status,
+        createdAt: r.createdAt,
+        contact,
+      })
+    }
+    incoming = requests.filter((r) => r.isIncoming && isAwaitingPayer(r.status)).map(view)
+    outgoing = requests.filter((r) => !r.isIncoming).map(view)
+  } else {
+    const [inbox, outbox] = await Promise.all([
+      listLocalRequests({ payerPartyRef: owner }).catch(() => []),
+      listLocalRequests({ requesterPartyRef: owner }).catch(() => []),
+    ])
+    const view = (r, isIncoming) => {
+      const contact = isIncoming ? undefined : contactByRef.get(r.payerCounterpartyRef)
+      return toRequestView({
+        reference: r.requestReference,
+        name: isIncoming ? r.requesterName : contact?.label,
+        amount: r.amount,
+        currency: r.currency,
+        note: r.note,
+        status: r.status,
+        createdAt: r.createdAt,
+        contact,
+      })
+    }
+    incoming = (inbox ?? []).filter((r) => isAwaitingPayer(r.status)).map((r) => view(r, true))
+    outgoing = (outbox ?? []).map((r) => view(r, false))
+  }
 
   const sortNewestFirst = (rows) =>
     rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
 
-  return {
-    incoming: sortNewestFirst((incoming ?? []).map(toRequestView)),
-    outgoing: sortNewestFirst((outgoing ?? []).map(toRequestView)),
-  }
+  return { incoming: sortNewestFirst(incoming), outgoing: sortNewestFirst(outgoing) }
 }
 
 /**
- * Pay a request addressed to the user: match the requester's blind index against the user's own
- * contacts, send the transfer, then mark the request paid. Online only - the requester must already
- * be a saved contact, since Leafy Pay only accepts transfers against an arrangement the sender owns.
- * @param {string} reference - The `requestReference`.
- * @param {string} [fromAccountReference] - Source account; omit for the default.
- * @param {string} [noteOverride] - Replaces the request's note on the transfer (edited at review).
+ * Send each queued request for real, then drop the local stand-in; its deletion propagates through
+ * Sync. A failed replay keeps its record for the next reconnect.
+ * @returns {Promise<{replayed: number, failed: number}>}
+ */
+export async function replayPendingRequests() {
+  const owner = await ownerRef()
+  const queued = await listLocalRequests({ localSyncStatus: LOCAL_PENDING }).catch(() => [])
+
+  let replayed = 0
+  let failed = 0
+  for (const r of (queued ?? []).filter((x) => !owner || x.requesterPartyRef === owner)) {
+    const sent = await createRequest({
+      counterpartyArrangementReference: r.payerCounterpartyRef,
+      amount: r.amount,
+      note: r.note || '',
+    })
+    if (!sent.ok) {
+      failed += 1
+      continue
+    }
+    try {
+      await deleteLocalRequest(r.id)
+      replayed += 1
+    } catch {
+      // Leafy Pay has the request; a stale local copy beats risking a second one, so leave it.
+      failed += 1
+    }
+  }
+  return { replayed, failed }
+}
+
+/**
+ * Approve a request addressed to the user. Leafy Pay creates the payment itself, so the requester
+ * need not be a saved contact. The note is ours and lives in Atlas, searchable like any other.
+ * @param {string} reference - The Leafy Pay request reference.
+ * @param {string} [fromAccountReference] - Funding account; omit for the default.
+ * @param {string} [noteOverride] - The note to file the resulting payment under (edited at review).
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
 export async function payRequest(reference, fromAccountReference, noteOverride) {
   if (!reference) return { ok: false, error: 'Missing request' }
-  const session = await getSession()
-  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+  const owner = await ownerRef()
+  if (!owner) return { ok: false, error: 'You need to be signed in' }
 
-  const incoming = await listIncomingRequests(lookupDigest(session.email)).catch(() => [])
-  const request = (incoming ?? []).find((r) => r.requestReference === reference)
-  if (!request) return { ok: false, error: 'This request is no longer pending' }
-
-  const contacts = await resolveContacts(session.sub)
-  const contact = contacts.find((c) => c.lookupDigest && c.lookupDigest === request.requesterDigest)
-  if (!contact) {
-    return { ok: false, error: `Add ${request.requesterName} as a contact to pay this request.` }
+  const inbox = await listRtpRequests('inbox').catch(() => [])
+  const request = inbox.find((r) => r.reference === reference)
+  if (!request || !isAwaitingPayer(request.status)) {
+    return { ok: false, error: 'This request is no longer pending' }
   }
 
-  const sent = await sendMoney({
-    counterpartyArrangementReference: contact.reference,
-    fromAccountReference,
-    amount: request.amount,
-    note: noteOverride ?? (request.note || ''),
-  })
-  if (!sent.ok) return sent
-
-  // The money has moved: never report failure, or the caller retries and pays twice.
+  let result
   try {
-    await resolveRequestDoc(request.id, { status: 'paid', leafyPayTransferReference: sent.reference })
-  } catch {
-    return {
-      ok: true,
-      reference: sent.reference,
-      status: sent.status,
-      warning: 'Payment sent, but the request could not be marked paid. Do not pay it again.',
-    }
+    result = await acceptRtpRequest(reference, {
+      fromAccountRef: fromAccountReference,
+      idempotencyKey: randomUUID(),
+    })
+  } catch (e) {
+    return { ok: false, error: rtpErrorMessage(e, 'Could not pay this request. Please try again.') }
   }
-  return { ok: true, reference: sent.reference, status: sent.status }
+  if (result.status !== 'accepted') {
+    return { ok: false, error: result.reason || 'Leafy Pay could not complete this payment.' }
+  }
+
+  // The money has moved: never report failure past this point, or the caller retries and pays twice.
+  if (result.executionReference) {
+    await createTransactionEnrichment({
+      leafyPayTransferReference: result.executionReference,
+      ownerPartyRef: owner,
+      // The payer holds no saved contact for the requester, and approving does not create one.
+      counterpartyArrangementReference: '',
+      amount: request.amount,
+      currency: request.currency,
+      note: noteOverride || null,
+      direction: 'sent',
+      leafyPayStatus: 'pending',
+    }).catch(() => {})
+  }
+  return { ok: true, reference: result.executionReference, status: 'pending' }
 }
 
 /**
- * Decline a request addressed to the user, or cancel one they raised.
- * @param {string} reference - The `requestReference`.
+ * Decline a request addressed to the user, or cancel one they raised. Both are Leafy Pay lifecycle
+ * transitions, so they need a connection even though no money moves.
+ * @param {string} reference - The Leafy Pay request reference.
  * @param {'declined'|'cancelled'} status
- * @param {boolean} [isOnline]
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
-export async function resolveRequest(reference, status, isOnline = true) {
+export async function resolveRequest(reference, status) {
   if (!reference) return { ok: false, error: 'Missing request' }
-  const session = await getSession()
-  if (!session?.sub || !session?.email) return { ok: false, error: 'You need to be signed in' }
+  const owner = await ownerRef()
+  if (!owner) return { ok: false, error: 'You need to be signed in' }
 
   try {
-    if (isOnline) {
-      const digest = lookupDigest(session.email)
-      const [incoming, outgoing] = await Promise.all([
-        listIncomingRequests(digest),
-        listOutgoingRequests(session.sub),
-      ])
-      const match = [...(incoming ?? []), ...(outgoing ?? [])].find((r) => r.requestReference === reference)
-      if (!match) return { ok: false, error: 'This request is no longer pending' }
-      await resolveRequestDoc(match.id, { status })
-    } else {
-      const local = await listLocalRequests({})
-      const match = (local ?? []).find((r) => r.requestReference === reference)
-      if (!match) return { ok: false, error: 'This request is no longer pending' }
-      await resolveLocalRequest(match.id, { status })
-    }
-  } catch {
-    return { ok: false, error: 'Could not update the request. Please try again.' }
+    const resolved =
+      status === 'cancelled' ? await cancelRtpRequest(reference) : await rejectRtpRequest(reference)
+    await mirrorRequest(resolved)
+  } catch (e) {
+    return { ok: false, error: rtpErrorMessage(e, 'Could not update the request. Please try again.') }
   }
   return { ok: true }
 }
