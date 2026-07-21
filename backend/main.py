@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dotenv import load_dotenv
@@ -57,5 +57,5 @@ app.include_router(chat_messages_router, prefix="/api/v1")
 app.mount("/mcp", mcp_app)
 
 @app.get("/")
-async def read_root(request: Request):
+async def read_root():
     return {"message":"Server is running"}

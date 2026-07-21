@@ -59,6 +59,7 @@ export function attachSession(res, session) {
 
 /** Expire the session cookie on a returned NextResponse. */
 export function clearSessionOn(res) {
+  // sameSite repeats what the opts already set: scanners cannot see it through the spread.
   res.cookies.set(COOKIE_NAME, '', { ...sessionCookieOpts(), sameSite: 'lax', maxAge: 0 })
 }
 
@@ -76,5 +77,6 @@ export function readLoginState(req) {
 
 /** Expire the login-state cookie on a returned NextResponse. */
 export function clearLoginStateOn(res) {
+  // sameSite repeats what the opts already set: scanners cannot see it through the spread.
   res.cookies.set(LOGIN_COOKIE, '', { ...loginCookieOpts(), sameSite: 'lax', maxAge: 0 })
 }

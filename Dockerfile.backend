@@ -1,18 +1,15 @@
 FROM python:3.13-slim
 
-WORKDIR /
+WORKDIR /app
 
-# uv installation
 RUN pip install uv
 
-# Copy project files
-COPY /backend/pyproject.toml ./
+# The lockfile comes too, so --frozen installs the versions the repo pins rather than re-resolving.
+COPY backend/pyproject.toml backend/uv.lock ./
 
-# Install dependencies with uv
-RUN uv sync --no-dev
+RUN uv sync --no-dev --frozen
 
-# Copy the rest of the backend code
-COPY ./backend/ .
+COPY backend/ .
 
 EXPOSE 8000
 

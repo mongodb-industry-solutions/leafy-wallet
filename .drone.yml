@@ -6,6 +6,8 @@ name: staging-combined
 trigger:
   branch:
     - staging
+  event:
+    - push
 
 steps:
   - name: publish-backend
@@ -32,9 +34,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: publish-frontend
     image: plugins/kaniko-ecr
@@ -60,9 +59,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: publish-local-store
     image: plugins/kaniko-ecr
@@ -88,9 +84,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: deploy-combined-staging
     image: public.ecr.aws/kanopy/drone-helm:v3
@@ -130,11 +123,6 @@ steps:
       api_server: https://api.staging.corp.mongodb.com
       kubernetes_token:
         from_secret: staging_kubernetes_token
-    when:
-      branch:
-        - staging
-      event:
-        - push
 
 ---
 kind: pipeline
@@ -172,9 +160,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: publish-frontend-prod
     image: plugins/kaniko-ecr
@@ -200,9 +185,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: publish-local-store-prod
     image: plugins/kaniko-ecr
@@ -228,9 +210,6 @@ steps:
         from_secret: ecr_access_key
       secret_key:
         from_secret: ecr_secret_key
-    when:
-      event:
-        - push
 
   - name: deploy-combined-prod
     image: public.ecr.aws/kanopy/drone-helm:v3
@@ -270,8 +249,3 @@ steps:
       api_server: https://api.prod.corp.mongodb.com
       kubernetes_token:
         from_secret: prod_kubernetes_token
-    when:
-      branch:
-        - main
-      event:
-        - push

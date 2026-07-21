@@ -52,16 +52,13 @@ class WalletTransactionCreate(BaseModel):
 class WalletTransactionUpdate(BaseModel):
     """Inbound payload for PATCH /wallet-transactions/{id}.
 
-    Covers only fields that legitimately change after creation (status
-    transitions, settlement time, a later-computed embedding). Identifying
-    fields (`ownerPartyRef`, `amount`, `direction`, ...) are immutable and
-    therefore not offered here, mirroring WalletContactUpdate.
+    Covers only what legitimately changes after creation: the status transition and
+    its settlement time. Identifying fields (`ownerPartyRef`, `amount`, `direction`,
+    ...) are immutable and therefore not offered here, mirroring WalletContactUpdate.
     """
 
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] | None = None
-    localSyncStatus: Literal["local_pending", "synced"] | None = None
     settledAt: datetime | None = None
-    noteEmbedding: list[float] | None = None
 
 
 class WalletTransactionOut(BaseModel):

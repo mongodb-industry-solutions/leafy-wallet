@@ -18,8 +18,8 @@ const EMPTY_NOTES = new Set(['', 'no note'])
 const OTHER = 'Other'
 const EMOJI_BY_LABEL = new Map(CATEGORIES.map((c) => [c.label, c.emoji]))
 
-/** The emoji for a category label (falls back to the "Other" symbol). */
-export const emojiForCategory = (label) => EMOJI_BY_LABEL.get(label) ?? '💸'
+/** The emoji for a category label. */
+export const emojiForCategory = (label) => EMOJI_BY_LABEL.get(label)
 
 // Category vectors are embedded once; note -> category is memoized so repeat queries don't re-embed.
 let categoryVectorsPromise = null
@@ -78,5 +78,5 @@ export async function classifyNotes(notes) {
       noteCategoryCache.set(note, best)
     })
   }
-  return notes.map((n) => (n && !EMPTY_NOTES.has(normalize(n)) ? (noteCategoryCache.get(n) ?? OTHER) : OTHER))
+  return notes.map((n) => (n && !EMPTY_NOTES.has(normalize(n)) ? noteCategoryCache.get(n) : OTHER))
 }

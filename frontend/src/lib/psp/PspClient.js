@@ -94,8 +94,6 @@ function normalizeTransaction(t) {
   return {
     reference: t.paymentExecutionInstanceReference ?? t.transferReference,
     counterpartyReference: t.beneficiaryArrangementReference ?? t.counterpartyArrangementReference ?? null,
-    beneficiaryName: t.beneficiaryName ?? null,
-    destinationMasked: t.destinationAccountMasked ?? null,
     direction: t.direction ?? 'sent',
     value: typeof gross === 'number' ? gross : (gross?.amount ?? 0),
     currency: t.currency ?? 'EUR',
@@ -186,7 +184,6 @@ export async function sendToBeneficiary(reference, { amount, currency = 'EUR', n
   return {
     reference: r.transferReference ?? r.paymentExecutionInstanceReference ?? null,
     status: r.status ?? r.paymentExecutionStatus ?? 'pending',
-    failureReason: r.failureReason ?? null,
   }
 }
 

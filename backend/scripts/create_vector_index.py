@@ -6,34 +6,17 @@ Vector Search (M10+ dedicated, or Search Nodes/Serverless).
 Usage: uv run python scripts/create_vector_index.py
 """
 
-import asyncio
 import time
 
 from pymongo.operations import SearchIndexModel
 
 from db.mdb import MongoDBConnector
-from services.embeddings import get_embedding
+from services.embeddings import embedding_dimensions
 
-# (collection, index name, embedded field). The index filters on
-# `ownerPartyRef` so a search can be scoped to a single user.
-INDEX_SPECS = [
-    ("walletTransactions", "noteEmbedding_vector_index", "noteEmbedding"),
-]
-
-
-def _embedding_dimensions() -> int:
-    """Derive the vector size from a live embedding call instead of a magic
-    number, so the index always matches whatever OLLAMA_EMBEDDING_MODEL is
-    actually configured (a hard-coded value would silently drift if the
-    model changes).
-    """
-    vector = asyncio.run(get_embedding("dimension probe"))
-    if vector is None:
-        raise RuntimeError(
-            "Could not reach Ollama to determine embedding dimensions; "
-            "make sure Ollama is running and OLLAMA_EMBEDDING_MODEL is pulled."
-        )
-    return len(vector)
+# The index filters on `ownerPartyRef` so a search can be scoped to a single user.
+COLLECTION = "walletTransactions"
+INDEX_NAME = "noteEmbedding_vector_index"
+EMBEDDED_FIELD = "noteEmbedding"
 
 
 def _ensure_index(db, collection_name: str, index_name: str, path: str, dimensions: int):
@@ -75,13 +58,11 @@ def _wait_until_queryable(db, collection_name: str, index_name: str):
 
 def main():
     db = MongoDBConnector()
-    dimensions = _embedding_dimensions()
+    dimensions = embedding_dimensions()
+    print(f"Indexing at {dimensions} dimensions.")
 
-    for collection_name, index_name, path in INDEX_SPECS:
-        _ensure_index(db, collection_name, index_name, path, dimensions)
-    # Waiting only after every index is requested lets Atlas build them in parallel.
-    for collection_name, index_name, _ in INDEX_SPECS:
-        _wait_until_queryable(db, collection_name, index_name)
+    _ensure_index(db, COLLECTION, INDEX_NAME, EMBEDDED_FIELD, dimensions)
+    _wait_until_queryable(db, COLLECTION, INDEX_NAME)
 
 
 if __name__ == "__main__":

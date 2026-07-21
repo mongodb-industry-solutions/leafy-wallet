@@ -152,12 +152,12 @@ function buildMcpReadTools(mcp, owner, charts) {
  * The assistant's tools, bound to a connection state. Online, reads go through the backend's
  * MCP server; offline they read the on-device store. Balance and drafting are always native.
  * @param {boolean} isOnline
- * @param {object[]} [drafts] - `draft_payment` pushes proposals here; the caller renders them for
+ * @param {object[]} drafts - `draft_payment` pushes proposals here; the caller renders them for
  *   confirmation. No tool moves money - that needs the user.
- * @param {object[]} [charts] - `get_spending_by_contact` pushes a breakdown here; the caller
+ * @param {object[]} charts - `get_spending_by_contact` pushes a breakdown here; the caller
  *   renders it as an inline chart card alongside the reply.
  */
-export async function walletTools(isOnline, drafts = [], charts = []) {
+export async function walletTools(isOnline, drafts, charts) {
   const getBalance = buildBalanceTool(isOnline)
   const spendingByCategory = buildSpendingByCategoryTool(isOnline, charts)
   const draftPayment = buildDraftTool(isOnline, drafts)
