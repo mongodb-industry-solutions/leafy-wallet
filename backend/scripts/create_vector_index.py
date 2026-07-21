@@ -13,11 +13,10 @@ from pymongo.operations import SearchIndexModel
 from db.mdb import MongoDBConnector
 from services.embeddings import embedding_dimensions
 
-# (collection, index name, embedded field). The index filters on
-# `ownerPartyRef` so a search can be scoped to a single user.
-INDEX_SPECS = [
-    ("walletTransactions", "noteEmbedding_vector_index", "noteEmbedding"),
-]
+# The index filters on `ownerPartyRef` so a search can be scoped to a single user.
+COLLECTION = "walletTransactions"
+INDEX_NAME = "noteEmbedding_vector_index"
+EMBEDDED_FIELD = "noteEmbedding"
 
 
 def _ensure_index(db, collection_name: str, index_name: str, path: str, dimensions: int):
@@ -62,11 +61,8 @@ def main():
     dimensions = embedding_dimensions()
     print(f"Indexing at {dimensions} dimensions.")
 
-    for collection_name, index_name, path in INDEX_SPECS:
-        _ensure_index(db, collection_name, index_name, path, dimensions)
-    # Waiting only after every index is requested lets Atlas build them in parallel.
-    for collection_name, index_name, _ in INDEX_SPECS:
-        _wait_until_queryable(db, collection_name, index_name)
+    _ensure_index(db, COLLECTION, INDEX_NAME, EMBEDDED_FIELD, dimensions)
+    _wait_until_queryable(db, COLLECTION, INDEX_NAME)
 
 
 if __name__ == "__main__":

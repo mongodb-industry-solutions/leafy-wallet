@@ -68,7 +68,6 @@ services:
   backend:
     build:
       context: .
-      no_cache: true
       dockerfile: Dockerfile.backend
     image: leafy-wallet-backend:latest
     ports:
@@ -84,7 +83,6 @@ services:
   frontend:
     build:
       context: .
-      no_cache: true
       dockerfile: Dockerfile.frontend
     image: leafy-wallet-frontend:latest
     ports:

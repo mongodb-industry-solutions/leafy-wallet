@@ -59,7 +59,8 @@ export function attachSession(res, session) {
 
 /** Expire the session cookie on a returned NextResponse. */
 export function clearSessionOn(res) {
-  res.cookies.set(COOKIE_NAME, '', { ...sessionCookieOpts(), maxAge: 0 })
+  // sameSite repeats what the opts already set: scanners cannot see it through the spread.
+  res.cookies.set(COOKIE_NAME, '', { ...sessionCookieOpts(), sameSite: 'lax', maxAge: 0 })
 }
 
 // Transient login state (PKCE + CSRF): { state, nonce, codeVerifier }.
@@ -76,5 +77,6 @@ export function readLoginState(req) {
 
 /** Expire the login-state cookie on a returned NextResponse. */
 export function clearLoginStateOn(res) {
-  res.cookies.set(LOGIN_COOKIE, '', { ...loginCookieOpts(), maxAge: 0 })
+  // sameSite repeats what the opts already set: scanners cannot see it through the spread.
+  res.cookies.set(LOGIN_COOKIE, '', { ...loginCookieOpts(), sameSite: 'lax', maxAge: 0 })
 }

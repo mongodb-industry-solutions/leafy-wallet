@@ -9,9 +9,8 @@ def list_contacts(db, owner_party_ref: str | None = None, q: str | None = None) 
     """List (optionally filtered) contacts.
 
     Shared by `routers/wallet_contacts.py`'s `GET` route and the `get_contacts`
-    MCP tool - one query, two callers. `q` is a new, backward-compatible
-    addition (case-insensitive substring match against `counterpartyLabel`);
-    omitting it keeps the exact behavior the REST route already had.
+    MCP tool - one query, two callers. `q` case-insensitively substring-matches
+    `counterpartyLabel`.
     """
     query = {}
     if owner_party_ref:
