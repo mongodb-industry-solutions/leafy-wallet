@@ -10,8 +10,6 @@ trigger:
 steps:
   - name: publish-backend
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -40,8 +38,6 @@ steps:
 
   - name: publish-frontend
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -70,8 +66,6 @@ steps:
 
   - name: publish-local-store
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -100,8 +94,6 @@ steps:
 
   - name: deploy-combined-staging
     image: public.ecr.aws/kanopy/drone-helm:v3
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     settings:
       chart: mongodb/web-app
       chart_version: 4.30.0
@@ -158,8 +150,6 @@ trigger:
 steps:
   - name: publish-backend-prod
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -188,8 +178,6 @@ steps:
 
   - name: publish-frontend-prod
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -218,8 +206,6 @@ steps:
 
   - name: publish-local-store-prod
     image: plugins/kaniko-ecr
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     resources:
       requests:
         cpu: 1000
@@ -248,8 +234,6 @@ steps:
 
   - name: deploy-combined-prod
     image: public.ecr.aws/kanopy/drone-helm:v3
-    environment:
-      DRONE_OUTPUT: /tmp/drone-output.env
     settings:
       chart: mongodb/web-app
       chart_version: 4.30.0
