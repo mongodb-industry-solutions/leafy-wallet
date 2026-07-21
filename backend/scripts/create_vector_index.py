@@ -21,6 +21,11 @@ EMBEDDED_FIELD = "noteEmbedding"
 
 def _ensure_index(db, collection_name: str, index_name: str, path: str, dimensions: int):
     """Create `index_name` on `collection_name`, or update it if it exists."""
+    # Atlas refuses to index a collection that does not exist yet, which is the normal state of a
+    # freshly provisioned environment database.
+    if collection_name not in db.db.list_collection_names():
+        db.db.create_collection(collection_name)
+        print(f"Created empty collection '{collection_name}'.")
     collection = db.get_collection(collection_name)
     index_definition = {
         "fields": [
