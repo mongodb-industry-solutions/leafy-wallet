@@ -151,7 +151,7 @@ The services and their ports:
 
 | Service | Port | Purpose |
 |---|---|---|
-| frontend | 3000 | The wallet UI and the AI chat route |
+| frontend | 3000 | The wallet UI and the AI chat route (the container serves 8080) |
 | backend | 8000 | Atlas enrichment API (FastAPI) |
 | leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
 | objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
