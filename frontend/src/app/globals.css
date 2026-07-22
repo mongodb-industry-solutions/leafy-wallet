@@ -259,3 +259,74 @@
     transform: scale(1.9);
   }
 }
+
+/* Home walkthrough: balance served from the on-device store. */
+@keyframes home-db-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+@keyframes home-balance-in {
+  0%,
+  15% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  35%,
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Home walkthrough: locally cached account cards sliding. */
+@keyframes home-cards-slide {
+  0%,
+  40% {
+    transform: translateY(0);
+  }
+  60%,
+  100% {
+    transform: translateY(calc(-50% - 4px));
+  }
+}
+
+/* Home walkthrough: background sync of local writes up to Atlas. */
+@keyframes home-sync-packet {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+@keyframes home-sync-check {
+  0%,
+  70% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  85%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

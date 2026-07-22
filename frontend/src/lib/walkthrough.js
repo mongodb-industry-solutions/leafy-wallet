@@ -6,7 +6,6 @@ import {
   Cpu,
   Database,
   ListChecks,
-  RefreshCw,
   Search,
   Send,
   ShieldCheck,
@@ -15,6 +14,9 @@ import {
 } from 'lucide-react'
 import { SsoLoginVisual } from '@/components/stage/Walkthrough/SsoLoginVisual'
 import { DemoUsersVisual } from '@/components/stage/Walkthrough/DemoUsersVisual'
+import { BalanceFromDeviceVisual } from '@/components/stage/Walkthrough/BalanceFromDeviceVisual'
+import { AccountsCarouselVisual } from '@/components/stage/Walkthrough/AccountsCarouselVisual'
+import { BackgroundSyncVisual } from '@/components/stage/Walkthrough/BackgroundSyncVisual'
 
 // Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet
 // screen. Written for a non-engineer presenter: plain language, with a tech term
@@ -40,14 +42,19 @@ export const WALKTHROUGH = {
     label: 'Home',
     steps: [
       {
-        icon: Database,
+        visual: BalanceFromDeviceVisual,
         title: 'Balance from the device',
-        body: 'The balance is read from a small database inside the phone, not from a server. That is why it shows instantly and still works with zero signal.',
+        body: 'The balance comes from the Leafy Pay service, but it is also saved in the local database on the phone. So if you go offline, the value is still there to see.',
       },
       {
-        icon: RefreshCw,
-        title: 'Quiet background sync',
-        body: 'Back online, everything written on the device copies up to MongoDB Atlas, the cloud database, in the background. No spinners, nothing to retry by hand.',
+        visual: AccountsCarouselVisual,
+        title: 'All your accounts',
+        body: 'In Leafy Wallet you can see and use every account you hold on the Leafy Pay service, all from one place.',
+      },
+      {
+        visual: BackgroundSyncVisual,
+        title: 'Local and Atlas, always in step',
+        body: 'The on-device database and MongoDB Atlas are mirror copies of each other. Every time the connection comes back, the two sync so both hold the same, up-to-date data.',
       },
     ],
   },
