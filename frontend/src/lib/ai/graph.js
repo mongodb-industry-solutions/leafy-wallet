@@ -151,6 +151,25 @@ export function recoverToolCalls(content, toolNames) {
   return calls
 }
 
+// Bullets need whitespace after the marker, so a leading "-€50" survives.
+const MARKDOWN_PATTERNS = [
+  [/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2'],
+  [/(?<![\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, '$1'],
+  [/`([^`\n]+)`/g, '$1'],
+  [/^#{1,6}[ \t]+/gm, ''],
+  [/^[ \t]*[-*+][ \t]+/gm, ''],
+]
+
+/**
+ * Strip markdown out of an answer: the chat bubble renders text verbatim, so `**bold**` would
+ * otherwise reach the user as asterisks.
+ * @param {string} text
+ * @returns {string}
+ */
+export function toPlainText(text) {
+  return MARKDOWN_PATTERNS.reduce((out, [pattern, replacement]) => out.replace(pattern, replacement), text)
+}
+
 /**
  * Compile the assistant's graph over an already-built tool set: the model either answers or calls a
  * tool, looping until it answers. Kept separate from tool loading so the eval harness can drive the
@@ -178,6 +197,8 @@ export function compileGraph(tools, { isOnline }) {
     if (!reply.tool_calls?.length) {
       const recovered = recoverToolCalls(reply.content, toolNames)
       if (recovered.length) return { messages: [new AIMessage({ content: '', tool_calls: recovered })] }
+      // No tool follows, so this is the answer the user reads.
+      if (typeof reply.content === 'string') reply.content = toPlainText(reply.content)
     }
     return { messages: [reply] }
   }

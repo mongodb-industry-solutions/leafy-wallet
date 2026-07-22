@@ -106,6 +106,8 @@ function normalizeTransaction(t) {
 /**
  * Shape a Leafy Pay request into the flat form the wallet stores and renders. `status` stays raw:
  * Leafy Pay owns the lifecycle, so collapsing it for display happens in `lib/wallet/requests.js`.
+ * `payeePartyRef`/`payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one
+ * as an owner key, or the offline read filters on an id that matches nothing.
  */
 function normalizeRtpRequest(r) {
   return {

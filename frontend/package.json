@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
+    "test:ai": "vitest run tests/ai",
+    "test:ai:grove": "APP_ENV=staging vitest run tests/ai",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {

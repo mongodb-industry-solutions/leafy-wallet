@@ -9,6 +9,9 @@ from schemas.wallet_requests import WalletRequestOut, WalletRequestUpsert
 
 COLLECTION = "walletRequests"
 
+# Each side fills only its own ref and leaves the other blank.
+PARTY_REFS = ("requesterPartyRef", "payerPartyRef")
+
 router = APIRouter(prefix="/wallet-requests", tags=["wallet-requests"])
 
 
@@ -17,12 +20,15 @@ async def upsert_request(payload: WalletRequestUpsert, db: MongoDBConnector = De
     """Mirror one Leafy Pay request, keyed by its reference.
 
     Idempotent by construction: the app re-posts every request it reads, so a repeat write converges.
+    A blank party ref only seeds a new document, so neither side can erase the other's.
     """
     doc = payload.model_dump()
     doc["createdAt"] = doc["createdAt"] or datetime.now(timezone.utc)
-    db.update_one(
-        COLLECTION, {"requestReference": payload.requestReference}, {"$set": doc}, upsert=True
-    )
+    blank_refs = [field for field in PARTY_REFS if not doc[field]]
+    update = {"$set": {k: v for k, v in doc.items() if k not in blank_refs}}
+    if blank_refs:
+        update["$setOnInsert"] = {field: "" for field in blank_refs}
+    db.update_one(COLLECTION, {"requestReference": payload.requestReference}, update, upsert=True)
     return with_str_id(db.find(COLLECTION, {"requestReference": payload.requestReference})[0])
 
 
