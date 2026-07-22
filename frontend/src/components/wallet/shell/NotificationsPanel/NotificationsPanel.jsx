@@ -83,7 +83,7 @@ export function NotificationsPanel({ onPayRequest, onClose }) {
     <BottomSheet onClose={onClose} onEntered={markNotificationsSeen}>
       {({ close }) => (
         <>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-none items-center justify-between">
             <p className="text-base font-bold text-foreground">Notifications</p>
             {notifications.length > 0 && (
               <button
@@ -103,9 +103,10 @@ export function NotificationsPanel({ onPayRequest, onClose }) {
             />
           ) : (
             <>
-              {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
-              {/* -mx-6 lets the swipe reveal bleed to the sheet's edges; rows pad it back. */}
-              <div className="no-scrollbar -mx-6 flex max-h-[60vh] flex-col divide-y divide-border overflow-y-auto">
+              {error && <p className="mb-3 flex-none text-sm text-destructive">{error}</p>}
+              {/* -mx-6 lets the swipe reveal bleed to the sheet's edges; rows pad it back.
+                  min-h-0 is what lets the list shrink into the sheet's height cap and scroll. */}
+              <div className="no-scrollbar -mx-6 flex min-h-0 flex-col divide-y divide-border overflow-y-auto">
                 {notifications.map((n) => (
                   <SwipeableRow
                     key={`${n.kind}-${n.id}`}

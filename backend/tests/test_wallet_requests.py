@@ -68,6 +68,25 @@ def test_rewriting_a_request_converges_instead_of_duplicating(client):
         _cleanup(REQUEST_PAYLOAD["requestReference"])
 
 
+def test_each_side_fills_its_own_party_ref_without_erasing_the_other(client):
+    """Both sides mirror the same request, so a blank ref must not wipe what the other stored.
+
+    Otherwise whoever refreshes second empties the first one's offline inbox.
+    """
+    payer_side = {**REQUEST_PAYLOAD, "requesterPartyRef": ""}
+    assert client.post(BASE, json=payer_side).status_code == 200
+    try:
+        requester_side = {**REQUEST_PAYLOAD, "payerPartyRef": ""}
+        assert client.post(BASE, json=requester_side).status_code == 200
+
+        stored = client.get(BASE, params={"payerPartyRef": PAYER}).json()
+        matching = [r for r in stored if r["requestReference"] == REQUEST_PAYLOAD["requestReference"]]
+        assert len(matching) == 1
+        assert matching[0]["requesterPartyRef"] == PAYEE
+    finally:
+        _cleanup(REQUEST_PAYLOAD["requestReference"])
+
+
 def test_request_is_not_in_another_partys_inbox(client):
     client.post(BASE, json=REQUEST_PAYLOAD)
     try:

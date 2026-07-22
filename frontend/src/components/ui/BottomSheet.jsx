@@ -14,6 +14,7 @@ const FADE_OUT = 'overlay-fade-out 260ms ease forwards'
  * dismiss. Animation is CSS-keyframe driven (reliable on mount); the panel's `animationend` drives
  * focus-on-enter and unmount-on-exit. Tapping the backdrop dismisses. `children` may be a function
  * receiving `{ close }`, so content can dismiss the sheet itself (e.g. after a successful submit).
+ * The panel is height-capped: give a long child `min-h-0 overflow-y-auto` and it scrolls inside it.
  * @param {object} props
  * @param {() => void} props.onClose - Called once the exit animation finishes.
  * @param {() => void} [props.onEntered] - Called once the enter animation finishes (e.g. to focus a field).
@@ -44,7 +45,8 @@ export function BottomSheet({ onClose, onEntered, className, children }) {
       <div
         onAnimationEnd={handleAnimationEnd}
         className={cn(
-          'relative rounded-t-3xl border-t border-border bg-card p-5 pb-8 text-foreground shadow-xl',
+          // % of the phone screen. vh would measure the browser window and overflow the frame.
+          'relative flex max-h-[85%] flex-col rounded-t-3xl border-t border-border bg-card p-5 pb-8 text-foreground shadow-xl',
           className,
         )}
         style={{ animation: isClosing ? EXIT : ENTER }}

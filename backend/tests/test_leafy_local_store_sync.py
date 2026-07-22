@@ -10,7 +10,7 @@ surface in isolation (write via leafy-local-store, read back via
 leafy-local-store) - none of them actually prove the Sync Server bridge is
 moving data to/from Atlas. That's the one thing these tests check, for every
 entity that's meant to sync: walletContacts, walletTransactions, chats,
-chatMessages. Plus one regression check the other way: LocalAccountBalance is
+chatMessages, walletRequests. Plus one regression check the other way: LocalAccountBalance is
 deliberately NOT sync-enabled (see local_store_service.cpp), so it must never
 show up in Atlas no matter how long we wait.
 
@@ -359,6 +359,89 @@ def test_chat_message_created_via_atlas_syncs_to_objectbox(db):
     finally:
         db.delete_many("chatMessages", {"text": text})
         httpx.delete(f"{LOCAL_BASE}/local/v1/chats/{chat_reference}")
+
+
+# ─── walletRequests ─────────────────────────────────────────────────────────
+
+
+def test_request_composed_offline_syncs_to_atlas(db):
+    ref = _unique("sync-request-ob")
+    created = httpx.post(
+        f"{LOCAL_BASE}/local/v1/requests",
+        json={
+            "requestReference": ref,
+            "requesterPartyRef": "sync-test-requester",
+            "requesterName": "Sync Test Requester",
+            "payerCounterpartyRef": "sync-test-arrangement",
+            "amount": 25.5,
+            "currency": "EUR",
+            # No `note`: this is about the sync bridge, not the embedding path.
+        },
+    )
+    assert created.status_code == 201
+    local_id = created.json()["id"]
+
+    try:
+        atlas_doc = _wait_until(
+            lambda: db.find("walletRequests", {"requestReference": ref}),
+            f"walletRequests document with requestReference={ref}",
+        )
+        assert atlas_doc[0]["amount"] == 25.5
+        assert atlas_doc[0]["localSyncStatus"] == "local_pending"
+    finally:
+        httpx.delete(f"{LOCAL_BASE}/local/v1/requests/{local_id}")
+        db.delete_many("walletRequests", {"requestReference": ref})
+
+
+def test_incoming_request_written_to_atlas_reaches_the_offline_inbox(db):
+    """The leg the notification bell depends on when the connection drops.
+
+    The device's inbox filters on payerPartyRef, so that field surviving the trip is what decides
+    whether a request someone else raised is still visible offline.
+    """
+    ref = _unique("sync-request-atlas")
+    payer = _unique("sync-test-payer")
+    db.insert_one(
+        "walletRequests",
+        {
+            "requestReference": ref,
+            "requesterPartyRef": "sync-test-requester",
+            "requesterName": "Atlas Origin Requester",
+            "payerPartyRef": payer,
+            "payerCounterpartyRef": "",
+            "amount": 40.0,
+            "currency": "EUR",
+            "note": None,
+            "status": "presented",
+            "localSyncStatus": "synced",
+            "leafyPayTransferReference": None,
+            "createdAt": datetime.now(timezone.utc),
+            "resolvedAt": None,
+        },
+    )
+
+    local_doc = None
+    try:
+        local_doc = _wait_until(
+            lambda: next(
+                (
+                    r
+                    for r in httpx.get(
+                        f"{LOCAL_BASE}/local/v1/requests", params={"payerPartyRef": payer}
+                    ).json()
+                    if r["requestReference"] == ref
+                ),
+                None,
+            ),
+            f"local request with requestReference={ref} in the inbox of payerPartyRef={payer}",
+        )
+        assert local_doc["amount"] == 40.0
+        assert local_doc["status"] == "presented"
+        assert local_doc["requesterName"] == "Atlas Origin Requester"
+    finally:
+        db.delete_many("walletRequests", {"requestReference": ref})
+        if local_doc:
+            httpx.delete(f"{LOCAL_BASE}/local/v1/requests/{local_doc['id']}")
 
 
 # ─── LocalAccountBalance (regression: must NEVER sync) ─────────────────────

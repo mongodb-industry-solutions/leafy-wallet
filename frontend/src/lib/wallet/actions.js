@@ -631,7 +631,7 @@ export async function reconcileWithLeafyPay() {
       ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
       ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
       ...orphanRequests.map((d) => deleteRequestDoc(d.id).catch(() => {})),
-      ...requests.map(mirrorRequest),
+      ...requests.map((r) => mirrorRequest(r, owner)),
       ...foreignTransfers.map((t) =>
         createTransactionEnrichment({
           leafyPayTransferReference: t.reference,
@@ -769,14 +769,19 @@ function toRequestView({ reference, name, amount, currency, note, status, create
   }
 }
 
-/** Leafy Pay's record, shaped for the Atlas replica that Sync carries down to the device. */
-function toRequestDoc(request) {
+/**
+ * Leafy Pay's record, shaped for the Atlas replica that Sync carries down to the device. Party refs
+ * come from the session, not from Leafy Pay: its ids are not the `sub` the offline read filters on.
+ * @param {object} request - A normalized request, tagged `isIncoming` (the user is the payer).
+ * @param {string|null} owner - The signed-in user's `sub`, stamped on whichever side they are.
+ */
+function toRequestDoc(request, owner) {
   const isResolved = toRequestStatus(request.status) !== 'pending'
   return {
     requestReference: request.reference,
-    requesterPartyRef: request.payeePartyRef,
+    requesterPartyRef: request.isIncoming ? '' : owner || '',
     requesterName: request.payeeName,
-    payerPartyRef: request.payerPartyRef,
+    payerPartyRef: request.isIncoming ? owner || '' : '',
     payerCounterpartyRef: request.payerCounterpartyRef,
     amount: request.amount,
     currency: request.currency,
@@ -804,9 +809,14 @@ async function bothRequestBoxes() {
   ]
 }
 
-/** Write Leafy Pay's view of a request into Atlas, so the device has it with no connection. */
-async function mirrorRequest(request) {
-  return upsertRequestDoc(toRequestDoc(request)).catch(() => {})
+/**
+ * Write Leafy Pay's view of a request into Atlas, so the device has it with no connection. The
+ * other side's party ref stays blank; the backend leaves what that side already wrote alone.
+ * @param {object} request - A normalized request, tagged `isIncoming`.
+ * @param {string|null} owner - The signed-in user's `sub`.
+ */
+async function mirrorRequest(request, owner) {
+  return upsertRequestDoc(toRequestDoc(request, owner)).catch(() => {})
 }
 
 // Leafy Pay's RTP error codes that mean something a person can act on; anything else is a retry.
@@ -873,7 +883,7 @@ export async function createRequest({ counterpartyArrangementReference, amount, 
       await cancelRtpRequest(created.reference).catch(() => {})
       return { ok: false, error: 'That contact is no longer saved, so the request was not sent.' }
     }
-    await mirrorRequest(await presentRtpRequest(created.reference))
+    await mirrorRequest(await presentRtpRequest(created.reference), session.sub)
   } catch (e) {
     return { ok: false, error: rtpErrorMessage(e, 'Could not send the request. Please try again.') }
   }
@@ -897,7 +907,7 @@ export async function getRequests(isOnline = true) {
   let outgoing
   if (isOnline) {
     const requests = await bothRequestBoxes()
-    await Promise.all(requests.map(mirrorRequest))
+    await Promise.all(requests.map((r) => mirrorRequest(r, owner)))
     const view = (r) => {
       const contact = r.isIncoming ? undefined : contactByRef.get(r.payerCounterpartyRef)
       return toRequestView({
@@ -1035,9 +1045,12 @@ export async function resolveRequest(reference, status) {
   if (!owner) return { ok: false, error: 'You need to be signed in' }
 
   try {
-    const resolved =
-      status === 'cancelled' ? await cancelRtpRequest(reference) : await rejectRtpRequest(reference)
-    await mirrorRequest(resolved)
+    // Cancelling is the requester's call, declining the payer's.
+    const isIncoming = status !== 'cancelled'
+    const resolved = isIncoming
+      ? await rejectRtpRequest(reference)
+      : await cancelRtpRequest(reference)
+    await mirrorRequest({ ...resolved, isIncoming }, owner)
   } catch (e) {
     return { ok: false, error: rtpErrorMessage(e, 'Could not update the request. Please try again.') }
   }
