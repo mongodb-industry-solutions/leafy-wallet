@@ -86,7 +86,7 @@ services:
       dockerfile: Dockerfile.frontend
     image: leafy-wallet-frontend:latest
     ports:
-      - "3000:8080"
+      - "8080:8080"
     env_file:
       - frontend/.env.local
     environment:

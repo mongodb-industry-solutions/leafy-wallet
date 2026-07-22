@@ -130,7 +130,7 @@ make build
 ```
 2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
    and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
-3. Open the app at http://localhost:3000 and sign in with SSO as one of the demo users below.
+3. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
 4. To delete the containers and images run:
 ```
 make clean
@@ -152,7 +152,7 @@ The services and their ports:
 
 | Service | Port | Purpose |
 |---|---|---|
-| frontend | 3000 | The wallet UI and the AI chat route (the container serves 8080) |
+| frontend | 8080 | The wallet UI and the AI chat route |
 | backend | 8000 | Atlas enrichment API (FastAPI) |
 | leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
 | objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
