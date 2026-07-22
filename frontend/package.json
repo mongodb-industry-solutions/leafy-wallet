@@ -26,7 +26,6 @@
     "@leafygreen-ui/icon": "14.9.0",
     "@leafygreen-ui/logo": "11.1.0",
     "@lottiefiles/dotlottie-react": "0.19.11",
-    "@vercel/analytics": "1.6.1",
     "clsx": "2.1.1",
     "jose": "6.2.3",
     "lucide-react": "1.25.0",
@@ -39,7 +38,6 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "3.3.6",
     "@tailwindcss/postcss": "4.3.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.11",

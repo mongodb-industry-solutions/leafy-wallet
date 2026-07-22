@@ -1,6 +1,6 @@
 import { CheckCheck, Database, ShieldCheck } from 'lucide-react'
 import { SsoLoginVisual } from '@/components/stage/Walkthrough/SsoLoginVisual'
-import { DemoUsersVisual } from '@/components/stage/Walkthrough/DemoUsersVisual'
+import { DEMO_USERS } from '@/lib/demo-users'
 import { BalanceFromDeviceVisual } from '@/components/stage/Walkthrough/BalanceFromDeviceVisual'
 import { AccountsCarouselVisual } from '@/components/stage/Walkthrough/AccountsCarouselVisual'
 import { BackgroundSyncVisual } from '@/components/stage/Walkthrough/BackgroundSyncVisual'
@@ -25,16 +25,14 @@ import { RequestDownstreamVisual } from '@/components/stage/Walkthrough/RequestD
 export const WALKTHROUGH = {
   login: {
     label: 'Sign in',
+    // One step on purpose: splitting "how to sign in" from "which credentials" left a presenter
+    // waiting out the first slide before the password appeared.
     steps: [
       {
         visual: SsoLoginVisual,
-        title: 'Start with SSO',
-        body: 'Click Continue with SSO. It opens Leafy Pay’s real login page; your password never touches the wallet app.',
-      },
-      {
-        visual: DemoUsersVisual,
         title: 'Sign in as a demo user',
-        body: 'Pick any of the three and type the email and password exactly as shown.',
+        body: `Tap a profile to fill in their email, or Continue with SSO to sign in as any other Leafy Pay user. Every user’s password is ${DEMO_USERS[0].password}.`,
+        highlight: DEMO_USERS[0].password,
       },
     ],
   },

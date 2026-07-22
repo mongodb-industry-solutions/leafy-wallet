@@ -6,6 +6,19 @@ import { WALKTHROUGH } from '@/lib/walkthrough'
 
 const AUTO_ADVANCE_MS = 10000
 
+/** Body text with one phrase picked out, for a value the presenter has to read off and type. */
+function Body({ text, highlight }) {
+  const [before, ...rest] = highlight ? text.split(highlight) : [text]
+  if (!rest.length) return text
+  return (
+    <>
+      {before}
+      <span className="font-semibold text-foreground">{highlight}</span>
+      {rest.join(highlight)}
+    </>
+  )
+}
+
 /**
  * "Under the hood" panel: cycles through the talking points for the given wallet
  * screen, auto-advancing every {@link AUTO_ADVANCE_MS} and resetting whenever the
@@ -38,7 +51,7 @@ export function Walkthrough({ flow }) {
           {current.title}
         </h3>
         <p className="mt-2.5 text-[15px] leading-relaxed text-muted-foreground">
-          {current.body}
+          <Body text={current.body} highlight={current.highlight} />
         </p>
       </div>
 
@@ -51,50 +64,47 @@ export function Walkthrough({ flow }) {
         )}
       </div>
 
-      <div className="mt-6 flex items-center justify-center gap-2.5">
-        <button
-          aria-label="Previous step"
-          onClick={() => go(-1)}
-          disabled={count < 2}
-          className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10 disabled:opacity-40"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
+      {/* A lone step has nowhere to go, so the whole control would just be dead furniture. */}
+      {count > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-2.5">
+          <button
+            aria-label="Previous step"
+            onClick={() => go(-1)}
+            className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
 
-        <div className="flex h-8 items-center gap-2 rounded-full bg-foreground/[0.06] px-3">
-          {steps.map((s, i) =>
-            i === step ? (
-              <span key={s.title} className="h-1.5 w-6 overflow-hidden rounded-full bg-secondary/25">
-                <span
-                  key={step}
-                  className="block h-full rounded-full bg-secondary"
-                  style={
-                    count > 1
-                      ? { animation: `dot-fill ${AUTO_ADVANCE_MS}ms linear forwards` }
-                      : { width: '100%' }
-                  }
+          <div className="flex h-8 items-center gap-2 rounded-full bg-foreground/[0.06] px-3">
+            {steps.map((s, i) =>
+              i === step ? (
+                <span key={s.title} className="h-1.5 w-6 overflow-hidden rounded-full bg-secondary/25">
+                  <span
+                    key={step}
+                    className="block h-full rounded-full bg-secondary"
+                    style={{ animation: `dot-fill ${AUTO_ADVANCE_MS}ms linear forwards` }}
+                  />
+                </span>
+              ) : (
+                <button
+                  key={s.title}
+                  aria-label={`Step ${i + 1}`}
+                  onClick={() => setStep(i)}
+                  className="size-1.5 rounded-full bg-muted-foreground/40 transition-colors hover:bg-muted-foreground/70"
                 />
-              </span>
-            ) : (
-              <button
-                key={s.title}
-                aria-label={`Step ${i + 1}`}
-                onClick={() => setStep(i)}
-                className="size-1.5 rounded-full bg-muted-foreground/40 transition-colors hover:bg-muted-foreground/70"
-              />
-            ),
-          )}
-        </div>
+              ),
+            )}
+          </div>
 
-        <button
-          aria-label="Next step"
-          onClick={() => go(1)}
-          disabled={count < 2}
-          className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10 disabled:opacity-40"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
+          <button
+            aria-label="Next step"
+            onClick={() => go(1)}
+            className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition hover:bg-foreground/10"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      )}
     </>
   )
 }
