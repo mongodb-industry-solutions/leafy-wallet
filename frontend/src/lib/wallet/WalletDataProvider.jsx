@@ -99,6 +99,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   })
   const [lastSeen, setLastSeen] = useState(null)
   const [dismissedIds, setDismissedIds] = useState([])
+  // Carries only the reference and outcome; the banner reads the row itself, so it never renders a
+  // stale amount from before the refresh that settled it.
+  const [settlement, setSettlement] = useState(null)
 
   // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
   // consumer's callbacks on each toggle.
@@ -140,6 +143,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
         // Before the refresh, so it reads back the settled status.
         if (isSettled) await markTransferSettled(reference, status)
         await refresh(['accounts', 'transactions'])
+        // Announce it: settling can outlast the screen the payment was made from.
+        if (isSettled) setSettlement({ reference, status })
         polls += 1
         if (isSettled || polls >= SETTLE_MAX_POLLS) return
         setTimeout(tick, SETTLE_POLL_MS)
@@ -226,6 +231,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   )
   const unreadCount = notifications.reduce((n, x) => n + (x.isUnread ? 1 : 0), 0)
 
+  /** Clear the settlement banner once it has played out. */
+  const dismissSettlement = useCallback(() => setSettlement(null), [])
+
   const value = {
     ...state,
     isOnline,
@@ -235,6 +243,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     unreadCount,
     markNotificationsSeen,
     dismissNotifications,
+    settlement,
+    dismissSettlement,
   }
   return <WalletDataContext.Provider value={value}>{children}</WalletDataContext.Provider>
 }

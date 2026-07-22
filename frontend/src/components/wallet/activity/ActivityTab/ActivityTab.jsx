@@ -4,19 +4,21 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { groupByDate } from '@/lib/wallet/format'
 import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { AwaitingPayment } from '@/components/wallet/requests/AwaitingPayment/AwaitingPayment'
+import { toAwaitingPaymentRows } from '@/lib/wallet/requests'
 
 const SKELETON_ROWS = 6
 
 /**
- * The "Activity" tab: the full transaction history, grouped by date.
+ * The "Activity" tab: the full history grouped by date, with requests still awaiting payment sitting
+ * inline among the payments.
  * @param {object} props
- * @param {(tx: object) => void} props.onDetail - Opens the detail sheet for a transaction.
+ * @param {(tx: object) => void} props.onDetail - Opens the detail sheet for a row.
  */
 export function ActivityTab({ onDetail }) {
   const { transactions: txState, requests: requestsState } = useWalletData()
-  const transactions = txState.data ?? []
-  const awaitingPayment = (requestsState.data?.outgoing ?? []).filter((r) => r.status === 'pending')
+  const rows = [...(txState.data ?? []), ...toAwaitingPaymentRows(requestsState.data?.outgoing)].sort(
+    (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
+  )
 
   if (txState.isLoading) {
     return (
@@ -35,10 +37,7 @@ export function ActivityTab({ onDetail }) {
     <div className="flex flex-col gap-5 px-4 pt-8 pb-6">
       <h1 className="text-xl font-bold text-foreground">Activity</h1>
 
-      <AwaitingPayment requests={awaitingPayment} className="flex flex-col gap-2" />
-
-      {transactions.length === 0 &&
-        awaitingPayment.length === 0 &&
+      {rows.length === 0 &&
         (txState.error ? (
           <EmptyState
             glyph="Warning"
@@ -55,7 +54,7 @@ export function ActivityTab({ onDetail }) {
           />
         ))}
 
-      {groupByDate(transactions).map(({ date, items }) => (
+      {groupByDate(rows).map(({ date, items }) => (
         <section key={date} className="flex flex-col gap-2">
           <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {date}

@@ -3,11 +3,9 @@
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
-import { removeContact } from '@/lib/wallet/actions'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 const SKELETON_ROWS = 6
 
@@ -26,7 +24,8 @@ function ContactRowSkeleton() {
 
 /**
  * The "People" tab: a searchable contact list where tapping a contact starts a send flow, plus adding
- * (by a registered Leafy Pay email or phone number) and removing saved contacts.
+ * one by a registered Leafy Pay email or phone number. Removing is Leafy Pay's own screen: it owns
+ * the beneficiary, and the login reconcile prunes whatever is deleted there.
  * @param {object} props
  * @param {(contact: object) => void} props.onSendTo
  * @param {() => void} props.onAddContact - Opens the add-contact sheet (rendered at the shell level).
@@ -34,12 +33,8 @@ function ContactRowSkeleton() {
 export function PeopleTab({ onSendTo, onAddContact }) {
   const {
     contacts: { data, isLoading, error },
-    refresh,
   } = useWalletData()
   const [q, setQ] = useState('')
-  const [contactToRemove, setContactToRemove] = useState(null)
-  const [isRemoving, setIsRemoving] = useState(false)
-  const [removeError, setRemoveError] = useState('')
 
   const contacts = data ?? []
   const query = q.trim().toLowerCase()
@@ -56,19 +51,6 @@ export function PeopleTab({ onSendTo, onAddContact }) {
     empty = query
       ? { glyph: 'MagnifyingGlass', title: 'No one found', subtitle: 'Try a different name, email or number.' }
       : { glyph: 'Person', title: 'No contacts yet', subtitle: 'Tap + to add someone on Leafy Pay.' }
-  }
-
-  async function handleConfirmRemove() {
-    setRemoveError('')
-    setIsRemoving(true)
-    const res = await removeContact(contactToRemove.reference)
-    setIsRemoving(false)
-    if (res.ok) {
-      setContactToRemove(null)
-      refresh(['contacts'])
-    } else {
-      setRemoveError(res.error)
-    }
   }
 
   return (
@@ -127,42 +109,21 @@ export function PeopleTab({ onSendTo, onAddContact }) {
             Array.from({ length: SKELETON_ROWS }).map((_, i) => <ContactRowSkeleton key={i} />)}
           {!isLoading &&
             filtered.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 py-3.5">
-                <button
-                  onClick={() => onSendTo(c)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                >
-                  <Peep seed={c.seed} bg={c.bg} size={44} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setContactToRemove(c)}
-                  aria-label={`Remove ${c.name}`}
-                  className="flex-none p-1 text-muted-foreground transition-colors hover:text-destructive"
-                >
-                  <Icon glyph="Trash" size={16} />
-                </button>
-              </div>
+              <button
+                key={c.id}
+                onClick={() => onSendTo(c)}
+                className="flex w-full items-center gap-3 py-3.5 text-left"
+              >
+                <Peep seed={c.seed} bg={c.bg} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.lookupHint}</p>
+                </div>
+              </button>
             ))}
           {!isLoading && empty && <EmptyState {...empty} />}
         </div>
       </section>
-
-      {contactToRemove && (
-        <ConfirmDialog
-          title={`Remove ${contactToRemove.name}?`}
-          message="They'll be removed from your saved contacts. You can add them again anytime."
-          error={removeError}
-          confirmLabel="Remove"
-          busyLabel="Removing…"
-          isBusy={isRemoving}
-          onCancel={() => setContactToRemove(null)}
-          onConfirm={handleConfirmRemove}
-        />
-      )}
     </div>
   )
 }

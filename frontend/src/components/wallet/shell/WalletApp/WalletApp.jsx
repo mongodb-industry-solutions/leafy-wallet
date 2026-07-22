@@ -13,6 +13,7 @@ import { PayRequestFlow } from '@/components/wallet/send/PayRequestFlow/PayReque
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel/NotificationsPanel'
+import { SettlementToast } from '@/components/wallet/shell/SettlementToast/SettlementToast'
 
 /**
  * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
@@ -133,6 +134,8 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
             <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />
           </div>
         )}
+        {/* Last, so it layers over whichever screen or sheet is open. */}
+        <SettlementToast />
       </div>
     </WalletDataProvider>
   )
