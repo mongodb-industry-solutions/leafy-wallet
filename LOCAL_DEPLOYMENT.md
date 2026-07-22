@@ -116,6 +116,7 @@ Generate the OAuth signing keys once:
 
 ```bash
 cd sec-fsi-pci-dss
+npm run setup       # install dependencies (first run only)
 npm run setup:key:rsa   # writes backend/keys/private.pem
 ```
 
@@ -155,7 +156,6 @@ Start the PSP (native):
 
 ```bash
 cd sec-fsi-pci-dss
-npm run setup       # install dependencies (first run only)
 npm run setup:db    # provision Queryable Encryption collections
 npm run setup:seed  # seed demo data (users, OAuth clients, providers)
 npm run dev         # backend:8081, frontend:8080, merchant:8082

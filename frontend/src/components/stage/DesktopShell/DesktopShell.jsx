@@ -48,10 +48,10 @@ export function DesktopShell() {
           <div className="rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)]">
             <div className="flex items-center gap-2.5">
               <LeafLogo size={22} />
-              <h2 className="text-base font-bold text-foreground">Under the hood</h2>
+              <h2 className="text-base font-bold text-foreground">Built on MongoDB</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              The tech behind the {WALKTHROUGH[activeFlow].label} screen.
+              See how the {WALKTHROUGH[activeFlow].label} screen uses MongoDB Atlas and on-device storage.
             </p>
 
             <div className="mt-5">
