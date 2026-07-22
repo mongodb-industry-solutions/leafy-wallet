@@ -26,9 +26,9 @@ export const ENV = {
   pspBaseUrl: () => envVar('PSP_BASE_URL') ?? '',
   clientId: () => envVar('CLIENT_ID') ?? '',
   clientSecret: () => envVar('CLIENT_SECRET') ?? '',
-  appBaseUrl: () => envVar('APP_BASE_URL') ?? 'http://localhost:3000',
+  appBaseUrl: () => envVar('APP_BASE_URL') ?? 'http://localhost:8080',
   redirectUri: () =>
-    envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:3000'}/api/auth/callback`,
+    envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:8080'}/api/auth/callback`,
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
   // Browser-facing login page, on the frontend host (a different host from the API).
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,
