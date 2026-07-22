@@ -55,10 +55,13 @@ async function fetchTurn(body) {
  * @returns {object} Chat state and actions for AiTab to render.
  */
 export function useAiChat() {
-  const { isOnline, refresh } = useWalletData()
+  const { isOnline, refresh, watchTransfer } = useWalletData()
   const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
   const [activeId, setActiveId] = useState('draft')
-  const [view, setView] = useState('chat') // 'chat' | 'history'
+  // Opens on the history so past conversations are the way in; a user with none skips straight to
+  // composing, since a list holding only the unsaved draft is not worth showing.
+  const [view, setView] = useState('history') // 'chat' | 'history'
+  const hasPickedViewRef = useRef(false)
   const [textInput, setTextInput] = useState('')
   const [transcript, setTranscript] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -81,6 +84,10 @@ export function useAiChat() {
     let isStale = false
     getChats(isOnline).then((saved) => {
       if (isStale) return
+      if (!hasPickedViewRef.current) {
+        hasPickedViewRef.current = true
+        if (saved.length === 0) setView('chat')
+      }
       setChats((prev) => {
         const draft = prev.find((c) => c.id === 'draft')
         const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
@@ -229,13 +236,30 @@ export function useAiChat() {
       }))
       return
     }
+    // Keep what actually happened, so the card reports it instead of a fixed "Sent". Offline both
+    // kinds are only queued; a real send then settles under its reference, which the card follows.
+    const isQueued = !isOnline
     patchActive((c) => ({
       ...c,
       messages: c.messages.map((m) =>
-        m.id === id ? { ...m, actionData: { ...m.actionData, isConfirmed: true } } : m,
+        m.id === id
+          ? {
+              ...m,
+              actionData: {
+                ...m.actionData,
+                isConfirmed: true,
+                isQueued,
+                reference: result.reference ?? null,
+              },
+            }
+          : m,
       ),
     }))
-    refresh(draft.mode === 'request' ? ['requests'] : ['accounts', 'transactions'])
+    if (draft.mode === 'request') refresh(['requests'])
+    else {
+      refresh(['accounts', 'transactions'])
+      if (!isQueued) watchTransfer(result.reference)
+    }
   }
 
   /** Edit a pending draft's note on the card, so changing it never depends on the model re-drafting. */

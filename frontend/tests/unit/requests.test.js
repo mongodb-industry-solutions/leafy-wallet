@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { isAwaitingPayer, toRequestPaymentRows, toRequestStatus } from '@/lib/wallet/requests'
+import {
+  isAwaitingPayer,
+  toAwaitingPaymentRows,
+  toRequestPaymentRows,
+  toRequestStatus,
+} from '@/lib/wallet/requests'
 
 // Leafy Pay models a payment request in sixteen states and the wallet renders five, so this mapping
 // is what decides whether a request is payable and how it reads in the list.
@@ -60,6 +65,32 @@ const incoming = {
   isIncoming: true,
 }
 const outgoing = { ...incoming, reference: 'req-2', executionReference: 'exec-2', payerCounterpartyRef: 'arr-9', isIncoming: false }
+
+// These rows sit inline among the transactions, so they have to survive the same sort and render.
+describe('toAwaitingPaymentRows', () => {
+  const pending = { id: 'req-1', name: 'Luis', amount: 25, status: 'pending', createdAt: '2026-07-01T10:00:00Z' }
+
+  it('marks a pending request so the row and detail sheet can tell it apart', () => {
+    const [row] = toAwaitingPaymentRows([pending])
+    expect(row).toMatchObject({ kind: 'request', amount: 25, isPending: true })
+  })
+
+  it('keeps only requests still awaiting payment', () => {
+    const answered = ['paid', 'declined', 'cancelled', 'expired', 'failed'].map((status) => ({
+      ...pending,
+      status,
+    }))
+    expect(toAwaitingPaymentRows(answered)).toEqual([])
+  })
+
+  it('never negates the amount, since no money has moved yet', () => {
+    expect(toAwaitingPaymentRows([{ ...pending, amount: -25 }])[0].amount).toBe(25)
+  })
+
+  it('survives no requests at all', () => {
+    expect(toAwaitingPaymentRows(undefined)).toEqual([])
+  })
+})
 
 describe('toRequestPaymentRows', () => {
   it('gives the payer an outgoing row named after the requester', () => {

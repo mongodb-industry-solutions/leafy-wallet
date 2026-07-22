@@ -166,10 +166,8 @@ export async function createBeneficiary({ lookupType, lookupValue, label }) {
   }
 }
 
-/** Remove a saved beneficiary (scope `write:beneficiaries`). */
-export async function removeBeneficiary(reference) {
-  await call('DELETE', `/api/v1/beneficiaries/${encodeURIComponent(reference)}`)
-}
+// No beneficiary delete here on purpose: Leafy Pay's own UI owns removal, and the login reconcile
+// prunes whatever disappeared there.
 
 /**
  * Send a P2P transfer to a saved beneficiary (scope `write:transfers`). Omitting `fromAccountRef` lets

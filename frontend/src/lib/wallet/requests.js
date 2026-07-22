@@ -43,6 +43,19 @@ export function toRequestStatus(pspStatus) {
 }
 
 /**
+ * Rows for money the user has asked for and not been paid yet, so it sits inline with the payments
+ * instead of in its own section. `kind` is what makes the row read as awaiting payment and the
+ * detail sheet offer to cancel; nothing has moved, so the amount carries no direction.
+ * @param {object[]} outgoing - Request views from `getRequests`.
+ * @returns {object[]} Rows the activity lists render alongside transactions.
+ */
+export function toAwaitingPaymentRows(outgoing) {
+  return (outgoing ?? [])
+    .filter((r) => r.status === 'pending')
+    .map((r) => ({ ...r, kind: 'request', amount: Math.abs(r.amount), isPending: true }))
+}
+
+/**
  * Activity rows for requests that produced a payment: Leafy Pay's history leaves a request's
  * settlement out, so the money would otherwise move the balance with no row to show for it.
  * @param {object[]} requests - Normalized requests, each tagged `isIncoming` (the user is the payer).

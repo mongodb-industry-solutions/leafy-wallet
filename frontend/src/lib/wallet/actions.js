@@ -13,7 +13,6 @@ import {
   listTransactions,
   presentRtpRequest,
   rejectRtpRequest,
-  removeBeneficiary,
   sendToBeneficiary,
 } from '@/lib/psp/PspClient'
 import { classifyNotes, emojiForCategory } from '@/lib/wallet/categories'
@@ -265,32 +264,8 @@ export async function addContact({ lookupValue, label = '' } = {}) {
   return { ok: true, contact: toContactView(beneficiary) }
 }
 
-/**
- * Remove a saved contact from Leafy Pay, then drop its Atlas replica doc (best-effort).
- * @param {string} reference - The counterpartyArrangementReference.
- * @returns {Promise<{ok: boolean, error?: string}>}
- */
-export async function removeContact(reference) {
-  if (!reference) return { ok: false, error: 'Missing contact' }
-  try {
-    await removeBeneficiary(reference)
-  } catch {
-    return { ok: false, error: 'Could not remove contact. Please try again.' }
-  }
-
-  const owner = await ownerRef()
-  if (owner) {
-    try {
-      const docs = await listContactEnrichment(owner)
-      const match = (docs ?? []).find((d) => d.counterpartyArrangementReference === reference)
-      if (match?.id) await deleteContactEnrichment(match.id)
-    } catch {
-      /* best-effort: the beneficiary is already gone from the source of truth */
-    }
-  }
-
-  return { ok: true }
-}
+// Removing a contact is Leafy Pay's own screen: it owns the beneficiary, and `reconcileWithLeafyPay`
+// prunes the Atlas replica on the next login. The wallet only ever adds.
 
 // Leafy Pay stamps this on a P2P transfer that was sent without a note; treated here as "no note".
 const DEFAULT_REMITTANCE = 'P2P transfer via beneficiary portal'
@@ -626,6 +601,12 @@ export async function reconcileWithLeafyPay() {
     // Note stays empty on adoption: the transfer wasn't composed in this app, and Leafy Pay's
     // own note is portal boilerplate, not something worth embedding.
     const foreignTransfers = transfers.filter((t) => !enrichedRefs.has(t.reference))
+    // Money arriving from a request the user raised. Only the payer writes an enrichment doc for a
+    // request payment (in `payRequest`), and Leafy Pay's history leaves the settlement out, so the
+    // payee would see it online and have nothing at all on the device.
+    const requestPayments = requests.filter(
+      (r) => !r.isIncoming && r.executionReference && !enrichedRefs.has(r.executionReference),
+    )
 
     await Promise.all([
       ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
@@ -644,13 +625,25 @@ export async function reconcileWithLeafyPay() {
           leafyPayStatus: toEnrichmentStatus(t.status),
         }).catch(() => {}),
       ),
+      ...requestPayments.map((r) =>
+        createTransactionEnrichment({
+          leafyPayTransferReference: r.executionReference,
+          ownerPartyRef: owner,
+          counterpartyArrangementReference: r.payerCounterpartyRef || '',
+          amount: Math.abs(r.amount),
+          currency: r.currency,
+          note: r.note || null,
+          direction: 'received',
+          leafyPayStatus: r.status === 'payment_settled' ? SETTLED_STATUS : 'pending',
+        }).catch(() => {}),
+      ),
     ])
     return {
       ok: true,
       prunedTransactions: orphanTransactions.length,
       prunedContacts: orphanContacts.length,
       prunedRequests: orphanRequests.length,
-      adoptedTransactions: foreignTransfers.length,
+      adoptedTransactions: foreignTransfers.length + requestPayments.length,
     }
   } catch {
     return { ok: false }
@@ -1057,8 +1050,12 @@ export async function resolveRequest(reference, status) {
   return { ok: true }
 }
 
+// A shared demo user accumulates chats fast, and the history list is the whole of the UI for them.
+const MAX_CHATS = 10
+
 /**
- * The user's chats, newest first.
+ * The user's chats, newest first, capped at the most recent {@link MAX_CHATS}. Capped here rather
+ * than in the UI so both stores are trimmed the same way.
  * @param {boolean} [isOnline]
  * @returns {Promise<{id: string, reference: string, title: string, updatedAt: string}[]>}
  */
@@ -1074,6 +1071,7 @@ export async function getChats(isOnline = true) {
       updatedAt: typeof c.updatedAt === 'number' ? new Date(c.updatedAt).toISOString() : c.updatedAt,
     }))
     .sort((a, b) => new Date(b.updatedAt ?? 0) - new Date(a.updatedAt ?? 0))
+    .slice(0, MAX_CHATS)
 }
 
 /**
