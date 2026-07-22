@@ -19,26 +19,24 @@ function snippetOf(chat) {
 }
 
 /**
- * Full-screen chat history: back to the active chat (left), a "+" to start a
- * new one (right), and the list of conversations. Tapping a row opens it;
- * swiping one left reveals delete (one row at a time).
+ * Full-screen chat history: the list of conversations, with a "+" to start a new one (right).
+ * This is where the assistant opens, so there is nothing to go back to - a chat is reached by
+ * tapping its row. Swiping one left reveals delete (one row at a time).
  * @param {object} props
  * @param {{id: string, title: string, messages: object[]}[]} props.chats
  * @param {string} props.activeId
  * @param {(id: string) => void} props.onOpen
  * @param {(id: string) => void} props.onDelete
  * @param {() => void} props.onNew
- * @param {() => void} props.onClose - Returns to the active chat.
  */
-export function ChatHistory({ chats, activeId, onOpen, onDelete, onNew, onClose }) {
+export function ChatHistory({ chats, activeId, onOpen, onDelete, onNew }) {
   const [openId, setOpenId] = useState(null)
 
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <header className="flex items-center gap-2 px-3 pt-5 pb-2">
-        <IconButton onClick={onClose} aria-label="Back">
-          <Icon glyph="ArrowLeft" size={18} />
-        </IconButton>
+        {/* Balances the "+" so the title stays optically centered. */}
+        <span aria-hidden className="size-9 flex-none" />
         <span className="min-w-0 flex-1 text-center text-base font-bold">Chat history</span>
         <IconButton onClick={onNew} aria-label="New chat">
           <Icon glyph="Plus" size={18} />

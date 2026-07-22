@@ -31,7 +31,9 @@ async def create_transaction(
     doc = {
         **payload.model_dump(),
         "noteEmbedding": note_embedding,
-        "createdAt": datetime.now(timezone.utc),
+        # Keep the payment's own time when the caller knows it (an adopted Leafy Pay transfer),
+        # so the device sorts it where the online list does.
+        "createdAt": payload.createdAt or datetime.now(timezone.utc),
         "settledAt": None,
     }
     doc["_id"] = db.insert_one(COLLECTION, doc)

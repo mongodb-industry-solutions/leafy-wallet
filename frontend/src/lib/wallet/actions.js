@@ -623,6 +623,8 @@ export async function reconcileWithLeafyPay() {
           note: null,
           direction: t.direction,
           leafyPayStatus: toEnrichmentStatus(t.status),
+          // Its own time, not now: the device sorts on this, the online list sorts on Leafy Pay's.
+          createdAt: t.createdAt ?? undefined,
         }).catch(() => {}),
       ),
       ...requestPayments.map((r) =>
@@ -635,6 +637,8 @@ export async function reconcileWithLeafyPay() {
           note: r.note || null,
           direction: 'received',
           leafyPayStatus: r.status === 'payment_settled' ? SETTLED_STATUS : 'pending',
+          // Dated from the approval, matching the row `toRequestPaymentRows` builds online.
+          createdAt: r.updatedAt ?? r.createdAt ?? undefined,
         }).catch(() => {}),
       ),
     ])
@@ -1051,7 +1055,7 @@ export async function resolveRequest(reference, status) {
 }
 
 // A shared demo user accumulates chats fast, and the history list is the whole of the UI for them.
-const MAX_CHATS = 10
+const MAX_CHATS = 8
 
 /**
  * The user's chats, newest first, capped at the most recent {@link MAX_CHATS}. Capped here rather

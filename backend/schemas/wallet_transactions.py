@@ -34,8 +34,14 @@ class WalletTransactionCreate(BaseModel):
 
     `noteEmbedding` is absent on purpose: it's generated server-side by
     the embedding provider from `note` (see services/embeddings.py), never supplied by the
-    client. `_id`/`createdAt`/`settledAt` are also server-managed, same
-    reasoning as WalletContactCreate.
+    client. `_id`/`settledAt` are also server-managed, same reasoning as
+    WalletContactCreate.
+
+    `createdAt` is optional rather than server-managed: a payment adopted from
+    Leafy Pay happened before this row was written, and stamping it with the
+    write time would sort it wrongly offline (the device reads this field,
+    while online reads Leafy Pay's own). Omit it for a payment made here and
+    now, which is what the default covers.
     """
 
     leafyPayTransferReference: str
@@ -47,6 +53,7 @@ class WalletTransactionCreate(BaseModel):
     direction: Literal["sent", "received"]
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] = "pending"
     localSyncStatus: Literal["local_pending", "synced"] = "synced"
+    createdAt: datetime | None = None
 
 
 class WalletTransactionUpdate(BaseModel):

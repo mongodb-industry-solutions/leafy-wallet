@@ -58,7 +58,6 @@ export function AiTab({ user }) {
         onOpen={c.handleOpenChat}
         onNew={c.handleNewChat}
         onDelete={c.handleDeleteChat}
-        onClose={() => c.setView('chat')}
       />
     )
   }
@@ -106,12 +105,7 @@ export function AiTab({ user }) {
         </div>
       </div>
 
-      <ChatHeader
-        title={c.title}
-        canCreate={!c.isEmpty}
-        onBack={() => c.setView('history')}
-        onNew={c.handleNewChat}
-      />
+      <ChatHeader title={c.title} onBack={() => c.setView('history')} />
 
       {showEmpty ? (
         <EmptyState user={user} onSuggestion={c.handleSuggestion} />

@@ -10,7 +10,8 @@ export async function GET(request) {
   const state = randomToken()
   const nonce = randomToken()
 
-  // Optional ?user=<email>: prefill Leafy Pay's login form with that demo user's credentials.
+  // Optional ?user=<email>: prefill that demo user's email on Leafy Pay's login form. Matched
+  // against DEMO_USERS rather than passed straight through, so only a known demo identity is sent.
   const email = new URL(request.url).searchParams.get('user')
   const demoUser = email ? DEMO_USERS.find((u) => u.email === email) : undefined
 
@@ -20,7 +21,6 @@ export async function GET(request) {
     codeChallenge: challenge,
     scopes: REQUESTED_SCOPES,
     prefillEmail: demoUser?.email,
-    prefillPassword: demoUser?.password,
   })
 
   // Set the short-lived encrypted PKCE/CSRF cookie directly on the redirect response.

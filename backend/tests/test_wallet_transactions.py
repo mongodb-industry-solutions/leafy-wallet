@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bson import ObjectId
 
@@ -19,6 +19,39 @@ TRANSACTION_PAYLOAD = {
 
 def _cleanup(transaction_id):
     get_db().delete_one("walletTransactions", {"_id": ObjectId(transaction_id)})
+
+
+def test_adopted_transfer_keeps_its_own_time(client):
+    """A transfer adopted from Leafy Pay happened before this row was written.
+
+    The device sorts activity on this field while the online list sorts on Leafy Pay's own, so
+    stamping it with the write time puts the same payment in two different places.
+    """
+    created = client.post(
+        BASE,
+        json={
+            **TRANSACTION_PAYLOAD,
+            "leafyPayTransferReference": "adopted-0001",
+            "createdAt": "2026-07-01T10:00:00Z",
+        },
+    )
+    assert created.status_code == 201
+    try:
+        assert created.json()["createdAt"].startswith("2026-07-01T10:00:00")
+    finally:
+        _cleanup(created.json()["_id"])
+
+
+def test_transaction_made_now_is_stamped_now(client):
+    """Omitting createdAt is the normal path: a payment composed in the app happens as it is written."""
+    before = datetime.now(timezone.utc)
+    created = client.post(BASE, json={**TRANSACTION_PAYLOAD, "leafyPayTransferReference": "now-0001"})
+    assert created.status_code == 201
+    try:
+        stamped = datetime.fromisoformat(created.json()["createdAt"])
+        assert stamped >= before.replace(microsecond=0)
+    finally:
+        _cleanup(created.json()["_id"])
 
 
 def test_transaction_crud_lifecycle(client):
