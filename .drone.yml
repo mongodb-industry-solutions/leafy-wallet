@@ -73,6 +73,9 @@ steps:
       compressed_caching: false
       snapshot_mode: redo
       create_repository: true
+      cache: true
+      cache_repo: industrysolutions/leafy-wallet-local-store-cache
+      cache_ttl: 168h
       registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
       repo: industrysolutions/leafy-wallet-local-store
       dockerfile: leafy-local-store/Dockerfile
@@ -199,6 +202,9 @@ steps:
       compressed_caching: false
       snapshot_mode: redo
       create_repository: true
+      cache: true
+      cache_repo: industrysolutions/leafy-wallet-local-store-cache
+      cache_ttl: 168h
       registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
       repo: industrysolutions/leafy-wallet-local-store
       dockerfile: leafy-local-store/Dockerfile

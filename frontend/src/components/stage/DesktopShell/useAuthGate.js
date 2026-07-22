@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { me } from '@/lib/auth/actions'
 import { hasCredential } from '@/lib/auth/authenticator'
 import { demoAvatarFor } from '@/lib/demo-users'
+import { WELCOME_SEEN_KEY } from '@/components/stage/WelcomeDialog/useWelcomeGate'
 
 // Forest-green tint for the identity avatar when the user isn't a pinned demo profile.
 const AVATAR_BG = '00684A'
@@ -65,7 +66,9 @@ export function useAuthGate() {
   }, [])
 
   // Full navigation to single sign-out at Leafy Pay, then back to the app (reloads into the LoginScreen).
+  // At a booth, sign-out means the next visitor is arriving, so re-arm the welcome for them.
   const handleSignOut = useCallback(() => {
+    window.sessionStorage.removeItem(WELCOME_SEEN_KEY)
     window.location.href = LOGOUT_URL
   }, [])
 

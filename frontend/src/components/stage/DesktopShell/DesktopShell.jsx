@@ -10,6 +10,8 @@ import { LoginScreen } from '@/components/stage/LoginScreen/LoginScreen'
 import { FaceIdEntry } from '@/components/stage/FaceIdEntry/FaceIdEntry'
 import { Walkthrough } from '@/components/stage/Walkthrough/Walkthrough'
 import { WalletApp } from '@/components/wallet/shell/WalletApp/WalletApp'
+import { WelcomeDialog } from '@/components/stage/WelcomeDialog/WelcomeDialog'
+import { useWelcomeGate } from '@/components/stage/WelcomeDialog/useWelcomeGate'
 import { LeafLogo } from '@/components/common/LeafLogo/LeafLogo'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
@@ -20,6 +22,7 @@ import { WALKTHROUGH } from '@/lib/walkthrough'
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
   const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
+  const { isWelcomeOpen, showWelcome, dismissWelcome, startTour } = useWelcomeGate()
   const [flow, setFlow] = useState('home')
 
   // Before authentication the wallet reports no flow - narrate the sign-in itself.
@@ -62,6 +65,19 @@ export function DesktopShell() {
           <ConnectionControl isOnline={isOnline} onToggle={handleToggle} shouldNudge={shouldNudge} />
         </div>
       </div>
+
+      {/* Low-prominence re-entry point: lets a presenter restart the intro between conversations. */}
+      {!isWelcomeOpen && (
+        <button
+          type="button"
+          onClick={showWelcome}
+          className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 text-xs font-medium text-muted-foreground/70 transition-colors hover:text-foreground"
+        >
+          What is this? Watch the intro
+        </button>
+      )}
+
+      {isWelcomeOpen && <WelcomeDialog onStartTour={startTour} onDismiss={dismissWelcome} />}
     </main>
   )
 }
