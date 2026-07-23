@@ -17,13 +17,18 @@ export function SettlementToast() {
   const isCompleted = settlement.status === 'completed'
 
   return (
-    <Toast
-      key={settlement.reference}
-      glyph={isCompleted ? 'Checkmark' : 'Warning'}
-      tone={isCompleted ? 'success' : 'warning'}
-      title={isCompleted ? 'Payment completed' : 'Payment failed'}
-      subtitle={`${amount}${who} ${isCompleted ? 'has settled' : 'could not be sent'}`}
-      onDismiss={dismissSettlement}
-    />
+    <>
+      {/* Invisible marker the self-driving tour polls for, so its cursor waits until the queued
+          payment has actually settled before moving on. */}
+      {isCompleted && <span data-tour-signal="settled" className="hidden" aria-hidden />}
+      <Toast
+        key={settlement.reference}
+        glyph={isCompleted ? 'Checkmark' : 'Warning'}
+        tone={isCompleted ? 'success' : 'warning'}
+        title={isCompleted ? 'Payment completed' : 'Payment failed'}
+        subtitle={`${amount}${who} ${isCompleted ? 'has settled' : 'could not be sent'}`}
+        onDismiss={dismissSettlement}
+      />
+    </>
   )
 }

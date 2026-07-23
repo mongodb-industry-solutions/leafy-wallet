@@ -94,6 +94,7 @@ export function ConfirmStep({
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-muted-foreground">Note</span>
             <input
+              data-tour-target="send-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={140}
@@ -134,6 +135,7 @@ export function ConfirmStep({
         )}
         {error && !insufficient && <p className="mb-2 text-center text-sm text-destructive">{error}</p>}
         <button
+          data-tour-target="send-submit"
           onClick={onSubmit}
           disabled={isSubmitting || insufficient}
           className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-60"

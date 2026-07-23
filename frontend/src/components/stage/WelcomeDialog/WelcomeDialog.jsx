@@ -3,7 +3,7 @@
 import { Check, Copy, KeyRound, X } from 'lucide-react'
 import { LeafLogo } from '@/components/common/LeafLogo/LeafLogo'
 import { DEMO_USERS } from '@/lib/demo-users'
-import { useCopyToClipboard } from '@/components/stage/WelcomeDialog/useCopyToClipboard'
+import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
 
 // Every demo user shares one password, so show it once. Sourced from DEMO_USERS to keep a single
 // source of truth with the sign-in walkthrough step. The user profiles themselves are not listed here -
@@ -19,8 +19,10 @@ const SHARED_PASSWORD = DEMO_USERS[0].password
  * @param {object} props
  * @param {() => void} props.onStartTour - Primary action; records the tour intent and closes.
  * @param {() => void} props.onDismiss - Close without starting the tour.
+ * @param {boolean} [props.isAuthed] - Whether a session exists. When false the tour cannot run yet
+ *   (it can't drive the SSO login), so the primary action tells the visitor to sign in first.
  */
-export function WelcomeDialog({ onStartTour, onDismiss }) {
+export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
   const { isCopied, copy } = useCopyToClipboard()
 
   function handleCopyPassword() {
@@ -78,24 +80,28 @@ export function WelcomeDialog({ onStartTour, onDismiss }) {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">
-              Sign in as any profile. They all share the same password.
-            </p>
-            <div className="flex items-center gap-3 rounded-2xl border border-border bg-foreground/[0.03] px-4 py-3">
-              <KeyRound size={17} className="shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-sm font-semibold text-foreground">{SHARED_PASSWORD}</span>
-              <button
-                type="button"
-                onClick={handleCopyPassword}
-                aria-label={`Copy password ${SHARED_PASSWORD}`}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-secondary transition-colors hover:bg-secondary/10"
-              >
-                {isCopied ? <Check size={14} /> : <Copy size={14} />}
-                {isCopied ? 'Copied' : 'Copy'}
-              </button>
+          {/* Credentials only matter before signing in. Once authed (e.g. a presenter reopening this
+              between conversations), the password is noise, so drop the whole sign-in block. */}
+          {!isAuthed && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                One password signs in every demo profile:
+              </p>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-foreground/[0.03] px-4 py-3">
+                <KeyRound size={17} className="shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-sm font-semibold text-foreground">{SHARED_PASSWORD}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyPassword}
+                  aria-label={`Copy password ${SHARED_PASSWORD}`}
+                  className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-secondary transition-colors hover:bg-secondary/10"
+                >
+                  {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                  {isCopied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex flex-col gap-2.5">
             <button
@@ -103,7 +109,7 @@ export function WelcomeDialog({ onStartTour, onDismiss }) {
               onClick={onStartTour}
               className="flex h-12 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground shadow-sm transition-opacity hover:opacity-90"
             >
-              Watch the tour
+              {isAuthed ? 'Watch the tour' : 'Sign in to watch the tour'}
             </button>
             <button
               type="button"
@@ -112,6 +118,11 @@ export function WelcomeDialog({ onStartTour, onDismiss }) {
             >
               Just let me try it
             </button>
+            {!isAuthed && (
+              <p className="mt-0.5 text-center text-xs text-muted-foreground">
+                Sign in on the phone first. The tour starts right after.
+              </p>
+            )}
           </div>
         </div>
       </div>

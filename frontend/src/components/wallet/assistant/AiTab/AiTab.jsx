@@ -56,7 +56,6 @@ export function AiTab({ user }) {
         chats={c.chats}
         activeId={c.activeId}
         onOpen={c.handleOpenChat}
-        onNew={c.handleNewChat}
         onDelete={c.handleDeleteChat}
       />
     )
@@ -174,6 +173,7 @@ export function AiTab({ user }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10 pb-24">
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
+            data-tour-target="ai-input"
             value={c.textInput}
             onChange={(e) => c.setTextInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
@@ -182,6 +182,7 @@ export function AiTab({ user }) {
           />
           {c.hasText ? (
             <button
+              data-tour-target="ai-send"
               onClick={c.handleSendText}
               aria-label="Send"
               className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background"

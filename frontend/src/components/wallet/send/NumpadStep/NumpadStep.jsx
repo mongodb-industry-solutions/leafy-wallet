@@ -72,6 +72,7 @@ export function NumpadStep({
         {KEYS.map((k) => (
           <button
             key={k}
+            data-tour-target={`key-${k}`}
             type="button"
             disabled={k === '.'}
             onClick={() => (k === '⌫' ? handleBackspace() : handleDigit(k))}
@@ -91,6 +92,7 @@ export function NumpadStep({
           Request
         </button>
         <button
+          data-tour-target="send-pay"
           onClick={() => onPick('send')}
           disabled={isEmpty}
           className="h-14 flex-1 rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"

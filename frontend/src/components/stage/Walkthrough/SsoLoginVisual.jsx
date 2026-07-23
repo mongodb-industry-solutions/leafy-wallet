@@ -1,22 +1,8 @@
 'use client'
 
 import { Peep } from '@/components/common/Peep/Peep'
+import { Pointer } from '@/components/common/Pointer/Pointer'
 import { DEMO_USERS } from '@/lib/demo-users'
-
-/** macOS-style pointer, drawn inline so the cursor needs no asset. */
-function Pointer({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        d="M5 3l14 9.3-6.2 1.1 3.4 6.4-2.7 1.4-3.4-6.4L5 19.4V3z"
-        fill="white"
-        stroke="black"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 // The card the cursor demonstrates: the first demo user, which is the one the story follows.
 const CURSOR_TARGET = 0

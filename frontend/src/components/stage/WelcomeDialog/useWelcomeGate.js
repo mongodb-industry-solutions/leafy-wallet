@@ -12,13 +12,13 @@ export const WELCOME_SEEN_KEY = 'leafy:welcome-seen'
 export const TOUR_INTENT_KEY = 'leafy:tour-intent'
 
 /**
- * Gates the pre-auth welcome overlay for the booth. Opens once per browser session (until the visitor
- * dismisses it or signs out), and records a "start the tour" intent that outlives the SSO redirect.
+ * Gates the pre-auth welcome overlay for the booth. Opens once per browser session, until the visitor
+ * dismisses it or signs out. Starting the tour is auth-aware (it may need to outlive the SSO redirect),
+ * so that lives in DesktopShell; this hook only owns open/seen state.
  * @returns {{
  *   isWelcomeOpen: boolean,
  *   showWelcome: () => void,
  *   dismissWelcome: () => void,
- *   startTour: () => void,
  * }}
  */
 export function useWelcomeGate() {
@@ -30,25 +30,13 @@ export function useWelcomeGate() {
     if (window.sessionStorage.getItem(WELCOME_SEEN_KEY) !== '1') setIsWelcomeOpen(true)
   }, [])
 
-  const markSeen = useCallback(() => {
-    window.sessionStorage.setItem(WELCOME_SEEN_KEY, '1')
-  }, [])
-
   // Re-entry point on the stage: reopen without touching the seen flag.
   const showWelcome = useCallback(() => setIsWelcomeOpen(true), [])
 
   const dismissWelcome = useCallback(() => {
-    markSeen()
+    window.sessionStorage.setItem(WELCOME_SEEN_KEY, '1')
     setIsWelcomeOpen(false)
-  }, [markSeen])
+  }, [])
 
-  // Primary action: record the intent so it survives the SSO round-trip, then close and let the visitor
-  // sign in. The tour itself begins post-auth in Phase 2, which consumes TOUR_INTENT_KEY.
-  const startTour = useCallback(() => {
-    window.sessionStorage.setItem(TOUR_INTENT_KEY, '1')
-    markSeen()
-    setIsWelcomeOpen(false)
-  }, [markSeen])
-
-  return { isWelcomeOpen, showWelcome, dismissWelcome, startTour }
+  return { isWelcomeOpen, showWelcome, dismissWelcome }
 }

@@ -108,9 +108,10 @@ export function PeopleTab({ onSendTo, onAddContact }) {
           {isLoading &&
             Array.from({ length: SKELETON_ROWS }).map((_, i) => <ContactRowSkeleton key={i} />)}
           {!isLoading &&
-            filtered.map((c) => (
+            filtered.map((c, i) => (
               <button
                 key={c.id}
+                data-tour-target={i === 0 ? 'contact-0' : undefined}
                 onClick={() => onSendTo(c)}
                 className="flex w-full items-center gap-3 py-3.5 text-left"
               >

@@ -50,18 +50,18 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
     onFlowChange?.(flow)
   }, [flow, onFlowChange])
 
-  function handleOpenSend(mode, contact = null) {
+  const handleOpenSend = useCallback((mode, contact = null) => {
     setSendMode(mode)
     setSendContact(contact)
     setIsSendOpen(true)
-  }
+  }, [])
 
-  function handleCloseSend() {
+  const handleCloseSend = useCallback(() => {
     setIsSendOpen(false)
     setSendContact(null)
     setSendMode('send')
     setTab('home')
-  }
+  }, [])
 
   const handleHeroIntroPlayed = useCallback(() => {
     heroIntroPlayedRef.current = true
@@ -77,7 +77,10 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
             {tab === 'ai' ? (
               <AiTab user={user} />
             ) : (
-              <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24">
+              <div
+                data-tour-target="wallet-scroll"
+                className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden overscroll-none pb-24"
+              >
                 {tab === 'home' && (
                   <HomeTab
                     user={user}
