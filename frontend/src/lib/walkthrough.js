@@ -73,7 +73,6 @@ export const WALKTHROUGH = {
   },
   transaction: {
     label: 'Transaction',
-    offlineMoment: true,
     steps: [
       {
         icon: Database,

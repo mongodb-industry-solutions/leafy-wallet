@@ -12,7 +12,7 @@
 //   readMs: how long to hold after the action so the narration can be read
 
 const AI_PROMPT = 'How much did I spend this month?'
-const NOTE_TEXT = 'Thanks for lunch'
+const NOTE_TEXT = 'Thanks for lunch!'
 
 /**
  * @typedef {object} TourAction
@@ -36,9 +36,10 @@ export const TOUR = [
   { type: 'scroll', target: 'wallet-scroll', by: 320, say: 'And your full history, right here.', walkthroughStep: 2, readMs: 2600 },
   { type: 'scroll', target: 'wallet-scroll', by: -640, say: "Now let's send some money.", walkthroughStep: 0, readMs: 700 },
 
-  // People: open the first contact into a send.
-  { type: 'click', target: 'tab-people', say: "First, I'll pick someone to pay.", walkthroughStep: 0, readMs: 1400 },
-  { type: 'click', target: 'contact-0', say: "Let's pay this contact.", walkthroughStep: 0, readMs: 700 },
+  // People: pick the first contact, then choose Send in the drawer that opens.
+  { type: 'click', target: 'tab-people', say: "First, I'll pick someone.", walkthroughStep: 0, readMs: 1400 },
+  { type: 'click', target: 'contact-0', say: 'Pay them or request from them?', walkthroughStep: 0, readMs: 1200 },
+  { type: 'click', target: 'contact-send', say: "I'll send them money.", walkthroughStep: 0, readMs: 900 },
 
   // Compose: tap €10.00 (cents), pick Pay, type a note.
   { type: 'click', target: 'key-1', say: 'Entering €10.00 on the keypad.', walkthroughStep: 0, readMs: 150 },
@@ -49,12 +50,13 @@ export const TOUR = [
   { type: 'type', target: 'send-note', text: NOTE_TEXT, say: "I'll add a quick note.", walkthroughStep: 0, readMs: 1000 },
 
   // The offline moment: the cursor leaves the phone to flip the connection off, then sends (it queues).
-  { type: 'click', target: 'connection-toggle', say: "Now watch, I'll go offline.", walkthroughStep: 1, readMs: 1500 },
-  { type: 'click', target: 'send-submit', say: 'Sending it, even with no connection.', walkthroughStep: 1, readMs: 1800 },
-  { type: 'click', target: 'send-done', say: 'Saved on the device, queued to sync.', walkthroughStep: 1, readMs: 900 },
+  // Held long so the visitor can actually read what is happening at the demo's key moment.
+  { type: 'click', target: 'connection-toggle', say: "Now watch, I'll go offline.", walkthroughStep: 1, readMs: 3000 },
+  { type: 'click', target: 'send-submit', say: 'Sending it, even with no connection.', walkthroughStep: 1, readMs: 3400 },
+  { type: 'click', target: 'send-done', say: 'Saved on the device, queued to sync.', walkthroughStep: 1, readMs: 2600 },
 
   // Activity: the payment shows pending; then the cursor reconnects and waits for it to actually settle.
-  { type: 'click', target: 'tab-activity', say: "Here it is in Activity, still pending.", walkthroughStep: 0, readMs: 2200 },
+  { type: 'click', target: 'tab-activity', say: "Here it is in Activity, still pending.", walkthroughStep: 0, readMs: 4000 },
   {
     type: 'click',
     target: 'connection-toggle',
@@ -62,7 +64,7 @@ export const TOUR = [
     sayDone: 'There it is, completed and settled.',
     waitFor: 'settled',
     walkthroughStep: 1,
-    readMs: 600,
+    readMs: 2600,
   },
 
   // Assistant: new chat, then typewrite the question and send it.

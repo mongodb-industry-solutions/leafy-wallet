@@ -41,11 +41,14 @@ export function Walkthrough({ flow, controlledStep }) {
 
   useEffect(() => setAutoStep(0), [flow])
 
+  // Schedule the next auto-advance relative to the current step. Keying on `autoStep` restarts the
+  // timer whenever the step changes (including manual dot/arrow navigation), so moving mid-step gives
+  // the next step a fresh full interval instead of inheriting the previous one's leftover time.
   useEffect(() => {
-    if (isControlled || count < 2) return
-    const id = setInterval(() => setAutoStep((s) => (s + 1) % count), AUTO_ADVANCE_MS)
-    return () => clearInterval(id)
-  }, [isControlled, count])
+    if (isControlled || count < 2) return undefined
+    const id = setTimeout(() => setAutoStep((s) => (s + 1) % count), AUTO_ADVANCE_MS)
+    return () => clearTimeout(id)
+  }, [isControlled, count, autoStep])
 
   const current = steps[Math.min(step, count - 1)]
   const Media = current.icon

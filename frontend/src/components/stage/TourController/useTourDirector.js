@@ -21,7 +21,6 @@ const DEFAULT_READ_MS = 1000
  *   isPaused: boolean,
  *   onStepComplete: () => void,
  *   togglePause: () => void,
- *   skip: () => void,
  * }}
  */
 export function useTourDirector({ isActive, onFinish }) {
@@ -59,7 +58,6 @@ export function useTourDirector({ isActive, onFinish }) {
 
   const onStepComplete = useCallback(() => setIsStepDone(true), [])
   const togglePause = useCallback(() => setIsPaused((p) => !p), [])
-  const skip = useCallback(() => advance(), [advance])
 
   return {
     command: isActive ? TOUR[index] : null,
@@ -68,6 +66,5 @@ export function useTourDirector({ isActive, onFinish }) {
     isPaused,
     onStepComplete,
     togglePause,
-    skip,
   }
 }

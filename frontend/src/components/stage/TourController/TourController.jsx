@@ -1,19 +1,20 @@
 'use client'
 
-import { Pause, Play, SkipForward, X } from 'lucide-react'
+import { Pause, Play, X } from 'lucide-react'
 
 /**
  * On-stage controls for the self-driving tour: one continuous progress bar that fills as the tour
- * advances through its actions, plus pause/resume, skip, and exit. The narration lives in the panel.
+ * advances through its actions, plus pause/resume and exit. There is deliberately no skip - the
+ * cursor performs each real interaction, so jumping ahead would desync the pointer from the UI.
+ * The narration lives in the panel.
  * @param {object} props
  * @param {number} props.index - Zero-based index of the active action.
  * @param {number} props.total - Total actions.
  * @param {boolean} props.isPaused
  * @param {() => void} props.onTogglePause
- * @param {() => void} props.onSkip
  * @param {() => void} props.onExit
  */
-export function TourController({ index, total, isPaused, onTogglePause, onSkip, onExit }) {
+export function TourController({ index, total, isPaused, onTogglePause, onExit }) {
   const pct = Math.round(((index + 1) / total) * 100)
 
   return (
@@ -33,15 +34,6 @@ export function TourController({ index, total, isPaused, onTogglePause, onSkip, 
           style={{ width: `${pct}%` }}
         />
       </div>
-
-      <button
-        type="button"
-        aria-label="Skip to next"
-        onClick={onSkip}
-        className="grid size-8 place-items-center rounded-full bg-foreground/[0.06] text-foreground transition-colors hover:bg-foreground/10"
-      >
-        <SkipForward className="size-4" />
-      </button>
 
       <span className="mx-0.5 h-5 w-px bg-border" />
 

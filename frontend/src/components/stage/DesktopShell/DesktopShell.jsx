@@ -119,7 +119,6 @@ export function DesktopShell() {
             total={tour.total}
             isPaused={tour.isPaused}
             onTogglePause={tour.togglePause}
-            onSkip={tour.skip}
             onExit={stopTour}
           />
         </div>

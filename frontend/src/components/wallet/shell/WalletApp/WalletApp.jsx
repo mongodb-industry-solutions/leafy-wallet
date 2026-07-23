@@ -12,6 +12,7 @@ import { SendFlow } from '@/components/wallet/send/SendFlow/SendFlow'
 import { PayRequestFlow } from '@/components/wallet/send/PayRequestFlow/PayRequestFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/ProfileScreen'
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
+import { ContactActionSheet } from '@/components/wallet/people/ContactActionSheet/ContactActionSheet'
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel/NotificationsPanel'
 import { SettlementToast } from '@/components/wallet/shell/SettlementToast/SettlementToast'
 
@@ -31,6 +32,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
   const [sendMode, setSendMode] = useState('send')
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAddContactOpen, setIsAddContactOpen] = useState(false)
+  const [contactMenu, setContactMenu] = useState(null)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [payRequestNotification, setPayRequestNotification] = useState(null)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
@@ -67,6 +69,17 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
     heroIntroPlayedRef.current = true
   }, [])
 
+  // Contact action sheet (opened from a People row's chevron): send to, or request from, that contact.
+  function handleContactSend() {
+    handleOpenSend('send', contactMenu)
+    setContactMenu(null)
+  }
+
+  function handleContactRequest() {
+    handleOpenSend('request', contactMenu)
+    setContactMenu(null)
+  }
+
   return (
     <WalletDataProvider isOnline={isOnline} ownerKey={user?.sub}>
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
@@ -97,10 +110,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
                 )}
                 {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
                 {tab === 'people' && (
-                  <PeopleTab
-                    onSendTo={(c) => handleOpenSend('send', c)}
-                    onAddContact={() => setIsAddContactOpen(true)}
-                  />
+                  <PeopleTab onSelect={setContactMenu} onAddContact={() => setIsAddContactOpen(true)} />
                 )}
               </div>
             )}
@@ -126,6 +136,14 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
         )}
         {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
         {isAddContactOpen && <AddContactSheet onClose={() => setIsAddContactOpen(false)} />}
+        {contactMenu && (
+          <ContactActionSheet
+            contact={contactMenu}
+            onSend={handleContactSend}
+            onRequest={handleContactRequest}
+            onClose={() => setContactMenu(null)}
+          />
+        )}
         {isNotificationsOpen && (
           <NotificationsPanel
             onPayRequest={setPayRequestNotification}

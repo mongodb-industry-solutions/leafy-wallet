@@ -27,10 +27,10 @@ function ContactRowSkeleton() {
  * one by a registered Leafy Pay email or phone number. Removing is Leafy Pay's own screen: it owns
  * the beneficiary, and the login reconcile prunes whatever is deleted there.
  * @param {object} props
- * @param {(contact: object) => void} props.onSendTo
+ * @param {(contact: object) => void} props.onSelect - Tapping a contact opens the pay/request sheet.
  * @param {() => void} props.onAddContact - Opens the add-contact sheet (rendered at the shell level).
  */
-export function PeopleTab({ onSendTo, onAddContact }) {
+export function PeopleTab({ onSelect, onAddContact }) {
   const {
     contacts: { data, isLoading, error },
   } = useWalletData()
@@ -87,7 +87,7 @@ export function PeopleTab({ onSendTo, onAddContact }) {
             {contacts.map((c) => (
               <button
                 key={c.id}
-                onClick={() => onSendTo(c)}
+                onClick={() => onSelect(c)}
                 className="flex w-16 flex-none flex-col items-center gap-1.5"
               >
                 <Peep seed={c.seed} bg={c.bg} size={56} />
@@ -112,7 +112,7 @@ export function PeopleTab({ onSendTo, onAddContact }) {
               <button
                 key={c.id}
                 data-tour-target={i === 0 ? 'contact-0' : undefined}
-                onClick={() => onSendTo(c)}
+                onClick={() => onSelect(c)}
                 className="flex w-full items-center gap-3 py-3.5 text-left"
               >
                 <Peep seed={c.seed} bg={c.bg} size={44} />
