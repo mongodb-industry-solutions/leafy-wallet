@@ -31,8 +31,8 @@ export const WALKTHROUGH = {
       {
         visual: SsoLoginVisual,
         title: 'Sign in as a demo user',
-        body: `Tap a profile to fill in their email, or Continue with SSO to sign in as any other Leafy Pay user. Every user’s password is ${DEMO_USERS[0].password}.`,
-        highlight: DEMO_USERS[0].password,
+        body: 'Tap a profile to prefill its email, or use Continue with SSO. Every profile shares one password:',
+        copyable: DEMO_USERS[0].password,
       },
     ],
   },
@@ -42,7 +42,7 @@ export const WALKTHROUGH = {
       {
         visual: BalanceFromDeviceVisual,
         title: 'Balance from the device',
-        body: 'The balance comes from the Leafy Pay service, but it is also saved in the local database on the phone. So if you go offline, the value is still there to see.',
+        body: 'Your balance is saved on the phone, not just fetched from the server. Go offline and it is still right there.',
       },
       {
         visual: AccountsCarouselVisual,
@@ -62,7 +62,7 @@ export const WALKTHROUGH = {
       {
         visual: LocalHistoryVisual,
         title: 'One local source of truth',
-        body: 'The full payment history lives on the phone, so scrolling never waits on the network. Online or offline, the list is always there and always fast.',
+        body: 'Your full history lives on the phone, so it is always there and always fast, online or off.',
       },
       {
         visual: PaymentStatusVisual,
@@ -73,7 +73,6 @@ export const WALKTHROUGH = {
   },
   transaction: {
     label: 'Transaction',
-    offlineMoment: true,
     steps: [
       {
         icon: Database,
@@ -99,17 +98,17 @@ export const WALKTHROUGH = {
       {
         visual: SendSettleVisual,
         title: 'Written locally, settles for real',
-        body: 'Tap send and the payment saves to the phone right away and shows as pending. It flips to completed once it actually settles, so the status is always the truth.',
+        body: 'Tap send and it saves to the phone instantly as pending, then flips to completed once it truly settles.',
       },
       {
         visual: SendQueueVisual,
         title: 'Queued while offline',
-        body: 'No connection? The payment waits in a queue on the device and sends itself the moment one returns. Nothing to retry, nothing lost.',
+        body: 'No connection? It waits in a queue on the device and sends itself the moment one returns. Nothing lost.',
       },
       {
         visual: SendSyncVisual,
         title: 'Synced on reconnect',
-        body: 'Once back online, the payment pushes up to MongoDB Atlas and is recorded there the moment it succeeds. The cloud and the phone end up holding the same result.',
+        body: 'Back online, it pushes up to MongoDB Atlas and settles. Phone and cloud end up holding the same result.',
       },
     ],
   },
@@ -160,7 +159,7 @@ export const WALKTHROUGH = {
       {
         visual: AssistantRoutingVisual,
         title: 'An assistant that checks, never guesses',
-        body: 'Ask in plain words and LangGraph routes it to the right tool: balance, spending, or a payment draft. It only answers from real data, never a guess.',
+        body: 'Ask in plain words and it routes to the right tool, then answers only from your real data, never a guess.',
       },
       {
         visual: LocalModelVisual,

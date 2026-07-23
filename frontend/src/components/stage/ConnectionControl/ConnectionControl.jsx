@@ -22,6 +22,7 @@ export function ConnectionControl({ isOnline, onToggle, shouldNudge = false }) {
         <TooltipTrigger
           render={
             <button
+              data-tour-target="connection-toggle"
               onClick={onToggle}
               aria-label={isOnline ? 'Go offline' : 'Go online'}
               className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-card text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"

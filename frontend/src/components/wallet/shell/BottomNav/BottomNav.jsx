@@ -25,6 +25,7 @@ export function BottomNav({ tab, setTab }) {
           return (
             <button
               key={id}
+              data-tour-target={`tab-${id}`}
               onClick={() => setTab(id)}
               className={cn(
                 'flex flex-1 flex-col items-center gap-0.5 rounded-full py-1.5 transition-colors',

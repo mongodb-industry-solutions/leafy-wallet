@@ -124,6 +124,30 @@
   }
 }
 
+/* Tour progress: one continuous bar for the whole tour. Each beat animates the fill from its start
+   fraction to its end fraction (set inline via --tour-from/--tour-to), so it advances smoothly. */
+@keyframes tour-progress {
+  from {
+    width: var(--tour-from);
+  }
+  to {
+    width: var(--tour-to);
+  }
+}
+
+/* Tour cursor: a discrete click ripple, fired once when the pointer lands on a target. Unlike
+   sso-click-ring (tuned for a 4s loop), this ripples immediately over its own short duration. */
+@keyframes tour-click-ring {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
 /* AI thinking: the FoldGradient gently expands/contracts and brightens. */
 @keyframes aurora-pulse {
   0%,

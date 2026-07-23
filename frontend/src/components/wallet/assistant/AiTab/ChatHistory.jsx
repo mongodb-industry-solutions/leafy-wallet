@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { IconButton } from '@/components/ui/IconButton'
 import { SwipeableRow } from '@/components/ui/SwipeableRow'
 import { cn } from '@/lib/utils'
 
@@ -27,21 +26,13 @@ function snippetOf(chat) {
  * @param {string} props.activeId
  * @param {(id: string) => void} props.onOpen
  * @param {(id: string) => void} props.onDelete
- * @param {() => void} props.onNew
  */
-export function ChatHistory({ chats, activeId, onOpen, onDelete, onNew }) {
+export function ChatHistory({ chats, activeId, onOpen, onDelete }) {
   const [openId, setOpenId] = useState(null)
 
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
-      <header className="flex items-center gap-2 px-3 pt-5 pb-2">
-        {/* Balances the "+" so the title stays optically centered. */}
-        <span aria-hidden className="size-9 flex-none" />
-        <span className="min-w-0 flex-1 text-center text-base font-bold">Chat history</span>
-        <IconButton onClick={onNew} aria-label="New chat">
-          <Icon glyph="Plus" size={18} />
-        </IconButton>
-      </header>
+      <header className="px-3 pt-5 pb-2 text-center text-base font-bold">Chat history</header>
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-4 pt-2 pb-6">
         {/* No horizontal padding here: rows and the delete layer run edge to edge, and the
@@ -58,7 +49,10 @@ export function ChatHistory({ chats, activeId, onOpen, onDelete, onNew }) {
               onAction={() => onDelete(c.id)}
               rowClassName="gap-3 bg-card px-3 py-3.5"
             >
-              <span className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground">
+              <span
+                data-tour-target={c.id === DRAFT_CHAT_ID ? 'ai-new-chat' : undefined}
+                className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground"
+              >
                 <Icon glyph="Sparkle" size={16} />
               </span>
               <div className="min-w-0 flex-1">
