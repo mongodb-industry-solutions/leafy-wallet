@@ -15,7 +15,7 @@ export function ChatHeader({ title, onBack }) {
   return (
     <header className="relative z-20 flex items-center gap-2 px-3 pt-5 pb-2">
       <IconButton onClick={onBack} aria-label="Chat history">
-        <Icon glyph="ArrowLeft" size={18} />
+        <Icon glyph="ClockWithArrow" size={18} />
       </IconButton>
 
       <div className="relative min-w-0 flex-1 text-center">
