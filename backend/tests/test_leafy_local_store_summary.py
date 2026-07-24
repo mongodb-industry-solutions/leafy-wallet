@@ -19,20 +19,13 @@ import uuid
 import httpx
 import pytest
 
-BASE = "http://localhost:8090"
+from tests.conftest import LOCAL_STORE_BASE as BASE, unique as _unique
+
+pytestmark = pytest.mark.usefixtures("require_leafy_local_store")
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _require_leafy_local_store():
-    try:
-        response = httpx.get(f"{BASE}/local/v1/health", timeout=2.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        pytest.skip(f"leafy-local-store not reachable at {BASE}: {exc}")
 
 
-def _unique(prefix):
-    return f"{prefix}-{uuid.uuid4()}"
 
 
 def _send(owner, counterparty, amount, direction="sent", currency="EUR"):

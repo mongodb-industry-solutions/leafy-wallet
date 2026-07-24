@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from db.client import get_db
 from db.mdb import MongoDBConnector
 from db.utils import parse_object_id, with_str_id
-from services.ollama import get_embedding
+from services.embeddings import get_embedding
 from services.transactions import SemanticSearchUnavailable
 from services.transactions import list_transactions as list_transactions_service
 from services.transactions import search_transactions as search_transactions_service
@@ -31,7 +31,9 @@ async def create_transaction(
     doc = {
         **payload.model_dump(),
         "noteEmbedding": note_embedding,
-        "createdAt": datetime.now(timezone.utc),
+        # Keep the payment's own time when the caller knows it (an adopted Leafy Pay transfer),
+        # so the device sorts it where the online list does.
+        "createdAt": payload.createdAt or datetime.now(timezone.utc),
         "settledAt": None,
     }
     doc["_id"] = db.insert_one(COLLECTION, doc)

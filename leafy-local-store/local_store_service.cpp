@@ -16,7 +16,6 @@
 #include <memory>
 #include <random>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "objectbox.hpp"
@@ -39,7 +38,7 @@ struct LocalTransaction {
     double amount = 0;
     std::string currency;
     std::string note;                    // empty = absent
-    std::vector<float> noteEmbedding;     // 768 dims, HNSW cosine - matches nomic-embed-text
+    std::vector<float> noteEmbedding;     // HNSW cosine; width is EMBEDDING_DIMENSIONS, which follows the provider.
     std::string direction;
     std::string leafyPayStatus;
     std::string localSyncStatus;
@@ -138,7 +137,6 @@ struct LocalContact {
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
     // Blind index of the contact's email; empty for contacts saved by phone.
-    std::string counterpartyLookupDigest;
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 2; }
@@ -152,7 +150,6 @@ struct LocalContact {
             auto offsetLabel = fbb.CreateString(object.counterpartyLabel);
             auto offsetLookupType = fbb.CreateString(object.counterpartyLookupType);
             auto offsetLookupHint = fbb.CreateString(object.counterpartyLookupHint);
-            auto offsetLookupDigest = fbb.CreateString(object.counterpartyLookupDigest);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
@@ -163,7 +160,6 @@ struct LocalContact {
             fbb.AddOffset(14, offsetLookupHint);            // 6: counterpartyLookupHint
             fbb.AddElement(16, object.createdAt);           // 7: createdAt
             fbb.AddElement(18, object.updatedAt);           // 8: updatedAt
-            fbb.AddOffset(22, offsetLookupDigest);          // 10: counterpartyLookupDigest
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -187,7 +183,6 @@ struct LocalContact {
             readString(14, out.counterpartyLookupHint);
             out.createdAt = table->GetField<int64_t>(16, 0);
             out.updatedAt = table->GetField<int64_t>(18, 0);
-            readString(22, out.counterpartyLookupDigest);
         }
 
         static LocalContact fromFlatBuffer(const void* data, size_t size) {
@@ -424,23 +419,24 @@ struct LocalAccountBalance {
     };
 };
 
-// Mirrors backend/schemas/wallet_requests.py's WalletRequestCreate/Out. Unlike a transaction it
-// needs no local_pending replay: nothing moves until it's paid, so Sync is the whole delivery.
+// Mirrors backend/schemas/wallet_requests.py. Leafy Pay owns requests; this is the offline replica.
+// One composed with no connection is stored local_pending and replayed on reconnect, like a send.
 
 struct LocalRequest {
     int64_t id = 0;
     std::string requestReference;
     std::string requesterPartyRef;
     std::string requesterName;
-    std::string requesterDigest;
-    std::string targetDigest;
+    std::string localSyncStatus;             // synced | local_pending
+    std::string payerPartyRef;               // empty until Leafy Pay resolves the payer
     double amount = 0;
     std::string currency;
     std::string note;                        // empty = absent
-    std::string status;                      // pending | paid | declined | cancelled
-    std::string leafyPayTransferReference;   // empty = absent (set when paid)
+    std::string status;                      // Leafy Pay's RTP lifecycle status, verbatim
+    std::string leafyPayTransferReference;   // empty = absent (set when the payer approves)
     int64_t createdAt = 0;                   // epoch millis
     int64_t resolvedAt = 0;                  // 0 = absent
+    std::string payerCounterpartyRef;        // the requester's saved contact for the payer
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 6; }
@@ -452,20 +448,21 @@ struct LocalRequest {
             auto offsetReference = fbb.CreateString(object.requestReference);
             auto offsetRequesterParty = fbb.CreateString(object.requesterPartyRef);
             auto offsetRequesterName = fbb.CreateString(object.requesterName);
-            auto offsetRequesterDigest = fbb.CreateString(object.requesterDigest);
-            auto offsetTargetDigest = fbb.CreateString(object.targetDigest);
+            auto offsetLocalSyncStatus = fbb.CreateString(object.localSyncStatus);
+            auto offsetPayerParty = fbb.CreateString(object.payerPartyRef);
             auto offsetCurrency = fbb.CreateString(object.currency);
             auto offsetNote = fbb.CreateString(object.note);
             auto offsetStatus = fbb.CreateString(object.status);
             auto offsetTransferRef = fbb.CreateString(object.leafyPayTransferReference);
+            auto offsetPayerCounterparty = fbb.CreateString(object.payerCounterpartyRef);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);                  // 1: id
             fbb.AddOffset(6, offsetReference);              // 2: requestReference
             fbb.AddOffset(8, offsetRequesterParty);         // 3: requesterPartyRef
             fbb.AddOffset(10, offsetRequesterName);         // 4: requesterName
-            fbb.AddOffset(12, offsetRequesterDigest);       // 5: requesterDigest
-            fbb.AddOffset(14, offsetTargetDigest);          // 6: targetDigest
+            fbb.AddOffset(12, offsetLocalSyncStatus);       // 5: localSyncStatus
+            fbb.AddOffset(14, offsetPayerParty);            // 6: payerPartyRef
             fbb.AddElement(16, object.amount);              // 7: amount
             fbb.AddOffset(18, offsetCurrency);              // 8: currency
             fbb.AddOffset(20, offsetNote);                  // 9: note
@@ -473,6 +470,7 @@ struct LocalRequest {
             fbb.AddOffset(24, offsetTransferRef);           // 11: leafyPayTransferReference
             fbb.AddElement(26, object.createdAt);           // 12: createdAt
             fbb.AddElement(28, object.resolvedAt);          // 13: resolvedAt
+            fbb.AddOffset(32, offsetPayerCounterparty);     // 15: payerCounterpartyRef
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -492,8 +490,8 @@ struct LocalRequest {
             readString(6, out.requestReference);
             readString(8, out.requesterPartyRef);
             readString(10, out.requesterName);
-            readString(12, out.requesterDigest);
-            readString(14, out.targetDigest);
+            readString(12, out.localSyncStatus);
+            readString(14, out.payerPartyRef);
             out.amount = table->GetField<double>(16, 0);
             readString(18, out.currency);
             readString(20, out.note);
@@ -501,6 +499,7 @@ struct LocalRequest {
             readString(24, out.leafyPayTransferReference);
             out.createdAt = table->GetField<int64_t>(26, 0);
             out.resolvedAt = table->GetField<int64_t>(28, 0);
+            readString(32, out.payerCounterpartyRef);
         }
 
         static LocalRequest fromFlatBuffer(const void* data, size_t size) {
@@ -517,151 +516,43 @@ struct LocalRequest {
     };
 };
 
-struct LocalContact_ {
-    static const obx::Property<LocalContact, OBXPropertyType_Long> id;
-    static const obx::Property<LocalContact, OBXPropertyType_String> ownerPartyRef;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyArrangementReference;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLabel;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupType;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupHint;
-    // Date (not Long): the Sync Server's MongoDB bridge maps Date to a real
-    // BSON ISODate; Long would map to a plain Int64.
-    static const obx::Property<LocalContact, OBXPropertyType_Date> createdAt;
-    static const obx::Property<LocalContact, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalContact, OBXPropertyType_String> counterpartyLookupDigest;
-};
-
-const obx::Property<LocalContact, OBXPropertyType_Long> LocalContact_::id(1);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::ownerPartyRef(2);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyArrangementReference(3);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLabel(4);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupType(5);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupHint(6);
-const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::createdAt(7);
-const obx::Property<LocalContact, OBXPropertyType_Date> LocalContact_::updatedAt(8);
-const obx::Property<LocalContact, OBXPropertyType_String> LocalContact_::counterpartyLookupDigest(10);
-
+// Query helpers. The schema itself comes from create_obx_model() below, so only the
+// properties a query actually filters on need one here; ids must match that model.
 struct LocalTransaction_ {
-    static const obx::Property<LocalTransaction, OBXPropertyType_Long> id;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> leafyPayTransferReference;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> ownerPartyRef;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> counterpartyArrangementReference;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Double> amount;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> currency;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> note;
     static const obx::Property<LocalTransaction, OBXPropertyType_FloatVector> noteEmbedding;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> direction;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> leafyPayStatus;
-    static const obx::Property<LocalTransaction, OBXPropertyType_String> localSyncStatus;
-    // Date (not Long): the Sync Server's MongoDB bridge maps Date to a real
-    // BSON ISODate; Long would map to a plain Int64.
-    static const obx::Property<LocalTransaction, OBXPropertyType_Date> createdAt;
-    static const obx::Property<LocalTransaction, OBXPropertyType_Date> settledAt;
 };
-
-const obx::Property<LocalTransaction, OBXPropertyType_Long> LocalTransaction_::id(1);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::leafyPayTransferReference(2);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::ownerPartyRef(3);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::counterpartyArrangementReference(4);
-const obx::Property<LocalTransaction, OBXPropertyType_Double> LocalTransaction_::amount(5);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::currency(6);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::note(7);
 const obx::Property<LocalTransaction, OBXPropertyType_FloatVector> LocalTransaction_::noteEmbedding(8);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::direction(9);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::leafyPayStatus(10);
-const obx::Property<LocalTransaction, OBXPropertyType_String> LocalTransaction_::localSyncStatus(11);
-const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::createdAt(12);
-const obx::Property<LocalTransaction, OBXPropertyType_Date> LocalTransaction_::settledAt(13);
 
 struct LocalChat_ {
-    static const obx::Property<LocalChat, OBXPropertyType_Long> id;
-    static const obx::Property<LocalChat, OBXPropertyType_String> title;
-    static const obx::Property<LocalChat, OBXPropertyType_Date> createdAt;
-    static const obx::Property<LocalChat, OBXPropertyType_Date> updatedAt;
-    static const obx::Property<LocalChat, OBXPropertyType_Long> localId;
-    static const obx::Property<LocalChat, OBXPropertyType_String> ownerPartyRef;
     static const obx::Property<LocalChat, OBXPropertyType_String> chatReference;
 };
-
-const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::id(1);
-const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::title(2);
-const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::createdAt(3);
-const obx::Property<LocalChat, OBXPropertyType_Date> LocalChat_::updatedAt(4);
-const obx::Property<LocalChat, OBXPropertyType_Long> LocalChat_::localId(6);
-const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::ownerPartyRef(7);
 const obx::Property<LocalChat, OBXPropertyType_String> LocalChat_::chatReference(8);
 
 struct LocalChatMessage_ {
-    static const obx::Property<LocalChatMessage, OBXPropertyType_Long> id;
-    static const obx::Property<LocalChatMessage, OBXPropertyType_String> role;
-    static const obx::Property<LocalChatMessage, OBXPropertyType_String> text;
-    static const obx::Property<LocalChatMessage, OBXPropertyType_Date> createdAt;
     static const obx::Property<LocalChatMessage, OBXPropertyType_String> chatReference;
 };
-
-const obx::Property<LocalChatMessage, OBXPropertyType_Long> LocalChatMessage_::id(1);
-const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::role(3);
-const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::text(4);
-const obx::Property<LocalChatMessage, OBXPropertyType_Date> LocalChatMessage_::createdAt(5);
 const obx::Property<LocalChatMessage, OBXPropertyType_String> LocalChatMessage_::chatReference(7);
 
 struct LocalAccountBalance_ {
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_Long> id;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> ownerPartyRef;
     static const obx::Property<LocalAccountBalance, OBXPropertyType_String> accountReference;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> label;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> currency;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_Double> balanceValue;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_String> maskedIban;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> isDefault;
-    static const obx::Property<LocalAccountBalance, OBXPropertyType_Date> lastRefreshedAt;
 };
-
-const obx::Property<LocalAccountBalance, OBXPropertyType_Long> LocalAccountBalance_::id(1);
-const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::ownerPartyRef(2);
 const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::accountReference(3);
-const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::label(4);
-const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::currency(5);
-const obx::Property<LocalAccountBalance, OBXPropertyType_Double> LocalAccountBalance_::balanceValue(6);
-const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::maskedIban(7);
-const obx::Property<LocalAccountBalance, OBXPropertyType_Bool> LocalAccountBalance_::isDefault(8);
-const obx::Property<LocalAccountBalance, OBXPropertyType_Date> LocalAccountBalance_::lastRefreshedAt(9);
 
-struct LocalRequest_ {
-    static const obx::Property<LocalRequest, OBXPropertyType_Long> id;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> requestReference;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> requesterPartyRef;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> requesterName;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> requesterDigest;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> targetDigest;
-    static const obx::Property<LocalRequest, OBXPropertyType_Double> amount;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> currency;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> note;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> status;
-    static const obx::Property<LocalRequest, OBXPropertyType_String> leafyPayTransferReference;
-    // Date (not Long): the Sync Server's MongoDB bridge maps Date to a real
-    // BSON ISODate; Long would map to a plain Int64.
-    static const obx::Property<LocalRequest, OBXPropertyType_Date> createdAt;
-    static const obx::Property<LocalRequest, OBXPropertyType_Date> resolvedAt;
-};
+// ─── Embedding provider ─────────────────────────────────────────────────
+// Ollama on a developer machine, Voyage once deployed, since no Ollama container is
+// deployed. The two models have different vector widths, so each environment keeps
+// its own Atlas database and its own on-device store.
 
-const obx::Property<LocalRequest, OBXPropertyType_Long> LocalRequest_::id(1);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requestReference(2);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterPartyRef(3);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterName(4);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::requesterDigest(5);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::targetDigest(6);
-const obx::Property<LocalRequest, OBXPropertyType_Double> LocalRequest_::amount(7);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::currency(8);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::note(9);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::status(10);
-const obx::Property<LocalRequest, OBXPropertyType_String> LocalRequest_::leafyPayTransferReference(11);
-const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::createdAt(12);
-const obx::Property<LocalRequest, OBXPropertyType_Date> LocalRequest_::resolvedAt(13);
+std::string env_or(const char* name, const std::string& fallback) {
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : fallback;
+}
+
+const bool IS_LOCAL = env_or("APP_ENV", "local") == "local";
 
 // ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
 
-constexpr int EMBEDDING_DIMENSIONS = 768;
+const int EMBEDDING_DIMENSIONS = IS_LOCAL ? 768 : 1024;
 
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
@@ -710,7 +601,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "counterpartyLookupHint", OBXPropertyType_String, 6, 7002000000000006ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 7, 7002000000000007ULL);
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
-    obx_model_property(model, "counterpartyLookupDigest", OBXPropertyType_String, 10, 7002000000000010ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
     // Entity 3: chats - a conversation. Entity name is the target MongoDB
@@ -774,8 +664,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "requestReference", OBXPropertyType_String, 2, 7006000000000002ULL);
     obx_model_property(model, "requesterPartyRef", OBXPropertyType_String, 3, 7006000000000003ULL);
     obx_model_property(model, "requesterName", OBXPropertyType_String, 4, 7006000000000004ULL);
-    obx_model_property(model, "requesterDigest", OBXPropertyType_String, 5, 7006000000000005ULL);
-    obx_model_property(model, "targetDigest", OBXPropertyType_String, 6, 7006000000000006ULL);
+    obx_model_property(model, "localSyncStatus", OBXPropertyType_String, 5, 7006000000000005ULL);
+    obx_model_property(model, "payerPartyRef", OBXPropertyType_String, 6, 7006000000000006ULL);
     obx_model_property(model, "amount", OBXPropertyType_Double, 7, 7006000000000007ULL);
     obx_model_property(model, "currency", OBXPropertyType_String, 8, 7006000000000008ULL);
     obx_model_property(model, "note", OBXPropertyType_String, 9, 7006000000000009ULL);
@@ -783,7 +673,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "leafyPayTransferReference", OBXPropertyType_String, 11, 7006000000000011ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 12, 7006000000000012ULL);
     obx_model_property(model, "resolvedAt", OBXPropertyType_Date, 13, 7006000000000013ULL);
-    obx_model_entity_last_property_id(model, 14, 7006000000000014ULL);
+    obx_model_property(model, "payerCounterpartyRef", OBXPropertyType_String, 15, 7006000000000015ULL);
+    obx_model_entity_last_property_id(model, 15, 7006000000000015ULL);
 
     obx_model_last_entity_id(model, 6, 7006000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
@@ -791,18 +682,13 @@ OBX_model* create_obx_model() {
     return model;
 }
 
-// ─── Ollama embedding client ────────────────────────────────────────────
-// Re-implements backend/services/ollama.py's get_embedding() contract in
+// ─── Embedding client ───────────────────────────────────────────────────
+// Re-implements backend/services/embeddings.py's get_embedding() contract in
 // C++, since this service can't import the Python module. Same graceful
-// degradation: returns an empty vector (not a thrown error) on failure, so
-// a down Ollama doesn't block writing the underlying transaction.
+// degradation: returns an empty vector (not a thrown error) on failure, so an
+// unreachable provider doesn't block writing the underlying transaction.
 
-std::string env_or(const char* name, const std::string& fallback) {
-    const char* value = std::getenv(name);
-    return value ? std::string(value) : fallback;
-}
-
-std::vector<float> get_embedding(const std::string& text) {
+std::vector<float> embed_with_ollama(const std::string& text) {
     static const std::string base_url = env_or("OLLAMA_BASE_URL", "http://ollama:11434");
     static const std::string model_name = env_or("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text");
 
@@ -825,6 +711,44 @@ std::vector<float> get_embedding(const std::string& text) {
         std::cerr << "Failed to parse Ollama embedding response: " << e.what() << std::endl;
         return {};
     }
+}
+
+std::vector<float> embed_with_voyage(const std::string& text) {
+    static const std::string api_key = env_or("VOYAGE_API_KEY", "");
+    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-3-large");
+
+    if (api_key.empty()) {
+        std::cerr << "VOYAGE_API_KEY is not set; continuing without noteEmbedding" << std::endl;
+        return {};
+    }
+
+    httplib::Client client("https://ai.mongodb.com");
+    client.set_connection_timeout(30);
+    client.set_read_timeout(30);
+
+    json body = {{"model", model_name},
+                 {"input", json::array({text})},
+                 {"input_type", "document"},
+                 {"output_dimension", EMBEDDING_DIMENSIONS}};
+    httplib::Headers headers = {{"Authorization", "Bearer " + api_key}};
+    auto response = client.Post("/v1/embeddings", headers, body.dump(), "application/json");
+
+    if (!response || response->status != 200) {
+        std::cerr << "Voyage embedding request failed; continuing without noteEmbedding" << std::endl;
+        return {};
+    }
+
+    try {
+        auto parsed = json::parse(response->body);
+        return parsed.at("data").at(0).at("embedding").get<std::vector<float>>();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to parse Voyage embedding response: " << e.what() << std::endl;
+        return {};
+    }
+}
+
+std::vector<float> get_embedding(const std::string& text) {
+    return IS_LOCAL ? embed_with_ollama(text) : embed_with_voyage(text);
 }
 
 // ─── ObjectBox store + sync ─────────────────────────────────────────────
@@ -900,7 +824,6 @@ json transaction_to_json(const LocalTransaction& t) {
         {"amount", t.amount},
         {"currency", t.currency},
         {"note", t.note.empty() ? json(nullptr) : json(t.note)},
-        {"hasEmbedding", !t.noteEmbedding.empty()},
         {"direction", t.direction},
         {"leafyPayStatus", t.leafyPayStatus},
         {"localSyncStatus", t.localSyncStatus},
@@ -917,8 +840,6 @@ json contact_to_json(const LocalContact& c) {
         {"counterpartyLabel", c.counterpartyLabel},
         {"counterpartyLookupType", c.counterpartyLookupType},
         {"counterpartyLookupHint", c.counterpartyLookupHint},
-        {"counterpartyLookupDigest",
-         c.counterpartyLookupDigest.empty() ? json(nullptr) : json(c.counterpartyLookupDigest)},
         {"createdAt", c.createdAt},
         {"updatedAt", c.updatedAt},
     };
@@ -930,8 +851,9 @@ json request_to_json(const LocalRequest& r) {
         {"requestReference", r.requestReference},
         {"requesterPartyRef", r.requesterPartyRef},
         {"requesterName", r.requesterName},
-        {"requesterDigest", r.requesterDigest},
-        {"targetDigest", r.targetDigest},
+        {"localSyncStatus", r.localSyncStatus},
+        {"payerPartyRef", r.payerPartyRef},
+        {"payerCounterpartyRef", r.payerCounterpartyRef},
         {"amount", r.amount},
         {"currency", r.currency},
         {"note", r.note.empty() ? json(nullptr) : json(r.note)},
@@ -1039,35 +961,35 @@ int main(int argc, char* argv[]) {
 
     httplib::Server svr;
 
-    svr.Get("/local/v1/health", [](const httplib::Request&, httplib::Response& res) {
+    // Every handler reports an unexpected failure the same way, so it is registered once here.
+    svr.set_exception_handler([](const httplib::Request&, httplib::Response& res, std::exception_ptr ep) {
+        res.status = 500;
         try {
-            json response;
-            response["status"] = "healthy";
-            response["transaction_count"] = store->box<LocalTransaction>().count();
-            response["contact_count"] = store->box<LocalContact>().count();
-            response["chat_count"] = store->box<LocalChat>().count();
-            response["chat_message_count"] = store->box<LocalChatMessage>().count();
-            response["account_count"] = store->box<LocalAccountBalance>().count();
-            response["request_count"] = store->box<LocalRequest>().count();
-            res.set_content(response.dump(), "application/json");
+            std::rethrow_exception(ep);
         } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"status", "error"}, {"error", e.what()}}.dump(), "application/json");
+            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
         }
     });
 
+    svr.Get("/local/v1/health", [](const httplib::Request&, httplib::Response& res) {
+        json response;
+        response["status"] = "healthy";
+        response["transaction_count"] = store->box<LocalTransaction>().count();
+        response["contact_count"] = store->box<LocalContact>().count();
+        response["chat_count"] = store->box<LocalChat>().count();
+        response["chat_message_count"] = store->box<LocalChatMessage>().count();
+        response["account_count"] = store->box<LocalAccountBalance>().count();
+        response["request_count"] = store->box<LocalRequest>().count();
+        res.set_content(response.dump(), "application/json");
+    });
+
     svr.Get("/local/v1/transactions", [](const httplib::Request&, httplib::Response& res) {
-        try {
-            auto box = store->box<LocalTransaction>();
-            json results = json::array();
-            for (const auto& t : box.getAll()) {
-                results.push_back(transaction_to_json(*t));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto box = store->box<LocalTransaction>();
+        json results = json::array();
+        for (const auto& t : box.getAll()) {
+            results.push_back(transaction_to_json(*t));
         }
+        res.set_content(results.dump(), "application/json");
     });
 
     // Semantic search over locally-stored transaction notes, entirely offline:
@@ -1082,54 +1004,49 @@ int main(int argc, char* argv[]) {
             return;
         }
 
-        try {
-            std::string q = req.get_param_value("q");
-            int limit = 10;
-            if (req.has_param("limit")) {
-                limit = std::stoi(req.get_param_value("limit"));
-            }
-            std::string ownerPartyRef = req.has_param("ownerPartyRef")
-                ? req.get_param_value("ownerPartyRef")
-                : "";
-
-            std::vector<float> queryVector = get_embedding(q);
-            if (queryVector.empty()) {
-                res.status = 503;
-                res.set_content(
-                    json{{"error", "Semantic search is temporarily unavailable (Ollama unreachable)"}}.dump(),
-                    "application/json");
-                return;
-            }
-
-            auto box = store->box<LocalTransaction>();
-            // nearestNeighbors alone can't also filter by ownerPartyRef, so
-            // over-fetch and filter client-side when a filter is requested  - 
-            // fine at this PoC's local scale (a handful of records).
-            int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
-            auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
-            // findWithScores() returns `score` as a *distance* (lower = more
-            // similar), already sorted nearest-first - the opposite
-            // convention from Atlas's $vectorSearch score (higher = better),
-            // which backend/routers/wallet_transactions.py's /search uses.
-            auto foundWithScores = query.findWithScores();
-
-            json results = json::array();
-            for (const auto& [t, score] : foundWithScores) {
-                if (!ownerPartyRef.empty() && t.ownerPartyRef != ownerPartyRef) {
-                    continue;
-                }
-                json item = transaction_to_json(t);
-                item["score"] = score;
-                results.push_back(item);
-                if (static_cast<int>(results.size()) >= limit) {
-                    break;
-                }
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        std::string q = req.get_param_value("q");
+        int limit = 10;
+        if (req.has_param("limit")) {
+            limit = std::stoi(req.get_param_value("limit"));
         }
+        std::string ownerPartyRef = req.has_param("ownerPartyRef")
+            ? req.get_param_value("ownerPartyRef")
+            : "";
+
+        std::vector<float> queryVector = get_embedding(q);
+        if (queryVector.empty()) {
+            res.status = 503;
+            res.set_content(
+                json{{"error", "Semantic search is temporarily unavailable (embedding provider unreachable)"}}.dump(),
+                "application/json");
+            return;
+        }
+
+        auto box = store->box<LocalTransaction>();
+        // nearestNeighbors alone can't also filter by ownerPartyRef, so
+        // over-fetch and filter client-side when a filter is requested  - 
+        // fine at this PoC's local scale (a handful of records).
+        int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
+        auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
+        // findWithScores() returns `score` as a *distance* (lower = more
+        // similar), already sorted nearest-first - the opposite
+        // convention from Atlas's $vectorSearch score (higher = better),
+        // which backend/routers/wallet_transactions.py's /search uses.
+        auto foundWithScores = query.findWithScores();
+
+        json results = json::array();
+        for (const auto& [t, score] : foundWithScores) {
+            if (!ownerPartyRef.empty() && t.ownerPartyRef != ownerPartyRef) {
+                continue;
+            }
+            json item = transaction_to_json(t);
+            item["score"] = score;
+            results.push_back(item);
+            if (static_cast<int>(results.size()) >= limit) {
+                break;
+            }
+        }
+        res.set_content(results.dump(), "application/json");
     });
 
     // Offline twin of the backend's GET /wallet-transactions/summary: same rows,
@@ -1150,13 +1067,8 @@ int main(int argc, char* argv[]) {
             return;
         }
 
-        try {
-            res.set_content(spending_by_contact(req.get_param_value("ownerPartyRef"), direction).dump(),
-                            "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
-        }
+        res.set_content(spending_by_contact(req.get_param_value("ownerPartyRef"), direction).dump(),
+                        "application/json");
     });
 
     svr.Post("/local/v1/transactions/send", [](const httplib::Request& req, httplib::Response& res) {
@@ -1181,67 +1093,52 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        try {
-            LocalTransaction t;
-            t.leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
-            t.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
-            t.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
-            t.amount = body.at("amount").get<double>();
-            t.currency = body.at("currency").get<std::string>();
-            t.direction = body.at("direction").get<std::string>();
-            t.note = body.value("note", "");
-            if (!t.note.empty()) {
-                t.noteEmbedding = get_embedding(t.note);
-            }
-            // This transaction originates from the offline-capable local store,
-            // hence local_pending rather than the backend's "synced" default.
-            t.leafyPayStatus = "pending";
-            t.localSyncStatus = "local_pending";
-            t.createdAt = now_epoch_millis();
-            t.settledAt = 0;
-
-            auto box = store->box<LocalTransaction>();
-            box.put(t);
-
-            res.status = 201;
-            res.set_content(transaction_to_json(t).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        LocalTransaction t;
+        t.leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
+        t.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+        t.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
+        t.amount = body.at("amount").get<double>();
+        t.currency = body.at("currency").get<std::string>();
+        t.direction = body.at("direction").get<std::string>();
+        t.note = body.value("note", "");
+        if (!t.note.empty()) {
+            t.noteEmbedding = get_embedding(t.note);
         }
+        // This transaction originates from the offline-capable local store,
+        // hence local_pending rather than the backend's "synced" default.
+        t.leafyPayStatus = "pending";
+        t.localSyncStatus = "local_pending";
+        t.createdAt = now_epoch_millis();
+        t.settledAt = 0;
+
+        auto box = store->box<LocalTransaction>();
+        box.put(t);
+
+        res.status = 201;
+        res.set_content(transaction_to_json(t).dump(), "application/json");
     });
 
     // Deletes propagate through ObjectBox Sync like any other write, so this
     // also removes the corresponding document from Atlas once connected  - 
     // primarily here so integration tests can clean up after themselves.
     svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            obx_id id = std::stoll(req.matches[1]);
-            auto box = store->box<LocalTransaction>();
-            if (!box.remove(id)) {
-                res.status = 404;
-                res.set_content(json{{"error", "Transaction not found"}}.dump(), "application/json");
-                return;
-            }
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        obx_id id = std::stoll(req.matches[1]);
+        auto box = store->box<LocalTransaction>();
+        if (!box.remove(id)) {
+            res.status = 404;
+            res.set_content(json{{"error", "Transaction not found"}}.dump(), "application/json");
+            return;
         }
+        res.status = 204;
     });
 
     svr.Get("/local/v1/contacts", [](const httplib::Request&, httplib::Response& res) {
-        try {
-            auto box = store->box<LocalContact>();
-            json results = json::array();
-            for (const auto& c : box.getAll()) {
-                results.push_back(contact_to_json(*c));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto box = store->box<LocalContact>();
+        json results = json::array();
+        for (const auto& c : box.getAll()) {
+            results.push_back(contact_to_json(*c));
         }
+        res.set_content(results.dump(), "application/json");
     });
 
     // Queues a contact add locally; reconciled with Leafy Pay on reconnect
@@ -1268,49 +1165,36 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        try {
-            LocalContact c;
-            c.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
-            c.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
-            c.counterpartyLabel = body.at("counterpartyLabel").get<std::string>();
-            c.counterpartyLookupType = body.at("counterpartyLookupType").get<std::string>();
-            c.counterpartyLookupHint = body.at("counterpartyLookupHint").get<std::string>();
-            // Explicitly null for phone contacts, so is_null rather than value() (which throws).
-            if (body.contains("counterpartyLookupDigest") && !body.at("counterpartyLookupDigest").is_null()) {
-                c.counterpartyLookupDigest = body.at("counterpartyLookupDigest").get<std::string>();
-            }
-            c.createdAt = now_epoch_millis();
-            c.updatedAt = c.createdAt;
+        LocalContact c;
+        c.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+        c.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
+        c.counterpartyLabel = body.at("counterpartyLabel").get<std::string>();
+        c.counterpartyLookupType = body.at("counterpartyLookupType").get<std::string>();
+        c.counterpartyLookupHint = body.at("counterpartyLookupHint").get<std::string>();
+        // Explicitly null for phone contacts, so is_null rather than value() (which throws).
+        c.createdAt = now_epoch_millis();
+        c.updatedAt = c.createdAt;
 
-            auto box = store->box<LocalContact>();
-            box.put(c);
+        auto box = store->box<LocalContact>();
+        box.put(c);
 
-            res.status = 201;
-            res.set_content(contact_to_json(c).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
-        }
+        res.status = 201;
+        res.set_content(contact_to_json(c).dump(), "application/json");
     });
 
     // Filtered by ownerPartyRef; no filter returns everything, matching
     // /contacts and /transactions.
     svr.Get("/local/v1/chats", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            const std::string ownerPartyRef =
-                req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
+        const std::string ownerPartyRef =
+            req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
 
-            auto box = store->box<LocalChat>();
-            json results = json::array();
-            for (const auto& c : box.getAll()) {
-                if (!ownerPartyRef.empty() && c->ownerPartyRef != ownerPartyRef) continue;
-                results.push_back(chat_to_json(*c));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto box = store->box<LocalChat>();
+        json results = json::array();
+        for (const auto& c : box.getAll()) {
+            if (!ownerPartyRef.empty() && c->ownerPartyRef != ownerPartyRef) continue;
+            results.push_back(chat_to_json(*c));
         }
+        res.set_content(results.dump(), "application/json");
     });
 
     svr.Post("/local/v1/chats", [](const httplib::Request& req, httplib::Response& res) {
@@ -1323,51 +1207,41 @@ int main(int argc, char* argv[]) {
             return;
         }
 
-        try {
-            LocalChat c;
-            c.title = body.value("title", "New chat");
-            c.ownerPartyRef = body.value("ownerPartyRef", "");
-            c.chatReference = body.value("chatReference", "");
-            if (c.chatReference.empty()) {
-                c.chatReference = new_uuid();
-            }
-            c.createdAt = now_epoch_millis();
-            c.updatedAt = c.createdAt;
-
-            auto box = store->box<LocalChat>();
-            box.put(c);       // assigns c.id
-            c.localId = c.id;
-            box.put(c);       // persist localId so it's carried into the Atlas sync
-
-            res.status = 201;
-            res.set_content(chat_to_json(c).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        LocalChat c;
+        c.title = body.value("title", "New chat");
+        c.ownerPartyRef = body.value("ownerPartyRef", "");
+        c.chatReference = body.value("chatReference", "");
+        if (c.chatReference.empty()) {
+            c.chatReference = new_uuid();
         }
+        c.createdAt = now_epoch_millis();
+        c.updatedAt = c.createdAt;
+
+        auto box = store->box<LocalChat>();
+        box.put(c);       // assigns c.id
+        c.localId = c.id;
+        box.put(c);       // persist localId so it's carried into the Atlas sync
+
+        res.status = 201;
+        res.set_content(chat_to_json(c).dump(), "application/json");
     });
 
     svr.Get(R"(/local/v1/chats/([^/]+)/messages)", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            std::string chatReference = req.matches[1];
-            if (!find_chat_by_reference(chatReference)) {
-                res.status = 404;
-                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
-                return;
-            }
-
-            auto query = store->box<LocalChatMessage>()
-                             .query(LocalChatMessage_::chatReference.equals(chatReference))
-                             .build();
-            json results = json::array();
-            for (const auto& m : query.find()) {
-                results.push_back(chat_message_to_json(m));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        std::string chatReference = req.matches[1];
+        if (!find_chat_by_reference(chatReference)) {
+            res.status = 404;
+            res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+            return;
         }
+
+        auto query = store->box<LocalChatMessage>()
+                         .query(LocalChatMessage_::chatReference.equals(chatReference))
+                         .build();
+        json results = json::array();
+        for (const auto& m : query.find()) {
+            results.push_back(chat_message_to_json(m));
+        }
+        res.set_content(results.dump(), "application/json");
     });
 
     // Bumps the parent LocalChat's updatedAt on every new message (two
@@ -1402,31 +1276,26 @@ int main(int argc, char* argv[]) {
             return;
         }
 
-        try {
-            auto chat = find_chat_by_reference(chatReference);
-            if (!chat) {
-                res.status = 404;
-                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
-                return;
-            }
-
-            LocalChatMessage m;
-            m.chatReference = chatReference;
-            m.role = role;
-            m.text = body.at("text").get<std::string>();
-            m.createdAt = now_epoch_millis();
-
-            store->box<LocalChatMessage>().put(m);
-
-            chat->updatedAt = m.createdAt;
-            store->box<LocalChat>().put(*chat);
-
-            res.status = 201;
-            res.set_content(chat_message_to_json(m).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto chat = find_chat_by_reference(chatReference);
+        if (!chat) {
+            res.status = 404;
+            res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+            return;
         }
+
+        LocalChatMessage m;
+        m.chatReference = chatReference;
+        m.role = role;
+        m.text = body.at("text").get<std::string>();
+        m.createdAt = now_epoch_millis();
+
+        store->box<LocalChatMessage>().put(m);
+
+        chat->updatedAt = m.createdAt;
+        store->box<LocalChat>().put(*chat);
+
+        res.status = 201;
+        res.set_content(chat_message_to_json(m).dump(), "application/json");
     });
 
     // Deletes propagate through ObjectBox Sync like any other write, so this
@@ -1434,89 +1303,73 @@ int main(int argc, char* argv[]) {
     // Cascades to the chat's messages, mirroring backend/routers/chats.py's
     // delete_chat.
     svr.Delete(R"(/local/v1/chats/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            std::string chatReference = req.matches[1];
+        std::string chatReference = req.matches[1];
 
-            auto chat = find_chat_by_reference(chatReference);
-            if (!chat) {
-                res.status = 404;
-                res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
-                return;
-            }
-            store->box<LocalChat>().remove(chat->id);
-
-            auto messageBox = store->box<LocalChatMessage>();
-            auto query = messageBox.query(LocalChatMessage_::chatReference.equals(chatReference)).build();
-            for (const auto& m : query.find()) {
-                messageBox.remove(m.id);
-            }
-
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto chat = find_chat_by_reference(chatReference);
+        if (!chat) {
+            res.status = 404;
+            res.set_content(json{{"error", "Chat not found"}}.dump(), "application/json");
+            return;
         }
+        store->box<LocalChat>().remove(chat->id);
+
+        auto messageBox = store->box<LocalChatMessage>();
+        auto query = messageBox.query(LocalChatMessage_::chatReference.equals(chatReference)).build();
+        for (const auto& m : query.find()) {
+            messageBox.remove(m.id);
+        }
+
+        res.status = 204;
     });
 
     svr.Delete(R"(/local/v1/chats/([^/]+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            std::string chatReference = req.matches[1];
-            obx_id messageId = std::stoll(req.matches[2]);
+        std::string chatReference = req.matches[1];
+        obx_id messageId = std::stoll(req.matches[2]);
 
-            auto messageBox = store->box<LocalChatMessage>();
-            auto existing = messageBox.get(messageId);
-            if (!existing || existing->chatReference != chatReference) {
-                res.status = 404;
-                res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
-                return;
-            }
-
-            messageBox.remove(messageId);
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto messageBox = store->box<LocalChatMessage>();
+        auto existing = messageBox.get(messageId);
+        if (!existing || existing->chatReference != chatReference) {
+            res.status = 404;
+            res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
+            return;
         }
+
+        messageBox.remove(messageId);
+        res.status = 204;
     });
 
     svr.Delete(R"(/local/v1/contacts/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            obx_id id = std::stoll(req.matches[1]);
-            auto box = store->box<LocalContact>();
-            if (!box.remove(id)) {
-                res.status = 404;
-                res.set_content(json{{"error", "Contact not found"}}.dump(), "application/json");
-                return;
-            }
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        obx_id id = std::stoll(req.matches[1]);
+        auto box = store->box<LocalContact>();
+        if (!box.remove(id)) {
+            res.status = 404;
+            res.set_content(json{{"error", "Contact not found"}}.dump(), "application/json");
+            return;
         }
+        res.status = 204;
     });
 
-    // Filtered by targetDigest (a target's inbox) or requesterPartyRef (an outbox); no filter
-    // returns everything, matching /contacts and /transactions.
+    // Filtered by payerPartyRef (an inbox) or requesterPartyRef (an outbox), matching /contacts
+    // and /transactions. localSyncStatus finds the ones composed offline, for the replay.
     svr.Get("/local/v1/requests", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            const std::string targetDigest = req.has_param("targetDigest") ? req.get_param_value("targetDigest") : "";
-            const std::string requesterPartyRef =
-                req.has_param("requesterPartyRef") ? req.get_param_value("requesterPartyRef") : "";
-            const std::string status = req.has_param("status") ? req.get_param_value("status") : "";
+        const std::string payerPartyRef =
+            req.has_param("payerPartyRef") ? req.get_param_value("payerPartyRef") : "";
+        const std::string requesterPartyRef =
+            req.has_param("requesterPartyRef") ? req.get_param_value("requesterPartyRef") : "";
+        const std::string status = req.has_param("status") ? req.get_param_value("status") : "";
+        const std::string localSyncStatus =
+            req.has_param("localSyncStatus") ? req.get_param_value("localSyncStatus") : "";
 
-            auto box = store->box<LocalRequest>();
-            json results = json::array();
-            for (const auto& r : box.getAll()) {
-                if (!targetDigest.empty() && r->targetDigest != targetDigest) continue;
-                if (!requesterPartyRef.empty() && r->requesterPartyRef != requesterPartyRef) continue;
-                if (!status.empty() && r->status != status) continue;
-                results.push_back(request_to_json(*r));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto box = store->box<LocalRequest>();
+        json results = json::array();
+        for (const auto& r : box.getAll()) {
+            if (!payerPartyRef.empty() && r->payerPartyRef != payerPartyRef) continue;
+            if (!requesterPartyRef.empty() && r->requesterPartyRef != requesterPartyRef) continue;
+            if (!status.empty() && r->status != status) continue;
+            if (!localSyncStatus.empty() && r->localSyncStatus != localSyncStatus) continue;
+            results.push_back(request_to_json(*r));
         }
+        res.set_content(results.dump(), "application/json");
     });
 
     svr.Post("/local/v1/requests", [](const httplib::Request& req, httplib::Response& res) {
@@ -1534,114 +1387,56 @@ int main(int argc, char* argv[]) {
         }
 
         for (const char* field : {"requestReference", "requesterPartyRef", "requesterName",
-                                   "requesterDigest", "targetDigest", "amount"}) {
+                                   "payerCounterpartyRef", "amount"}) {
             if (!body.contains(field)) {
                 bad_request(std::string("Missing required field: ") + field);
                 return;
             }
         }
 
-        try {
-            LocalRequest r;
-            r.requestReference = body.at("requestReference").get<std::string>();
-            r.requesterPartyRef = body.at("requesterPartyRef").get<std::string>();
-            r.requesterName = body.at("requesterName").get<std::string>();
-            r.requesterDigest = body.at("requesterDigest").get<std::string>();
-            r.targetDigest = body.at("targetDigest").get<std::string>();
-            r.amount = body.at("amount").get<double>();
-            r.currency = body.value("currency", "EUR");
-            if (body.contains("note") && !body.at("note").is_null()) {
-                r.note = body.at("note").get<std::string>();
-            }
-            r.status = "pending";
-            r.createdAt = now_epoch_millis();
-
-            auto box = store->box<LocalRequest>();
-            box.put(r);
-
-            res.status = 201;
-            res.set_content(request_to_json(r).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        LocalRequest r;
+        r.requestReference = body.at("requestReference").get<std::string>();
+        r.requesterPartyRef = body.at("requesterPartyRef").get<std::string>();
+        r.requesterName = body.at("requesterName").get<std::string>();
+        r.payerCounterpartyRef = body.at("payerCounterpartyRef").get<std::string>();
+        r.amount = body.at("amount").get<double>();
+        r.currency = body.value("currency", "EUR");
+        if (body.contains("note") && !body.at("note").is_null()) {
+            r.note = body.at("note").get<std::string>();
         }
+        // Leafy Pay has not seen it, so no payer is resolved yet. Enters at Leafy Pay's own
+        // opening status; the replay creates the real request and drops this stand-in.
+        r.status = "created";
+        r.localSyncStatus = "local_pending";
+        r.createdAt = now_epoch_millis();
+
+        auto box = store->box<LocalRequest>();
+        box.put(r);
+
+        res.status = 201;
+        res.set_content(request_to_json(r).dump(), "application/json");
     });
 
-    // One-shot, like the backend: a second payment must not settle the same request.
-    svr.Put(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        json body;
-        try {
-            body = json::parse(req.body);
-        } catch (const std::exception& e) {
-            res.status = 400;
-            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(),
-                            "application/json");
-            return;
-        }
-        if (!body.contains("status")) {
-            res.status = 400;
-            res.set_content(json{{"error", "Missing required field: status"}}.dump(), "application/json");
-            return;
-        }
-
-        try {
-            obx_id id = std::stoll(req.matches[1]);
-            auto box = store->box<LocalRequest>();
-            auto existing = box.get(id);
-            if (!existing) {
-                res.status = 404;
-                res.set_content(json{{"error", "Request not found"}}.dump(), "application/json");
-                return;
-            }
-            if (existing->status != "pending") {
-                res.status = 409;
-                res.set_content(json{{"error", "Request is already resolved"}}.dump(), "application/json");
-                return;
-            }
-
-            LocalRequest r = *existing;
-            r.status = body.at("status").get<std::string>();
-            if (body.contains("leafyPayTransferReference") && !body.at("leafyPayTransferReference").is_null()) {
-                r.leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
-            }
-            r.resolvedAt = now_epoch_millis();
-            box.put(r);
-
-            res.set_content(request_to_json(r).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
-        }
-    });
-
+    // How the replay retires a stand-in once Leafy Pay has the real request. Resolving one
+    // (pay/decline/cancel) is Leafy Pay's call and never happens here.
     svr.Delete(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            obx_id id = std::stoll(req.matches[1]);
-            auto box = store->box<LocalRequest>();
-            if (!box.remove(id)) {
-                res.status = 404;
-                res.set_content(json{{"error", "Request not found"}}.dump(), "application/json");
-                return;
-            }
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        obx_id id = std::stoll(req.matches[1]);
+        auto box = store->box<LocalRequest>();
+        if (!box.remove(id)) {
+            res.status = 404;
+            res.set_content(json{{"error", "Request not found"}}.dump(), "application/json");
+            return;
         }
+        res.status = 204;
     });
 
     svr.Get("/local/v1/accounts", [](const httplib::Request&, httplib::Response& res) {
-        try {
-            auto box = store->box<LocalAccountBalance>();
-            json results = json::array();
-            for (const auto& a : box.getAll()) {
-                results.push_back(account_balance_to_json(*a));
-            }
-            res.set_content(results.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        auto box = store->box<LocalAccountBalance>();
+        json results = json::array();
+        for (const auto& a : box.getAll()) {
+            results.push_back(account_balance_to_json(*a));
         }
+        res.set_content(results.dump(), "application/json");
     });
 
     // Upsert, not insert-only: a balance is a cache meant to be refreshed in
@@ -1670,50 +1465,40 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        try {
-            auto box = store->box<LocalAccountBalance>();
-            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
-            auto existing = query.find();
+        auto box = store->box<LocalAccountBalance>();
+        auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+        auto existing = query.find();
 
-            LocalAccountBalance a = existing.empty() ? LocalAccountBalance() : existing.front();
-            a.accountReference = accountReference;
-            a.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
-            a.label = body.at("label").get<std::string>();
-            a.currency = body.at("currency").get<std::string>();
-            a.balanceValue = body.at("balanceValue").get<double>();
-            a.maskedIban = body.value("maskedIban", "");
-            a.isDefault = body.value("isDefault", false);
-            a.lastRefreshedAt = now_epoch_millis();
+        LocalAccountBalance a = existing.empty() ? LocalAccountBalance() : existing.front();
+        a.accountReference = accountReference;
+        a.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+        a.label = body.at("label").get<std::string>();
+        a.currency = body.at("currency").get<std::string>();
+        a.balanceValue = body.at("balanceValue").get<double>();
+        a.maskedIban = body.value("maskedIban", "");
+        a.isDefault = body.value("isDefault", false);
+        a.lastRefreshedAt = now_epoch_millis();
 
-            box.put(a);
+        box.put(a);
 
-            res.status = existing.empty() ? 201 : 200;
-            res.set_content(account_balance_to_json(a).dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
-        }
+        res.status = existing.empty() ? 201 : 200;
+        res.set_content(account_balance_to_json(a).dump(), "application/json");
     });
 
     svr.Delete(R"(/local/v1/accounts/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
-        try {
-            std::string accountReference = req.matches[1];
-            auto box = store->box<LocalAccountBalance>();
-            auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
-            auto existing = query.find();
+        std::string accountReference = req.matches[1];
+        auto box = store->box<LocalAccountBalance>();
+        auto query = box.query(LocalAccountBalance_::accountReference.equals(accountReference)).build();
+        auto existing = query.find();
 
-            if (existing.empty()) {
-                res.status = 404;
-                res.set_content(json{{"error", "Account not found"}}.dump(), "application/json");
-                return;
-            }
-
-            box.remove(existing.front().id);
-            res.status = 204;
-        } catch (const std::exception& e) {
-            res.status = 500;
-            res.set_content(json{{"error", e.what()}}.dump(), "application/json");
+        if (existing.empty()) {
+            res.status = 404;
+            res.set_content(json{{"error", "Account not found"}}.dump(), "application/json");
+            return;
         }
+
+        box.remove(existing.front().id);
+        res.status = 204;
     });
 
     std::cout << "Starting HTTP server on 0.0.0.0:" << port << "..." << std::endl;

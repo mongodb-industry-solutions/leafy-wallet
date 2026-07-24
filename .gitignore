@@ -18,6 +18,7 @@ setup-hooks.sh
 # claude
 **/.claude
 CLAUDE.md
+PLAN.md
 
 # task-def.json
 **/task-def.json

@@ -19,6 +19,7 @@ function amountScale(len) {
  * @param {number} props.cents - Amount in cents.
  * @param {object} props.currency - Account currency, `{ code, symbol, balance }`.
  * @param {object} [props.recipient] - Pre-selected recipient, if any.
+ * @param {'send'|'request'} props.mode - The chosen intent; the primary button reflects it.
  * @param {(updater: (cents: number) => number) => void} props.setCents
  * @param {() => void} props.onClose
  * @param {(mode: 'send'|'request') => void} props.onPick
@@ -28,10 +29,12 @@ export function NumpadStep({
   cents,
   currency,
   recipient,
+  mode,
   setCents,
   onClose,
   onPick,
 }) {
+  const isRequest = mode === 'request'
   const handleDigit = (d) =>
     setCents((p) => (p * 10 + parseInt(d, 10) > MAX_CENTS ? p : p * 10 + parseInt(d, 10)))
   const handleBackspace = () => setCents((p) => Math.floor(p / 10))
@@ -72,6 +75,7 @@ export function NumpadStep({
         {KEYS.map((k) => (
           <button
             key={k}
+            data-tour-target={`key-${k}`}
             type="button"
             disabled={k === '.'}
             onClick={() => (k === '⌫' ? handleBackspace() : handleDigit(k))}
@@ -84,18 +88,18 @@ export function NumpadStep({
 
       <div className="flex gap-3 px-4 pt-4 pb-6">
         <button
-          onClick={() => onPick('request')}
-          disabled={isEmpty}
-          className="h-14 flex-1 rounded-full bg-foreground/10 text-base font-semibold text-foreground disabled:opacity-40"
+          onClick={onClose}
+          className="h-14 flex-1 rounded-full bg-foreground/10 text-base font-semibold text-foreground"
         >
-          Request
+          Cancel
         </button>
         <button
-          onClick={() => onPick('send')}
+          data-tour-target="send-pay"
+          onClick={() => onPick(mode)}
           disabled={isEmpty}
           className="h-14 flex-1 rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
         >
-          Pay
+          {isRequest ? 'Request' : 'Pay'}
         </button>
       </div>
     </div>

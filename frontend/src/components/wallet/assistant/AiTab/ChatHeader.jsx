@@ -5,19 +5,17 @@ import { AnimatePresence, motion } from 'motion/react'
 import { IconButton } from '@/components/ui/IconButton'
 
 /**
- * AI chat top bar: back to history (left), the current chat title (center,
- * cross-fading when it auto-renames), and a new-chat "+" (right).
+ * AI chat top bar: back to history (left) and the current chat title (center, cross-fading when it
+ * auto-renames). Starting a chat lives on the history screen, so there is no "+" here.
  * @param {object} props
  * @param {string} props.title
- * @param {boolean} props.canCreate - False while already on an empty new chat, where "+" would do nothing.
  * @param {() => void} props.onBack - Opens the chat history.
- * @param {() => void} props.onNew - Starts a new chat.
  */
-export function ChatHeader({ title, canCreate, onBack, onNew }) {
+export function ChatHeader({ title, onBack }) {
   return (
     <header className="relative z-20 flex items-center gap-2 px-3 pt-5 pb-2">
       <IconButton onClick={onBack} aria-label="Chat history">
-        <Icon glyph="ArrowLeft" size={18} />
+        <Icon glyph="ClockWithArrow" size={18} />
       </IconButton>
 
       <div className="relative min-w-0 flex-1 text-center">
@@ -35,13 +33,8 @@ export function ChatHeader({ title, canCreate, onBack, onNew }) {
         </AnimatePresence>
       </div>
 
-      {canCreate ? (
-        <IconButton onClick={onNew} aria-label="New chat">
-          <Icon glyph="Plus" size={18} />
-        </IconButton>
-      ) : (
-        <span aria-hidden className="size-9 flex-none" />
-      )}
+      {/* Balances the back button so the title stays optically centered. */}
+      <span aria-hidden className="size-9 flex-none" />
     </header>
   )
 }

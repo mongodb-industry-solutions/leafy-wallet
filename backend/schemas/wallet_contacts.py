@@ -17,9 +17,6 @@ class WalletContactCreate(BaseModel):
     counterpartyLabel: str
     counterpartyLookupType: Literal["phone", "email"]
     counterpartyLookupHint: str
-    # Blind index of the email the owner typed, so a request can be addressed to this contact
-    # without storing their address. Absent on phone contacts: there is no phone claim to match.
-    counterpartyLookupDigest: str | None = None
 
 
 class WalletContactOut(BaseModel):
@@ -35,6 +32,5 @@ class WalletContactOut(BaseModel):
     counterpartyLabel: str
     counterpartyLookupType: Literal["phone", "email"]
     counterpartyLookupHint: str
-    counterpartyLookupDigest: str | None = None
     createdAt: datetime
     updatedAt: datetime

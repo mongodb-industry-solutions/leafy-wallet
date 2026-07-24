@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  appendChatCard,
   appendChatMessage,
   createChat,
   createRequest,
@@ -30,47 +31,21 @@ function deriveTitle(text) {
 }
 
 /**
- * Streams one assistant turn. The route emits NDJSON so drafted payments and spending charts can
- * ride the same stream as the text - `onDraft`/`onChart` fire the moment one arrives, mid-stream.
+ * Runs one assistant turn and returns the whole result at once: `{ reply, drafts, charts }`. The
+ * route waits for the full turn rather than streaming tokens - on a slow local model the token
+ * trickle stutters the typewriter, so the client reveals the finished reply at a steady rate.
  * @param {object} body - `{ message, history, isOnline }`.
- * @param {{onToken: (text: string) => void, onDraft: (draft: object) => void, onChart: (chart: object) => void}} handlers
- * @returns {Promise<string>} The full reply text.
+ * @returns {Promise<{reply: string, drafts: object[], charts: object[]}>}
  */
-async function streamTurn(body, { onToken, onDraft, onChart }) {
+async function fetchTurn(body) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!res.ok || !res.body) throw new Error(await res.text().catch(() => 'Chat failed'))
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let text = ''
-
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-    for (const line of lines) {
-      if (!line.trim()) continue
-      const event = JSON.parse(line)
-      if (event.type === 'token') {
-        text += event.text
-        onToken(text)
-      } else if (event.type === 'draft') {
-        onDraft(event.draft)
-      } else if (event.type === 'chart') {
-        onChart(event.chart)
-      } else if (event.type === 'error') {
-        throw new Error(event.text)
-      }
-    }
-  }
-  return text
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(data?.error || 'Chat failed')
+  return { reply: data?.reply ?? '', drafts: data?.drafts ?? [], charts: data?.charts ?? [] }
 }
 
 /**
@@ -80,10 +55,13 @@ async function streamTurn(body, { onToken, onDraft, onChart }) {
  * @returns {object} Chat state and actions for AiTab to render.
  */
 export function useAiChat() {
-  const { isOnline, refresh } = useWalletData()
+  const { isOnline, refresh, watchTransfer } = useWalletData()
   const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
   const [activeId, setActiveId] = useState('draft')
-  const [view, setView] = useState('chat') // 'chat' | 'history'
+  // Opens on the history so past conversations are the way in; a user with none skips straight to
+  // composing, since a list holding only the unsaved draft is not worth showing.
+  const [view, setView] = useState('history') // 'chat' | 'history'
+  const hasPickedViewRef = useRef(false)
   const [textInput, setTextInput] = useState('')
   const [transcript, setTranscript] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -106,6 +84,10 @@ export function useAiChat() {
     let isStale = false
     getChats(isOnline).then((saved) => {
       if (isStale) return
+      if (!hasPickedViewRef.current) {
+        hasPickedViewRef.current = true
+        if (saved.length === 0) setView('chat')
+      }
       setChats((prev) => {
         const draft = prev.find((c) => c.id === 'draft')
         const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
@@ -154,53 +136,42 @@ export function useAiChat() {
           prev.map((c) => (c.id === threadId() ? { ...c, messages: [...c.messages, message] } : c)),
         )
       }
-      try {
-        const reply = await streamTurn(
-          { message: text, history, isOnline: isOnlineRef.current },
-          {
-            onToken: (partial) => {
-              setIsThinking(false)
-              setChats((prev) =>
-                prev.map((c) => {
-                  if (c.id !== threadId()) return c
-                  const withoutReply = c.messages.filter((m) => m.id !== replyId)
-                  return {
-                    ...c,
-                    messages: [
-                      ...withoutReply,
-                      { id: replyId, role: 'assistant', type: 'text', text: partial, stream: 'live' },
-                    ],
-                  }
-                }),
-              )
-            },
-            // Cards render the moment a tool produces them, alongside the streaming reply.
-            onDraft: (draft) =>
-              appendToThread({
-                id: nextId(),
-                role: 'assistant',
-                type: 'action',
-                actionData: { ...draft, isConfirmed: false },
-              }),
-            onChart: (chart) =>
-              appendToThread({
-                id: nextId(),
-                role: 'assistant',
-                type: 'chart',
-                chartTitle: chart.title,
-                chartData: chart.rows,
-              }),
-          },
-        )
-        // Seal the reply: 'done' lets the typewriter finish and mark itself so it never replays.
+      // A re-draft (editing the note or amount) supersedes the prior unconfirmed card for the same
+      // person so only the current one is confirmable.
+      const upsertDraftCard = (draft) =>
         setChats((prev) =>
-          prev.map((c) =>
-            c.id === threadId()
-              ? { ...c, messages: c.messages.map((m) => (m.id === replyId ? { ...m, stream: 'done' } : m)) }
-              : c,
-          ),
+          prev.map((c) => {
+            if (c.id !== threadId()) return c
+            const isStaleDraft = (m) =>
+              m.type === 'action' &&
+              !m.actionData.isConfirmed &&
+              m.actionData.mode === draft.mode &&
+              m.actionData.contact?.reference === draft.contact?.reference
+            return {
+              ...c,
+              messages: [
+                ...c.messages.filter((m) => !isStaleDraft(m)),
+                { id: nextId(), role: 'assistant', type: 'action', actionData: { ...draft, isConfirmed: false } },
+              ],
+            }
+          }),
         )
-        if (reference && reply) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
+      try {
+        const { reply, drafts, charts } = await fetchTurn({ message: text, history, isOnline: isOnlineRef.current })
+        setIsThinking(false)
+        // Cards land first (above the reply); then the reply reveals via the typewriter. `done` lets
+        // the typewriter run once over the finished text and mark itself so it never replays.
+        drafts.forEach(upsertDraftCard)
+        charts.forEach((chart) => {
+          const card = { type: 'chart', chartTitle: chart.title, chartData: chart.rows }
+          appendToThread({ id: nextId(), role: 'assistant', ...card })
+          // Persist alongside the reply so the chart is still there when the chat is reopened.
+          if (reference) appendChatCard(reference, card, isOnlineRef.current)
+        })
+        if (reply) {
+          appendToThread({ id: replyId, role: 'assistant', type: 'text', text: reply, stream: 'done' })
+          if (reference) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
+        }
       } catch (error) {
         setChats((prev) =>
           prev.map((c) =>
@@ -238,18 +209,20 @@ export function useAiChat() {
     const draft = message?.actionData
     if (!draft || draft.isConfirmed) return
 
+    // The note may have been edited on the card; store the bare phrase, since the card shows "For <note>".
+    const note = (draft.note ?? '').trim().replace(/^for\s+/i, '')
     const result =
       draft.mode === 'request'
         ? await createRequest({
             counterpartyArrangementReference: draft.contact.reference,
             amount: draft.amount,
-            note: draft.note,
+            note,
             isOnline,
           })
         : await sendMoney({
             counterpartyArrangementReference: draft.contact.reference,
             amount: draft.amount,
-            note: draft.note,
+            note,
             isOnline,
           })
 
@@ -263,13 +236,42 @@ export function useAiChat() {
       }))
       return
     }
+    // Keep what actually happened, so the card reports it instead of a fixed "Sent". Offline both
+    // kinds are only queued; a real send then settles under its reference, which the card follows.
+    const isQueued = !isOnline
     patchActive((c) => ({
       ...c,
       messages: c.messages.map((m) =>
-        m.id === id ? { ...m, actionData: { ...m.actionData, isConfirmed: true } } : m,
+        m.id === id
+          ? {
+              ...m,
+              actionData: {
+                ...m.actionData,
+                isConfirmed: true,
+                isQueued,
+                reference: result.reference ?? null,
+              },
+            }
+          : m,
       ),
     }))
-    refresh(draft.mode === 'request' ? ['requests'] : ['accounts', 'transactions'])
+    if (draft.mode === 'request') refresh(['requests'])
+    else {
+      refresh(['accounts', 'transactions'])
+      if (!isQueued) watchTransfer(result.reference)
+    }
+  }
+
+  /** Edit a pending draft's note on the card, so changing it never depends on the model re-drafting. */
+  function handleEditNote(id, note) {
+    patchActive((c) => ({
+      ...c,
+      messages: c.messages.map((m) =>
+        m.id === id && m.type === 'action' && !m.actionData.isConfirmed
+          ? { ...m, actionData: { ...m.actionData, note } }
+          : m,
+      ),
+    }))
   }
 
   function handleSendText() {
@@ -343,6 +345,7 @@ export function useAiChat() {
     hasText: textInput.trim().length > 0,
     handleScrollToEnd,
     handleConfirmAction,
+    handleEditNote,
     handleSendText,
     handleSuggestion,
     handleNewChat,

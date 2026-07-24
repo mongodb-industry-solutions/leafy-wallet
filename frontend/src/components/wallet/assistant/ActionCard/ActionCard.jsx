@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
+import { cn } from '@/lib/utils'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 
@@ -17,18 +18,43 @@ function Row({ label, value }) {
 }
 
 /**
+ * What the confirmed card reports. A queued action has not reached Leafy Pay at all; a real send
+ * settles under its reference, so its row in the activity list is the live answer.
+ */
+function outcomeOf({ isQueued, isRequest, transaction }) {
+  if (isQueued) {
+    return {
+      glyph: 'Clock',
+      label: isRequest ? 'Queued · sends when online' : 'Queued · pays when online',
+      tone: 'text-warning',
+    }
+  }
+  if (isRequest) return { glyph: 'Checkmark', label: 'Requested', tone: 'text-secondary' }
+  if (transaction && !transaction.isPending) {
+    return { glyph: 'Checkmark', label: 'Completed', tone: 'text-secondary' }
+  }
+  return { glyph: 'Clock', label: 'Pending', tone: 'text-warning' }
+}
+
+/**
  * A send/request the assistant drafts inline, reviewed and confirmed before any money moves.
  * @param {object} props
  * @param {object} props.msg - Chat message with an `actionData` payload.
  * @param {(id: string) => void} props.onConfirm - Called when the user confirms the action.
+ * @param {(id: string, note: string) => void} [props.onEditNote] - Edits the draft's note before confirming.
  * @param {() => void} [props.onExpand] - Called when the card expands into review.
  */
-export function ActionCard({ msg, onConfirm, onExpand }) {
-  const { accounts } = useWalletData()
+export function ActionCard({ msg, onConfirm, onEditNote, onExpand }) {
+  const { accounts, transactions } = useWalletData()
   const d = msg.actionData
   const isReq = d.mode === 'request'
   const [isReviewing, setIsReviewing] = useState(false)
   const account = (accounts.data ?? []).find((a) => a.isDefault) ?? (accounts.data ?? [])[0]
+  // Reading the row back is what makes the footer flip to Completed on its own as the poll settles.
+  const transaction = d.reference
+    ? (transactions.data ?? []).find((t) => t.reference === d.reference)
+    : undefined
+  const outcome = outcomeOf({ isQueued: d.isQueued, isRequest: isReq, transaction })
 
   // When the card expands into review, scroll the thread so it stays in view.
   useEffect(() => {
@@ -53,12 +79,28 @@ export function ActionCard({ msg, onConfirm, onExpand }) {
       </div>
 
       {d.isConfirmed ? (
-        <div className="flex items-center justify-center gap-1.5 border-t border-border bg-secondary/[0.07] py-3 text-sm font-semibold text-secondary">
-          <Icon glyph="Checkmark" size={16} />
-          {isReq ? 'Requested' : 'Sent'}
+        <div
+          className={cn(
+            'flex items-center justify-center gap-1.5 border-t border-border bg-foreground/[0.04] py-3 text-sm font-semibold',
+            outcome.tone,
+          )}
+        >
+          <Icon glyph={outcome.glyph} size={16} />
+          {outcome.label}
         </div>
       ) : isReviewing ? (
         <div className="border-t border-border p-4">
+          <label className="mb-3 block">
+            <span className="mb-1 block text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+              Note
+            </span>
+            <input
+              value={d.note}
+              onChange={(e) => onEditNote?.(msg.id, e.target.value)}
+              placeholder="What’s it for?"
+              className="w-full rounded-lg bg-foreground/[0.05] px-2.5 py-2 text-sm outline-none ring-1 ring-transparent focus:ring-secondary"
+            />
+          </label>
           <div className="flex flex-col gap-2 text-xs">
             {isReq ? (
               <Row label="You’ll receive" value={`€${fmt(d.amount)}`} />

@@ -81,6 +81,7 @@ export function SuccessStep({ display, symbol, isRequest, recipient, reference, 
 
       <div className="px-6 pb-6">
         <button
+          data-tour-target="send-done"
           onClick={onClose}
           className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
         >

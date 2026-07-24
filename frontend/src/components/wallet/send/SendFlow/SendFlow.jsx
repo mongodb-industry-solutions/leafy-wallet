@@ -105,6 +105,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
         cents={cents}
         currency={currency}
         recipient={recipient}
+        mode={mode}
         setCents={setCents}
         onClose={onClose}
         onPick={handlePickMode}

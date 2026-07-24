@@ -19,10 +19,10 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 3. **Send and request money**
    - Sends execute real Leafy Pay transfers with a full review step (amount, recipient, note, source account).
    - Offline sends queue on the device and replay automatically on reconnect.
-   - Requests are addressed with a privacy-preserving blind index, so no raw email is ever stored.
+   - Requests are real Leafy Pay requests-to-pay: the payer approves in-app and Leafy Pay moves the money.
 
 4. **Manage contacts**
-   - Add contacts by a registered Leafy Pay email; removing one also cleans up its Atlas replica.
+   - Add contacts by a registered Leafy Pay email or phone number; removing one also cleans up its Atlas replica.
 
 5. **Receive notifications**
    - Money received and incoming payment requests, with swipe-to-clear and a full review flow for paying a request.
@@ -83,9 +83,8 @@ To run the demo outside MongoDB:
 
 1. Run Leafy Pay locally, or deploy it to your own infrastructure.
 2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
-3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`) in that instance.
+3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
 
-> **_Note:_** You may notice a `PSP_DEV_COOKIE` variable in the code and env examples. That cookie is a MongoDB-internal bypass for the corporate gate that sits in front of our shared Leafy Pay environment. It is not part of the demo's design and is not needed when you run Leafy Pay yourself. It will be removed from the code once this demo is deployed to MongoDB's staging infrastructure; until then, simply leave it unset.
 
 ## Prerequisites
 
@@ -100,18 +99,20 @@ To run the demo outside MongoDB:
 > **_Note:_** Create a `.env.local` file within the `/frontend` directory and a `.env` file within the `/backend` directory. Ask the demo owner for the values.
 
 ```bash
-# frontend/.env.local
+# frontend/.env.local - everything else has a working local default
 CLIENT_ID="<leafy-pay-oauth-client-id>"
 CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
 PSP_BASE_URL="<leafy-pay-api-base-url>"
 PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
-APP_BASE_URL="http://localhost:3000"
-REDIRECT_URI="http://localhost:3000/api/auth/callback"
 SESSION_SECRET="<random-string>"
-BACKEND_URL="http://localhost:8000"
-PSP_DEV_COOKIE=""   # MongoDB-internal only, leave unset when running your own Leafy Pay
-LOOKUP_DIGEST_KEY="<random-string-for-blind-indexes>"
 ```
+
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`), `GROVE_API_KEY` and
+`VOYAGE_API_KEY`, plus the URLs that only default correctly on localhost - see
+[`environment/`](environment/). `APP_ENV` is what moves the assistant's chat to MongoDB's Grove
+gateway and embeddings to Voyage AI on Atlas (`https://ai.mongodb.com`, which takes an Atlas-managed
+key), so no Ollama container is deployed. The two embedding models have
+different vector widths (768 local, 1024 deployed), so each environment uses its own Atlas database.
 
 ```bash
 # backend/.env
@@ -127,8 +128,9 @@ Make sure to run this on the root directory.
 ```
 make build
 ```
-2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
-3. Open the app at http://localhost:3000 and sign in with SSO as one of the demo users below.
+2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
+   and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
+3. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
 4. To delete the containers and images run:
 ```
 make clean
@@ -150,7 +152,7 @@ The services and their ports:
 
 | Service | Port | Purpose |
 |---|---|---|
-| frontend | 3000 | The wallet UI and the AI chat route |
+| frontend | 8080 | The wallet UI and the AI chat route |
 | backend | 8000 | Atlas enrichment API (FastAPI) |
 | leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
 | objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
@@ -166,9 +168,28 @@ The services and their ports:
 ## Common errors
 
 - **The first AI reply is slow or times out.** The chat model loads into memory on first use; the `ollama-pull` container warms it at startup, so wait for that container to exit before chatting.
-- **Chats or requests don't sync.** Make sure the ObjectBox Sync trial license was activated at http://localhost:9980.
+- **Chats or requests don't sync.** The sync server defaults to ObjectBox's public trial image, which
+  stops accepting transactions once the trial window closes - its logs then repeat
+  `State condition failed ... : trial`. Activate the trial at http://localhost:9980, or switch to a
+  licensed build (below).
 - **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
-- **Payment requests never arrive.** `LOOKUP_DIGEST_KEY` must be set and identical across environments that should exchange requests.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
+
+## ObjectBox Sync server image
+
+`docker-compose.yml` pulls ObjectBox's public **trial** sync server by default, so a fresh clone runs
+with no extra steps. A licensed build ships as a tarball rather than a public image, so it has to be
+loaded into your local Docker daemon once and then selected by name:
+
+```bash
+docker load -i <objectbox-sync-server-docker.tar.gz>   # prints the image name it loaded
+echo 'OBJECTBOX_SYNC_IMAGE=<that image name>' >> .env  # root .env, gitignored
+docker compose up -d --force-recreate objectbox-sync-server
+```
+
+`docker load` only populates the machine it runs on - it does not publish anywhere. To use a licensed
+build somewhere else (CI, a deployment), push it to a registry that host can pull from and set
+`OBJECTBOX_SYNC_IMAGE` to that address instead.
 
 ## 📄 License
 

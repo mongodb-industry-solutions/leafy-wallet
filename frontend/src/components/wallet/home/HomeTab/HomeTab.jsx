@@ -7,6 +7,7 @@ import { groupByDate } from '@/lib/wallet/format'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
+import { toAwaitingPaymentRows } from '@/lib/wallet/requests'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -108,11 +109,15 @@ export function HomeTab({
   onHeroIntroPlayed,
 }) {
   const onCta = { send: onSend, request: onRequest, chat: () => onSetTab('ai') }
-  const { accounts: accountsState, transactions: txState } = useWalletData()
+  const { accounts: accountsState, transactions: txState, requests: requestsState } = useWalletData()
   const accounts = accountsState.data ?? []
   const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
   const balance = formatBalance(primaryAccount?.balanceValue ?? 0)
-  const groups = groupByDate((txState.data ?? []).slice(0, HOME_TX_PREVIEW))
+  // Requests awaiting payment sit inline with the payments, newest first, not in their own section.
+  const rows = [...(txState.data ?? []), ...toAwaitingPaymentRows(requestsState.data?.outgoing)].sort(
+    (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
+  )
+  const groups = groupByDate(rows.slice(0, HOME_TX_PREVIEW))
   const showTxEmpty = !txState.isLoading && groups.length === 0
 
   // Capture the intro decision once on mount so it can't flip mid-animation.

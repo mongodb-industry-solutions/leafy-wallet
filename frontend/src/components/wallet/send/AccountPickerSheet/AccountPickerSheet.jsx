@@ -22,8 +22,9 @@ export function AccountPickerSheet({ accounts, selectedReference, onSelect, onCl
     <BottomSheet onClose={onClose}>
       {({ close }) => (
         <>
-          <p className="mb-4 text-base font-bold text-foreground">Send from</p>
-          <div className="flex flex-col divide-y divide-border">
+          <p className="mb-4 flex-none text-base font-bold text-foreground">Send from</p>
+          {/* Scrolls inside the sheet's height cap instead of pushing past it. */}
+          <div className="no-scrollbar flex min-h-0 flex-col divide-y divide-border overflow-y-auto">
             {accounts.map((a) => {
               const isSelected = a.reference === selectedReference
               return (

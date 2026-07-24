@@ -6,14 +6,13 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
-    environment:
-      - OLLAMA_KEEP_ALIVE=-1
     healthcheck:
       test: ["CMD", "ollama", "list"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
+      start_interval: 2s
     restart: always
   ollama-pull:
     image: ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a
@@ -23,17 +22,18 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:3b"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
     restart: "no"
+  # Falls back to the public trial image; point OBJECTBOX_SYNC_IMAGE at a licensed one in .env.
   objectbox-sync-server:
-    image: objectboxio/sync-server-trial
+    image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync-server-trial}
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - backend/.env
     ports:
-      - "9980:9980"  # Admin UI - activate the trial license here
-      - "9999:9999"  # Sync protocol port for leafy-local-store
+      - "9980:9980"
+      - "9999:9999"
     volumes:
       - ./objectbox-sync-server:/data
     working_dir: /data
@@ -45,7 +45,8 @@ services:
           --unsecured-no-authentication \
           --admin-bind 0.0.0.0:9980 \
           --mongo-url "$$MONGODB_URI" \
-          --mongo-db "$$DATABASE_NAME"
+          --mongo-db "$$DATABASE_NAME" \
+          --mongo-initial-import
     restart: always
   leafy-local-store:
     build:
@@ -67,7 +68,6 @@ services:
   backend:
     build:
       context: .
-      no_cache: true
       dockerfile: Dockerfile.backend
     image: leafy-wallet-backend:latest
     ports:
@@ -83,11 +83,10 @@ services:
   frontend:
     build:
       context: .
-      no_cache: true
       dockerfile: Dockerfile.frontend
     image: leafy-wallet-frontend:latest
     ports:
-      - "3000:3000"
+      - "8080:8080"
     env_file:
       - frontend/.env.local
     environment:

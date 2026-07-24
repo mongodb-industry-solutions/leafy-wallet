@@ -1,20 +1,22 @@
-import {
-  ArrowDownLeft,
-  CheckCheck,
-  Clock,
-  CloudUpload,
-  Cpu,
-  Database,
-  ListChecks,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Waypoints,
-  Zap,
-} from 'lucide-react'
+import { CheckCheck, Database, ShieldCheck } from 'lucide-react'
 import { SsoLoginVisual } from '@/components/stage/Walkthrough/SsoLoginVisual'
-import { DemoUsersVisual } from '@/components/stage/Walkthrough/DemoUsersVisual'
+import { DEMO_USERS } from '@/lib/demo-users'
+import { BalanceFromDeviceVisual } from '@/components/stage/Walkthrough/BalanceFromDeviceVisual'
+import { AccountsCarouselVisual } from '@/components/stage/Walkthrough/AccountsCarouselVisual'
+import { BackgroundSyncVisual } from '@/components/stage/Walkthrough/BackgroundSyncVisual'
+import { LocalHistoryVisual } from '@/components/stage/Walkthrough/LocalHistoryVisual'
+import { PaymentStatusVisual } from '@/components/stage/Walkthrough/PaymentStatusVisual'
+import { BlindIndexVisual } from '@/components/stage/Walkthrough/BlindIndexVisual'
+import { NameResolutionVisual } from '@/components/stage/Walkthrough/NameResolutionVisual'
+import { ContactsOfflineVisual } from '@/components/stage/Walkthrough/ContactsOfflineVisual'
+import { AssistantRoutingVisual } from '@/components/stage/Walkthrough/AssistantRoutingVisual'
+import { LocalModelVisual } from '@/components/stage/Walkthrough/LocalModelVisual'
+import { SendSettleVisual } from '@/components/stage/Walkthrough/SendSettleVisual'
+import { SendQueueVisual } from '@/components/stage/Walkthrough/SendQueueVisual'
+import { SendSyncVisual } from '@/components/stage/Walkthrough/SendSyncVisual'
+import { RequestComposeVisual } from '@/components/stage/Walkthrough/RequestComposeVisual'
+import { RequestDeliverVisual } from '@/components/stage/Walkthrough/RequestDeliverVisual'
+import { RequestDownstreamVisual } from '@/components/stage/Walkthrough/RequestDownstreamVisual'
 
 // Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet
 // screen. Written for a non-engineer presenter: plain language, with a tech term
@@ -23,16 +25,14 @@ import { DemoUsersVisual } from '@/components/stage/Walkthrough/DemoUsersVisual'
 export const WALKTHROUGH = {
   login: {
     label: 'Sign in',
+    // One step on purpose: splitting "how to sign in" from "which credentials" left a presenter
+    // waiting out the first slide before the password appeared.
     steps: [
       {
         visual: SsoLoginVisual,
-        title: 'Start with SSO',
-        body: 'Click Continue with SSO. It opens Leafy Pay’s real login page; your password never touches the wallet app.',
-      },
-      {
-        visual: DemoUsersVisual,
         title: 'Sign in as a demo user',
-        body: 'Pick any of the three and type the email and password exactly as shown.',
+        body: 'Tap a profile to prefill its email, or use Continue with SSO. Every profile shares one password:',
+        copyable: DEMO_USERS[0].password,
       },
     ],
   },
@@ -40,14 +40,19 @@ export const WALKTHROUGH = {
     label: 'Home',
     steps: [
       {
-        icon: Database,
+        visual: BalanceFromDeviceVisual,
         title: 'Balance from the device',
-        body: 'The balance is read from a small database inside the phone, not from a server. That is why it shows instantly and still works with zero signal.',
+        body: 'Your balance is saved on the phone, not just fetched from the server. Go offline and it is still right there.',
       },
       {
-        icon: RefreshCw,
-        title: 'Quiet background sync',
-        body: 'Back online, everything written on the device copies up to MongoDB Atlas, the cloud database, in the background. No spinners, nothing to retry by hand.',
+        visual: AccountsCarouselVisual,
+        title: 'All your accounts',
+        body: 'In Leafy Wallet you can see and use every account you hold on the Payment Platform (PSP) service, all from one place.',
+      },
+      {
+        visual: BackgroundSyncVisual,
+        title: 'Local and Atlas, always in step',
+        body: 'The on-device database and MongoDB Atlas are mirror copies of each other. Every time the connection comes back, the two sync so both hold the same, up-to-date data.',
       },
     ],
   },
@@ -55,20 +60,19 @@ export const WALKTHROUGH = {
     label: 'Activity',
     steps: [
       {
-        icon: Database,
+        visual: LocalHistoryVisual,
         title: 'One local source of truth',
-        body: 'The full payment history lives on the phone, so scrolling never waits on the network. Online or offline, the list is always there and always fast.',
+        body: 'Your full history lives on the phone, so it is always there and always fast, online or off.',
       },
       {
-        icon: ListChecks,
+        visual: PaymentStatusVisual,
         title: 'Every payment knows its status',
-        body: 'Each row shows pending, confirmed, or failed, straight from the cloud as things settle. You see what really happened, not what the phone hopes.',
+        body: 'Each row shows pending or completed, straight from the cloud as things settle. You see what really happened, not what the phone hopes.',
       },
     ],
   },
   transaction: {
     label: 'Transaction',
-    offlineMoment: true,
     steps: [
       {
         icon: Database,
@@ -92,19 +96,19 @@ export const WALKTHROUGH = {
     offlineMoment: true,
     steps: [
       {
-        icon: Zap,
-        title: 'Instant by design',
-        body: 'The payment shows as done the moment you tap, no network involved. The phone trusts its own copy first and settles up with the cloud afterwards.',
+        visual: SendSettleVisual,
+        title: 'Written locally, settles for real',
+        body: 'Tap send and it saves to the phone instantly as pending, then flips to completed once it truly settles.',
       },
       {
-        icon: Clock,
+        visual: SendQueueVisual,
         title: 'Queued while offline',
-        body: 'No connection? The payment waits in a queue on the device and sends itself the moment one returns. Nothing to retry, nothing lost.',
+        body: 'No connection? It waits in a queue on the device and sends itself the moment one returns. Nothing lost.',
       },
       {
-        icon: CloudUpload,
-        title: 'Synced to Atlas',
-        body: 'Once online, the queued payment pushes up to MongoDB Atlas in the background, where the bank side picks it up for fraud checks and reporting.',
+        visual: SendSyncVisual,
+        title: 'Synced on reconnect',
+        body: 'Back online, it pushes up to MongoDB Atlas and settles. Phone and cloud end up holding the same result.',
       },
     ],
   },
@@ -113,14 +117,19 @@ export const WALKTHROUGH = {
     offlineMoment: true,
     steps: [
       {
-        icon: ArrowDownLeft,
+        visual: RequestComposeVisual,
         title: 'Composed anywhere',
         body: 'The request saves to the phone first, so you can write it with no signal at all. Safe locally, delivered later.',
       },
       {
-        icon: Send,
-        title: 'Delivered through the cloud',
-        body: 'When both people are online, the request travels through Atlas to the other wallet, carrying its note and context along as one flexible document.',
+        visual: RequestDeliverVisual,
+        title: 'Delivered by the PSP',
+        body: 'Back online, the request goes through the payment platform (PSP) as a real request to pay. It lands in the other person’s wallet and the money only moves once they approve it.',
+      },
+      {
+        visual: RequestDownstreamVisual,
+        title: 'Kept close by',
+        body: 'A copy of every request rides down through Atlas onto the phone, so the list is still there to read the next time the signal is not.',
       },
     ],
   },
@@ -128,9 +137,19 @@ export const WALKTHROUGH = {
     label: 'People',
     steps: [
       {
-        icon: Search,
-        title: 'Search by meaning, even offline',
-        body: 'Search payments by what they were about, like "coffee", even when the words are not exact. Atlas Vector Search matches online; the phone matches offline.',
+        visual: BlindIndexVisual,
+        title: 'Emails are never stored',
+        body: 'You add a contact by email, but the raw email is never saved. It is turned into a keyed digest, so the wallet can still find people without holding their personal data.',
+      },
+      {
+        visual: NameResolutionVisual,
+        title: 'Friendly names, resolved',
+        body: 'Leafy Pay hides who the other person really is. The contact directory in MongoDB Atlas maps that obscured reference to a name, so you see "Luis", not a raw code.',
+      },
+      {
+        visual: ContactsOfflineVisual,
+        title: 'Your people, even offline',
+        body: 'The contact directory syncs onto the phone, so names still resolve and you can start a payment with zero signal. Your people are always there.',
       },
     ],
   },
@@ -138,12 +157,12 @@ export const WALKTHROUGH = {
     label: 'Assistant',
     steps: [
       {
-        icon: Waypoints,
+        visual: AssistantRoutingVisual,
         title: 'An assistant that checks, never guesses',
-        body: 'Ask in plain words and LangGraph routes it to the right tool: balance, spending, or a payment draft. It only answers from real data, never a guess.',
+        body: 'Ask in plain words and it routes to the right tool, then answers only from your real data, never a guess.',
       },
       {
-        icon: Cpu,
+        visual: LocalModelVisual,
         title: 'AI that stays on the machine',
         body: 'The model runs locally, so money questions never leave the demo machine. Online, its tools call the MongoDB MCP server over Atlas; offline they read the phone’s copy.',
       },

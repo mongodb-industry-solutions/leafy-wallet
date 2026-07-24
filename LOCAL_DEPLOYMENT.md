@@ -10,7 +10,7 @@ which removes the need for container-to-container networking configuration:
 | Service | URL |
 |---------|-----|
 | PSP backend | `http://localhost:8081` |
-| PSP frontend (login / consent) | `http://localhost:8080` |
+| PSP frontend (login / consent) | `http://localhost:8083` |
 | PSP merchant demo | `http://localhost:8082` |
 
 Leafy Wallet remains in Docker (ObjectBox, Ollama, and the sync server stay containerized) and reaches
@@ -32,9 +32,9 @@ Clone both repositories side by side:
 | Stack | Service | URL | Runtime |
 |-------|---------|-----|---------|
 | Leafy Pay | backend | `http://localhost:8081` | native (`npm run dev`) |
-| Leafy Pay | frontend (login + OAuth consent) | `http://localhost:8080` | native |
+| Leafy Pay | frontend (login + OAuth consent) | `http://localhost:8083` | native |
 | Leafy Pay | merchant demo (Espresso) | `http://localhost:8082` | native |
-| Leafy Wallet | frontend (UI + BFF/OAuth client) | `http://localhost:3000` | Docker |
+| Leafy Wallet | frontend (UI + BFF/OAuth client) | `http://localhost:8080` | Docker |
 | Leafy Wallet | backend (Atlas enrichment / chat / MCP) | `http://localhost:8000` | Docker |
 | Leafy Wallet | local store (ObjectBox) | `http://localhost:8090` | Docker |
 | Leafy Wallet | Ollama | `http://localhost:11434` | Docker |
@@ -44,7 +44,7 @@ The PSP seeds two OAuth clients in `backend/data/merchants.json`:
 
 - **Leafy Wallet client.** Use this client. Its `client_id` and `client_secret` are provided in
   `leafy-wallet/frontend/.env.local.example`. Registered redirect URI:
-  `http://localhost:3000/api/auth/callback`.
+  `http://localhost:8080/api/auth/callback`.
 - **Espresso merchant client.** For the merchant demo only. Using it with Leafy Wallet results in a
   `redirect_uri not registered` error.
 
@@ -116,6 +116,7 @@ Generate the OAuth signing keys once:
 
 ```bash
 cd sec-fsi-pci-dss
+npm run setup       # install dependencies (first run only)
 npm run setup:key:rsa   # writes backend/keys/private.pem
 ```
 
@@ -125,7 +126,6 @@ npm run setup:key:rsa   # writes backend/keys/private.pem
 |----------|-------|
 | `MONGODB_URI` | Connection string for the **Leafy Wallet** database (distinct from Leafy Pay) |
 | `DATABASE_NAME` | Leafy Wallet database name |
-| `LOOKUP_DIGEST_KEY` | 32-byte hex key; must be identical to the frontend value below |
 
 ### 5.3 Leafy Wallet frontend — `leafy-wallet/frontend/.env.local`
 
@@ -133,24 +133,19 @@ npm run setup:key:rsa   # writes backend/keys/private.pem
 CLIENT_ID=<from frontend/.env.local.example>
 CLIENT_SECRET=<from frontend/.env.local.example>
 PSP_BASE_URL=http://host.docker.internal:8081
-PSP_FRONTEND_URL=http://localhost:8080
-APP_BASE_URL=http://localhost:3000
-REDIRECT_URI=http://localhost:3000/api/auth/callback
-LOOKUP_DIGEST_KEY=<32-byte hex; identical to the backend value>
+PSP_FRONTEND_URL=http://localhost:8083
 ```
 
-Generate a `LOOKUP_DIGEST_KEY` value with:
-
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
+The redirect URI is derived as `<APP_BASE_URL>/api/auth/callback`, and `APP_BASE_URL` itself
+defaults to `http://localhost:8080` - set neither unless the app is served from another origin.
 
 Notes:
 
 - `PSP_BASE_URL` must use `host.docker.internal`, not `localhost`. Server-side calls run inside the
   wallet container, where `localhost` refers to the container itself.
-- `LOOKUP_DIGEST_KEY` must be identical in the frontend and backend files, otherwise contact and request
-  digests will not resolve.
+- The OAuth client registered in Leafy Pay must allow the scopes the wallet asks for at login
+  (`frontend/src/lib/auth/env.js`), including `read:rtp` and `write:rtp` for payment requests.
+  Leafy Pay rejects the whole login with `invalid_scope` if any requested scope is not registered.
 - The two `MONGODB_URI` values point to different databases and are configured independently.
 
 ---
@@ -161,10 +156,9 @@ Start the PSP (native):
 
 ```bash
 cd sec-fsi-pci-dss
-npm run setup       # install dependencies (first run only)
 npm run setup:db    # provision Queryable Encryption collections
 npm run setup:seed  # seed demo data (users, OAuth clients, providers)
-npm run dev         # backend:8081, frontend:8080, merchant:8082
+npm run dev         # backend:8081, frontend:8083, merchant:8082
 ```
 
 Create the Leafy Wallet vector search index (first run only):
@@ -181,7 +175,7 @@ cd leafy-wallet
 docker compose up -d --build
 ```
 
-Open `http://localhost:3000` and select **Continue with SSO**.
+Open `http://localhost:8080` and select **Continue with SSO**.
 
 ### Demo credentials
 
@@ -203,7 +197,7 @@ curl -s -o /dev/null -w "8080 %{http_code}\n" http://localhost:8080/         # e
 curl -s -o /dev/null -w "8082 %{http_code}\n" http://localhost:8082/         # expect 200
 
 # Leafy Wallet emits the correct client_id and redirect_uri
-curl -s -D - -o /dev/null http://localhost:3000/api/auth/login \
+curl -s -D - -o /dev/null http://localhost:8080/api/auth/login \
   | grep -i '^location' | grep -oE 'client_id=[^&]+|redirect_uri=[^&]+'
 
 # The wallet container can reach the native PSP

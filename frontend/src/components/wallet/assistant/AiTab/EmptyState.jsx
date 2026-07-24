@@ -1,6 +1,7 @@
 'use client'
 
-import { suggestionsFor } from '@/lib/demo-users'
+import { suggestionsFor } from './suggestions'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 
 /** Returns a time-of-day greeting for the given hour (0 to 23). */
 function greetingFor(hour) {
@@ -17,9 +18,10 @@ function greetingFor(hour) {
  * @param {(query: string) => void} props.onSuggestion
  */
 export function EmptyState({ user, onSuggestion }) {
+  const { contacts } = useWalletData()
   const firstName = user.name.split(' ')[0]
   const greeting = greetingFor(new Date().getHours())
-  const suggestions = suggestionsFor(user.email)
+  const suggestions = suggestionsFor(user.email, contacts.data ?? [])
 
   return (
     <div className="relative z-10 flex flex-1 flex-col justify-between px-4 pt-12 pb-40">

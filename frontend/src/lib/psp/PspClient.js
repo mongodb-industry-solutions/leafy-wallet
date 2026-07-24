@@ -14,14 +14,13 @@ class PspError extends Error {
 }
 
 // Call Leafy Pay with a Bearer token; on 401 refresh once and retry with the rotated token.
-async function pspRequest(method, path, body, token, refreshToken, retried = false) {
-  const cookie = ENV.pspDevCookie()
+async function pspRequest(method, path, body, token, refreshToken, extraHeaders, retried = false) {
   const res = await fetch(`${ENV.pspBaseUrl()}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(cookie ? { Cookie: cookie } : {}),
+      ...extraHeaders,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: 'no-store',
@@ -42,17 +41,30 @@ async function pspRequest(method, path, body, token, refreshToken, retried = fal
         expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       }).catch(() => {})
     }
-    return pspRequest(method, path, body, tokens.access_token, tokens.refresh_token ?? refreshToken, true)
+    return pspRequest(
+      method,
+      path,
+      body,
+      tokens.access_token,
+      tokens.refresh_token ?? refreshToken,
+      extraHeaders,
+      true,
+    )
   }
   if (!res.ok) throw new PspError(res.status, await res.text().catch(() => ''))
   const text = await res.text()
   return text ? JSON.parse(text) : {}
 }
 
-async function call(method, path, body) {
+/**
+ * `idempotencyKey` guards the writes that must not double-fire on a retry (create, accept): Leafy
+ * Pay replays the original result instead of acting twice.
+ */
+async function call(method, path, body, idempotencyKey) {
   const session = await getSession()
   if (!session) throw new PspError(401, 'not_authenticated')
-  return pspRequest(method, path, body, session.accessToken, session.refreshToken)
+  const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined
+  return pspRequest(method, path, body, session.accessToken, session.refreshToken, headers)
 }
 
 function normalizeAccount(a) {
@@ -82,14 +94,35 @@ function normalizeTransaction(t) {
   return {
     reference: t.paymentExecutionInstanceReference ?? t.transferReference,
     counterpartyReference: t.beneficiaryArrangementReference ?? t.counterpartyArrangementReference ?? null,
-    beneficiaryName: t.beneficiaryName ?? null,
-    destinationMasked: t.destinationAccountMasked ?? null,
     direction: t.direction ?? 'sent',
     value: typeof gross === 'number' ? gross : (gross?.amount ?? 0),
     currency: t.currency ?? 'EUR',
     status: t.paymentExecutionStatus ?? t.status ?? 'pending',
     note: t.concept ?? t.paymentExecutionRemittanceInformation ?? t.description ?? '',
     createdAt: t.completedAt ?? t.initiatedAt ?? t.scheduledAt ?? t.recordCreatedDateTime ?? null,
+  }
+}
+
+/**
+ * Shape a Leafy Pay request into the flat form the wallet stores and renders. `status` stays raw:
+ * Leafy Pay owns the lifecycle, so collapsing it for display happens in `lib/wallet/requests.js`.
+ * `payeePartyRef`/`payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one
+ * as an owner key, or the offline read filters on an id that matches nothing.
+ */
+function normalizeRtpRequest(r) {
+  return {
+    reference: r.paymentRequestInstanceReference,
+    payeePartyRef: r.requesterPartyReference ?? '',
+    payeeName: r.payeeName ?? '',
+    payerPartyRef: r.payerPartyReference ?? '',
+    payerCounterpartyRef: r.payerCounterpartyReference ?? '',
+    amount: typeof r.amount === 'number' ? r.amount : 0,
+    currency: r.currency ?? 'EUR',
+    note: r.purpose ?? '',
+    status: r.status ?? 'created',
+    executionReference: r.linkedPaymentExecutionReference ?? null,
+    createdAt: r.recordCreatedDateTime ?? null,
+    updatedAt: r.recordUpdatedDateTime ?? null,
   }
 }
 
@@ -133,10 +166,8 @@ export async function createBeneficiary({ lookupType, lookupValue, label }) {
   }
 }
 
-/** Remove a saved beneficiary (scope `write:beneficiaries`). */
-export async function removeBeneficiary(reference) {
-  await call('DELETE', `/api/v1/beneficiaries/${encodeURIComponent(reference)}`)
-}
+// No beneficiary delete here on purpose: Leafy Pay's own UI owns removal, and the login reconcile
+// prunes whatever disappeared there.
 
 /**
  * Send a P2P transfer to a saved beneficiary (scope `write:transfers`). Omitting `fromAccountRef` lets
@@ -153,6 +184,85 @@ export async function sendToBeneficiary(reference, { amount, currency = 'EUR', n
   return {
     reference: r.transferReference ?? r.paymentExecutionInstanceReference ?? null,
     status: r.status ?? r.paymentExecutionStatus ?? 'pending',
-    failureReason: r.failureReason ?? null,
   }
+}
+
+// ── Request to Pay (scopes `read:rtp` / `write:rtp`) ──────────────────────────
+// A request is its own record, separate from the transfer that settles it: only once the payer
+// approves does Leafy Pay create the linked payment. The payer is addressed by a saved beneficiary.
+
+const RTP_BASE = '/api/v1/gateway/rtp/requests'
+
+/**
+ * Raise a request against a saved beneficiary. Leafy Pay resolves the payer from it, and the
+ * destination from the requester's default account.
+ * @param {{payerCounterpartyRef: string, amount: number, currency?: string, note?: string, idempotencyKey?: string}} input
+ */
+export async function createRtpRequest({
+  payerCounterpartyRef,
+  amount,
+  currency = 'EUR',
+  note,
+  idempotencyKey,
+}) {
+  const body = {
+    amount,
+    currency,
+    payerCounterpartyReference: payerCounterpartyRef,
+    ...(note ? { purpose: note } : {}),
+  }
+  return normalizeRtpRequest(await call('POST', RTP_BASE, body, idempotencyKey))
+}
+
+/**
+ * Deliver a created request to the payer. Leafy Pay keeps creation and presentation separate, so a
+ * request is only live once this has run.
+ */
+export async function presentRtpRequest(reference) {
+  return normalizeRtpRequest(
+    await call('POST', `${RTP_BASE}/${encodeURIComponent(reference)}/present`, {}),
+  )
+}
+
+/**
+ * The user's requests: `inbox` are addressed to them (they would pay), `outbox` are ones they raised.
+ * @param {'inbox'|'outbox'} box
+ */
+export async function listRtpRequests(box) {
+  const data = await call('GET', `${RTP_BASE}?box=${box}`)
+  return (data.results ?? []).map(normalizeRtpRequest)
+}
+
+/**
+ * Approve a request: Leafy Pay screens it, holds the funds and creates the payment. Returns
+ * `accepted` with that payment's reference, or a reason it was blocked.
+ * @returns {Promise<{status: string, executionReference: string|null, reason: string|null}>}
+ */
+export async function acceptRtpRequest(reference, { fromAccountRef, idempotencyKey } = {}) {
+  const body = fromAccountRef ? { fundingAccountRef: fromAccountRef } : {}
+  const r = await call(
+    'POST',
+    `${RTP_BASE}/${encodeURIComponent(reference)}/accept`,
+    body,
+    idempotencyKey,
+  )
+  return {
+    status: r.status ?? 'failed',
+    executionReference: r.executionReference ?? null,
+    reason: r.reason ?? null,
+  }
+}
+
+/** Decline a request addressed to the user. */
+export async function rejectRtpRequest(reference) {
+  return normalizeRtpRequest(
+    await call('POST', `${RTP_BASE}/${encodeURIComponent(reference)}/reject`, {}),
+  )
+}
+
+/** Withdraw a request the user raised. */
+export async function cancelRtpRequest(reference) {
+  return normalizeRtpRequest(
+    await call('POST', `${RTP_BASE}/${encodeURIComponent(reference)}/cancel`, {}),
+  )
 }

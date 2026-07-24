@@ -33,9 +33,15 @@ class WalletTransactionCreate(BaseModel):
     write path.
 
     `noteEmbedding` is absent on purpose: it's generated server-side by
-    Ollama from `note` (see services/ollama.py), never supplied by the
-    client. `_id`/`createdAt`/`settledAt` are also server-managed, same
-    reasoning as WalletContactCreate.
+    the embedding provider from `note` (see services/embeddings.py), never supplied by the
+    client. `_id`/`settledAt` are also server-managed, same reasoning as
+    WalletContactCreate.
+
+    `createdAt` is optional rather than server-managed: a payment adopted from
+    Leafy Pay happened before this row was written, and stamping it with the
+    write time would sort it wrongly offline (the device reads this field,
+    while online reads Leafy Pay's own). Omit it for a payment made here and
+    now, which is what the default covers.
     """
 
     leafyPayTransferReference: str
@@ -47,21 +53,19 @@ class WalletTransactionCreate(BaseModel):
     direction: Literal["sent", "received"]
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] = "pending"
     localSyncStatus: Literal["local_pending", "synced"] = "synced"
+    createdAt: datetime | None = None
 
 
 class WalletTransactionUpdate(BaseModel):
     """Inbound payload for PATCH /wallet-transactions/{id}.
 
-    Covers only fields that legitimately change after creation (status
-    transitions, settlement time, a later-computed embedding). Identifying
-    fields (`ownerPartyRef`, `amount`, `direction`, ...) are immutable and
-    therefore not offered here, mirroring WalletContactUpdate.
+    Covers only what legitimately changes after creation: the status transition and
+    its settlement time. Identifying fields (`ownerPartyRef`, `amount`, `direction`,
+    ...) are immutable and therefore not offered here, mirroring WalletContactUpdate.
     """
 
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] | None = None
-    localSyncStatus: Literal["local_pending", "synced"] | None = None
     settledAt: datetime | None = None
-    noteEmbedding: list[float] | None = None
 
 
 class WalletTransactionOut(BaseModel):

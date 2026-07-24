@@ -56,9 +56,7 @@ export function AiTab({ user }) {
         chats={c.chats}
         activeId={c.activeId}
         onOpen={c.handleOpenChat}
-        onNew={c.handleNewChat}
         onDelete={c.handleDeleteChat}
-        onClose={() => c.setView('chat')}
       />
     )
   }
@@ -106,22 +104,22 @@ export function AiTab({ user }) {
         </div>
       </div>
 
-      <ChatHeader
-        title={c.title}
-        canCreate={!c.isEmpty}
-        onBack={() => c.setView('history')}
-        onNew={c.handleNewChat}
-      />
+      <ChatHeader title={c.title} onBack={() => c.setView('history')} />
 
       {showEmpty ? (
         <EmptyState user={user} onSuggestion={c.handleSuggestion} />
       ) : (
-        <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-32">
+        <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-44">
           {c.msgs.map((m) => {
             if (m.type === 'action') {
               return (
                 <div key={m.id} className="flex justify-start">
-                  <ActionCard msg={m} onConfirm={c.handleConfirmAction} onExpand={c.handleScrollToEnd} />
+                  <ActionCard
+                    msg={m}
+                    onConfirm={c.handleConfirmAction}
+                    onEditNote={c.handleEditNote}
+                    onExpand={c.handleScrollToEnd}
+                  />
                 </div>
               )
             }
@@ -175,6 +173,7 @@ export function AiTab({ user }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10 pb-24">
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
+            data-tour-target="ai-input"
             value={c.textInput}
             onChange={(e) => c.setTextInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
@@ -183,6 +182,7 @@ export function AiTab({ user }) {
           />
           {c.hasText ? (
             <button
+              data-tour-target="ai-send"
               onClick={c.handleSendText}
               aria-label="Send"
               className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background"

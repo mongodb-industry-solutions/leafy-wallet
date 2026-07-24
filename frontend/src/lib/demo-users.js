@@ -8,10 +8,12 @@
  */
 // `seed`/`bg` pin each user's Peep avatar (dicebear open-peeps) so the login card and the in-app
 // profile picture always render the same illustration. `bg` is a hex color without the leading `#`.
+// `phone` is what the same user is registered under in Leafy Pay, so a contact's masked hint can be
+// matched back to pin their avatar whether they were added by email or by phone.
 export const DEMO_USERS = [
-  { name: 'Amara Okafor', email: 'amara.okafor@back.es', password: 'demo-password', seed: 'amara', bg: 'dcfce7' },
-  { name: 'Luis Fernandez', email: 'luis.fernandez@back.es', password: 'demo-password', seed: 'luis-fernandez', bg: 'dbeafe' },
-  { name: 'Priya Patel', email: 'priya.patel@back.es', password: 'demo-password', seed: 'priya-patel', bg: 'fce7f3' },
+  { name: 'Amara Okafor', email: 'amara.okafor@back.es', phone: '+234 806 543 2109', password: 'demo-password', seed: 'amara', bg: 'dcfce7' },
+  { name: 'Luis Fernandez', email: 'luis.fernandez@back.es', phone: '+34 612 345 678', password: 'demo-password', seed: 'luis-fernandez', bg: 'dbeafe' },
+  { name: 'Priya Patel', email: 'priya.patel@back.es', phone: '+44 7712 345678', password: 'demo-password', seed: 'priya-patel', bg: 'fce7f3' },
 ]
 
 /**
@@ -22,23 +24,4 @@ export const DEMO_USERS = [
 export function demoAvatarFor(email) {
   const user = email ? DEMO_USERS.find((u) => u.email === email) : undefined
   return user ? { seed: user.seed, bg: user.bg } : undefined
-}
-
-const firstNameOf = (user) => user.name.split(' ')[0]
-
-/**
- * Chat suggestion chips for the signed-in user. Money actions target the other demo users, so
- * every suggestion resolves against contacts that actually exist for whoever is logged in.
- * @param {string} [email] - The signed-in user's email.
- * @returns {{label: string, query: string}[]}
- */
-export function suggestionsFor(email) {
-  const others = DEMO_USERS.filter((u) => u.email !== email)
-  const [sendTo, requestFrom] = others.length >= 2 ? others : DEMO_USERS
-  return [
-    { label: 'Summarize my week', query: 'How much did I spend this week?' },
-    { label: 'Break down my spending', query: 'Where did my money go?' },
-    { label: `Send money to ${firstNameOf(sendTo)}`, query: `Send €20 to ${firstNameOf(sendTo)} for lunch` },
-    { label: `Request from ${firstNameOf(requestFrom)}`, query: `Request €15 from ${firstNameOf(requestFrom)}` },
-  ]
 }

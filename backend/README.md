@@ -8,7 +8,7 @@
    - CRUD routers for contacts, requests, transactions enrichment, chats, and chat messages.
 
 2. **Semantic search**
-   - Transaction notes are embedded through a local [Ollama](https://ollama.com/) model and searched with Atlas `$vectorSearch`.
+   - Transaction notes are embedded (local Ollama, or Voyage once deployed) and searched with Atlas `$vectorSearch`.
 
 3. **Spending summaries**
    - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
@@ -36,13 +36,14 @@ server**
   - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
 
 - **AI**:
-  - [Ollama](https://ollama.com/) embeddings (nomic-embed-text)
+  - Embeddings: [Ollama](https://ollama.com/) (nomic-embed-text) locally, [Voyage AI on Atlas](https://www.mongodb.com/docs/voyageai/) when deployed
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - A MongoDB Atlas cluster (M0 or higher)
 - A running Ollama with the embedding model pulled (the repo's Docker Compose handles this)
+- Deployed only: `APP_ENV` and `VOYAGE_API_KEY` (an Atlas-managed key, not a voyageai.com one)
 
 ### Add environment variables
 

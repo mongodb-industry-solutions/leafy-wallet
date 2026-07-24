@@ -9,6 +9,7 @@ import {
   getTransferStatus,
   markTransferSettled,
   reconcileWithLeafyPay,
+  replayPendingRequests,
   replayPendingSends,
 } from '@/lib/wallet/actions'
 
@@ -98,6 +99,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   })
   const [lastSeen, setLastSeen] = useState(null)
   const [dismissedIds, setDismissedIds] = useState([])
+  // Carries only the reference and outcome; the banner reads the row itself, so it never renders a
+  // stale amount from before the refresh that settled it.
+  const [settlement, setSettlement] = useState(null)
 
   // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
   // consumer's callbacks on each toggle.
@@ -139,6 +143,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
         // Before the refresh, so it reads back the settled status.
         if (isSettled) await markTransferSettled(reference, status)
         await refresh(['accounts', 'transactions'])
+        // Announce it: settling can outlast the screen the payment was made from.
+        if (isSettled) setSettlement({ reference, status })
         polls += 1
         if (isSettled || polls >= SETTLE_MAX_POLLS) return
         setTimeout(tick, SETTLE_POLL_MS)
@@ -158,13 +164,16 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     if (!isOnlineRef.current) return
     reconcileWithLeafyPay().then((result) => {
       const changed =
-        (result?.prunedTransactions ?? 0) + (result?.prunedContacts ?? 0) + (result?.adoptedTransactions ?? 0)
-      if (changed > 0) refresh(['contacts', 'transactions'])
+        (result?.prunedTransactions ?? 0) +
+        (result?.prunedContacts ?? 0) +
+        (result?.prunedRequests ?? 0) +
+        (result?.adoptedTransactions ?? 0)
+      if (changed > 0) refresh(['contacts', 'transactions', 'requests'])
     })
   }, [refresh])
 
-  // Both directions re-read, since the source changes. Reconnecting also replays queued sends  - 
-  // Sync moves records, not money.
+  // Both directions re-read, since the source changes. Reconnecting also replays whatever was
+  // composed offline: Sync moves records, but only Leafy Pay reaches the other wallet.
   const wasOnline = useRef(isOnline)
   useEffect(() => {
     if (isOnline === wasOnline.current) return
@@ -173,8 +182,11 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
 
     async function resync() {
       if (isReconnect) {
-        const res = await replayPendingSends().catch(() => null)
-        res?.references?.forEach(watchTransfer)
+        const [sends] = await Promise.all([
+          replayPendingSends().catch(() => null),
+          replayPendingRequests().catch(() => null),
+        ])
+        sends?.references?.forEach(watchTransfer)
       }
       refresh()
     }
@@ -219,6 +231,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   )
   const unreadCount = notifications.reduce((n, x) => n + (x.isUnread ? 1 : 0), 0)
 
+  /** Clear the settlement banner once it has played out. */
+  const dismissSettlement = useCallback(() => setSettlement(null), [])
+
   const value = {
     ...state,
     isOnline,
@@ -228,6 +243,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     unreadCount,
     markNotificationsSeen,
     dismissNotifications,
+    settlement,
+    dismissSettlement,
   }
   return <WalletDataContext.Provider value={value}>{children}</WalletDataContext.Provider>
 }

@@ -19,7 +19,7 @@ from pymongo.errors import OperationFailure
 
 from db.client import get_db
 from mcp_server.server import mcp
-from services.ollama import get_embedding
+from services.embeddings import get_embedding
 from services.transactions import NOTE_EMBEDDING_INDEX
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")

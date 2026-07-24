@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useConnection } from '@/components/stage/DesktopShell/useConnection'
 import { useAuthGate } from '@/components/stage/DesktopShell/useAuthGate'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow/ConnectionGlow'
@@ -10,21 +10,63 @@ import { LoginScreen } from '@/components/stage/LoginScreen/LoginScreen'
 import { FaceIdEntry } from '@/components/stage/FaceIdEntry/FaceIdEntry'
 import { Walkthrough } from '@/components/stage/Walkthrough/Walkthrough'
 import { WalletApp } from '@/components/wallet/shell/WalletApp/WalletApp'
+import { WelcomeDialog } from '@/components/stage/WelcomeDialog/WelcomeDialog'
+import { useWelcomeGate, TOUR_INTENT_KEY } from '@/components/stage/WelcomeDialog/useWelcomeGate'
+import { TourController } from '@/components/stage/TourController/TourController'
+import { useTourDirector } from '@/components/stage/TourController/useTourDirector'
+import { TourCursor } from '@/components/stage/TourCursor/TourCursor'
 import { LeafLogo } from '@/components/common/LeafLogo/LeafLogo'
 import { WALKTHROUGH } from '@/lib/walkthrough'
+
+/** The presenter can disable the whole tour with ?tour=0 if it misbehaves mid-event. */
+function isTourKilled() {
+  return new URLSearchParams(window.location.search).get('tour') === '0'
+}
 
 /**
  * Top-level presenter stage: the phone frame beside the "Under the hood" panel. Gates the phone on the
  * real Leafy Pay session, showing the LoginScreen (SSO), the FaceID passwordless path, or the wallet app.
+ * Also hosts the self-driving tour: the director sequences actions, the cursor performs them on the real
+ * UI (including the off-phone connection toggle), and the walkthrough narration is pinned to each action.
  */
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
   const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
+  const { isWelcomeOpen, showWelcome, dismissWelcome } = useWelcomeGate()
   const [flow, setFlow] = useState('home')
+  const [isTourActive, setIsTourActive] = useState(false)
+
+  const isAuthed = phase === 'authed'
+  const stopTour = useCallback(() => setIsTourActive(false), [])
+  const tour = useTourDirector({ isActive: isTourActive, onFinish: stopTour })
+  const command = tour.command
+
+  // Start the tour from the welcome's primary action. Pre-auth it cannot run yet (the wallet is not
+  // mounted and the SSO redirect is a full navigation), so the intent is parked in sessionStorage and
+  // consumed once authenticated.
+  const handleWatchTour = useCallback(() => {
+    dismissWelcome()
+    if (isTourKilled()) return
+    if (isAuthed) {
+      setIsTourActive(true)
+    } else {
+      window.sessionStorage.setItem(TOUR_INTENT_KEY, '1')
+    }
+  }, [dismissWelcome, isAuthed])
+
+  // Consume a parked tour intent once authenticated.
+  useEffect(() => {
+    if (!isAuthed || isTourKilled()) return
+    if (window.sessionStorage.getItem(TOUR_INTENT_KEY) === '1') {
+      window.sessionStorage.removeItem(TOUR_INTENT_KEY)
+      setIsTourActive(true)
+    }
+  }, [isAuthed])
 
   // Before authentication the wallet reports no flow - narrate the sign-in itself.
-  const activeFlow = phase === 'authed' ? flow : 'login'
-  const shouldNudge = isOnline && Boolean(WALKTHROUGH[activeFlow]?.offlineMoment)
+  const activeFlow = isAuthed ? flow : 'login'
+  const shouldNudge = !isTourActive && isOnline && Boolean(WALKTHROUGH[activeFlow]?.offlineMoment)
+  const walkthroughStep = isTourActive && command ? command.walkthroughStep : undefined
 
   let phoneContent
   if (phase === 'authed') {
@@ -45,23 +87,56 @@ export function DesktopShell() {
         <PhoneFrame>{phoneContent}</PhoneFrame>
 
         <div className="flex w-[400px] max-w-[90vw] flex-col gap-3">
-          <div className="rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)]">
+          <div
+            className={`rounded-[2rem] border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)] transition-all duration-500 ${
+              isTourActive ? 'border-secondary/40 ring-2 ring-secondary/25' : 'border-border'
+            }`}
+          >
             <div className="flex items-center gap-2.5">
               <LeafLogo size={22} />
-              <h2 className="text-base font-bold text-foreground">Under the hood</h2>
+              <h2 className="text-base font-bold text-foreground">Built on MongoDB</h2>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The tech behind the {WALKTHROUGH[activeFlow].label} screen.
-            </p>
 
             <div className="mt-5">
-              <Walkthrough flow={activeFlow} />
+              <Walkthrough flow={activeFlow} controlledStep={walkthroughStep} />
             </div>
           </div>
 
           <ConnectionControl isOnline={isOnline} onToggle={handleToggle} shouldNudge={shouldNudge} />
         </div>
       </div>
+
+      {/* Stage-level cursor: lives above everything (pointer-events-none) so it can travel from inside
+          the phone to the off-phone connection toggle. */}
+      {isTourActive && isAuthed && <TourCursor command={command} onStepComplete={tour.onStepComplete} />}
+
+      {/* Bottom of the stage: the tour controls while it runs, otherwise the low-prominence re-entry
+          point that lets a presenter restart the intro between conversations. */}
+      {isTourActive ? (
+        <div className="absolute bottom-6 left-1/2 z-[60] -translate-x-1/2">
+          <TourController
+            index={tour.index}
+            total={tour.total}
+            isPaused={tour.isPaused}
+            onTogglePause={tour.togglePause}
+            onExit={stopTour}
+          />
+        </div>
+      ) : (
+        !isWelcomeOpen && (
+          <button
+            type="button"
+            onClick={showWelcome}
+            className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 text-xs font-medium text-muted-foreground/70 transition-colors hover:text-foreground"
+          >
+            What is this? Watch the intro
+          </button>
+        )
+      )}
+
+      {isWelcomeOpen && (
+        <WelcomeDialog onStartTour={handleWatchTour} onDismiss={dismissWelcome} isAuthed={isAuthed} />
+      )}
     </main>
   )
 }

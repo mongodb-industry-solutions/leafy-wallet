@@ -10,6 +10,8 @@ export const REQUESTED_SCOPES = [
   'write:transfers',
   'read:accounts',
   'read:transactions',
+  'read:rtp',
+  'write:rtp',
 ]
 
 /** Read an env var, treating empty strings as unset. */
@@ -24,15 +26,10 @@ export const ENV = {
   pspBaseUrl: () => envVar('PSP_BASE_URL') ?? '',
   clientId: () => envVar('CLIENT_ID') ?? '',
   clientSecret: () => envVar('CLIENT_SECRET') ?? '',
-  appBaseUrl: () => envVar('APP_BASE_URL') ?? 'http://localhost:3000',
+  appBaseUrl: () => envVar('APP_BASE_URL') ?? 'http://localhost:8080',
   redirectUri: () =>
-    envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:3000'}/api/auth/callback`,
+    envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:8080'}/api/auth/callback`,
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
   // Browser-facing login page, on the frontend host (a different host from the API).
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,
-  // Corp SSO session cookie: lets server-side calls through the gate fronting the
-  // staging PSP. Set only in .env.local; unset when deployed inside the corp network.
-  pspDevCookie: () => envVar('PSP_DEV_COOKIE') ?? '',
-  // Blind-index key for contact/request lookup digests. Rotating it orphans every stored digest.
-  lookupDigestKey: () => envVar('LOOKUP_DIGEST_KEY') ?? '',
 }

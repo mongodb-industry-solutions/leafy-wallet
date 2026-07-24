@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHash, randomBytes } from 'crypto'
-import { createRemoteJWKSet, jwtVerify, customFetch } from 'jose'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { ENV } from './env'
 
 let jwksCache = null
@@ -20,17 +20,8 @@ function oidcConfig() {
 }
 
 function jwks(jwksUri) {
-  // jose fetches the JWKS with its own fetch, which would miss PSP_DEV_COOKIE and hit the corp gate.
-  // Route it through pspFetch so the JWKS request carries the same cookie as every other Leafy Pay call.
-  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri), { [customFetch]: pspFetch })
+  if (!jwksCache) jwksCache = createRemoteJWKSet(new URL(jwksUri))
   return jwksCache
-}
-
-// Attaches PSP_DEV_COOKIE (a copied corp-SSO session, dev-only) so server-side calls pass the gate.
-function pspFetch(url, init = {}) {
-  const cookie = ENV.pspDevCookie()
-  const headers = cookie ? { ...init.headers, Cookie: cookie } : init.headers
-  return fetch(url, { ...init, headers })
 }
 
 const b64url = (buf) => buf.toString('base64url')
@@ -51,7 +42,7 @@ function basicAuthHeader() {
 }
 
 /** Build the browser-facing authorize URL (Leafy Pay's frontend login page). */
-export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefillEmail, prefillPassword }) {
+export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefillEmail }) {
   const u = new URL(ENV.authorizeUrl())
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', ENV.clientId())
@@ -61,10 +52,10 @@ export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefill
   u.searchParams.set('nonce', nonce)
   u.searchParams.set('code_challenge', codeChallenge)
   u.searchParams.set('code_challenge_method', 'S256')
-  // Demo convenience: prefill Leafy Pay's login form (login_hint is standard OIDC; the PSP also
-  // reads prefill_password, but only in its non-production builds).
+  // Demo convenience: prefill the email on Leafy Pay's login form. The password is never sent - the
+  // PSP ignores `prefill_password` in production builds, so deployed it only leaked the credential
+  // into browser history, proxy logs and Referer headers for nothing. The walkthrough shows it.
   if (prefillEmail) u.searchParams.set('login_hint', prefillEmail)
-  if (prefillPassword) u.searchParams.set('prefill_password', prefillPassword)
   return u.toString()
 }
 
@@ -78,7 +69,7 @@ export async function exchangeCode(code, codeVerifier) {
     code_verifier: codeVerifier,
     client_id: ENV.clientId(),
   })
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -99,7 +90,7 @@ export async function refreshTokens(refreshToken) {
     refresh_token: refreshToken,
     client_id: ENV.clientId(),
   })
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -122,16 +113,13 @@ export class OAuthUpstreamError extends Error {
   }
 }
 
-function backchannelEndpoint(cfg) {
-  return cfg.backchannel_authentication_endpoint ?? cfg.token_endpoint.replace(/\/token$/, '/bc-authorize')
-}
 
 /** Initiate the CIBA backchannel request and return { auth_req_id, expires_in, interval }. */
 export async function backchannelAuthorize({ loginHintToken, scope, bindingMessage }) {
   const cfg = oidcConfig()
   const body = new URLSearchParams({ login_hint_token: loginHintToken, scope, client_id: ENV.clientId() })
   if (bindingMessage) body.set('binding_message', bindingMessage)
-  const res = await pspFetch(backchannelEndpoint(cfg), {
+  const res = await fetch(cfg.backchannel_authentication_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body,
@@ -150,7 +138,7 @@ export async function backchannelAuthorize({ loginHintToken, scope, bindingMessa
  */
 export async function cibaTokenPoll(authReqId) {
   const cfg = oidcConfig()
-  const res = await pspFetch(cfg.token_endpoint, {
+  const res = await fetch(cfg.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({
@@ -179,7 +167,7 @@ export async function cibaTokenPoll(authReqId) {
 /** Best-effort token revocation. */
 export async function revoke(token) {
   const cfg = oidcConfig()
-  await pspFetch(cfg.revocation_endpoint, {
+  await fetch(cfg.revocation_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: basicAuthHeader() },
     body: new URLSearchParams({ token }),
@@ -194,7 +182,7 @@ export async function revoke(token) {
 export async function fetchUserinfo(accessToken) {
   try {
     const cfg = oidcConfig()
-    const res = await pspFetch(cfg.userinfo_endpoint, {
+    const res = await fetch(cfg.userinfo_endpoint, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     })

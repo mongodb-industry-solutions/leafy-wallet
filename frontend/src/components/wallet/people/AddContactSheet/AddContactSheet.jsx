@@ -7,8 +7,8 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 
 /**
- * Bottom-sheet form to add a contact by a registered Leafy Pay email. On success it refreshes the
- * contact list and dismisses; on a miss it shows an inline error.
+ * Bottom-sheet form to add a contact by a registered Leafy Pay email or phone, whichever the value
+ * looks like. On success it refreshes the contact list and dismisses; on a miss it shows an error.
  * @param {object} props
  * @param {() => void} props.onClose
  */
@@ -53,8 +53,11 @@ export function AddContactSheet({ onClose }) {
             ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            type="email"
-            placeholder="name@email.com"
+            type="text"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            placeholder="Email or phone number"
             className="mb-2 h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm outline-none placeholder:text-muted-foreground"
           />
           <input

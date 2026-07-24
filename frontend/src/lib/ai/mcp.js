@@ -31,24 +31,22 @@ export function getMcpTools() {
 }
 
 /**
- * An MCP tool result as a plain array of rows. FastMCP returns a list as one content block per
- * element (an empty list is an empty array), and the adapter may hand back a bare string for a
- * single block, so every shape normalizes to "array of parsed rows".
+ * An MCP tool result as a plain array of rows. The adapter surfaces a `list[dict]` tool in three
+ * shapes: `structuredContent` ({result: [...]}) when the response is a single block, an array of
+ * text blocks when it is multiple rows, or a bare string. Each normalizes to an array of rows.
  * @param {unknown} result
  * @returns {any[]}
  */
 export function parseMcpResult(result) {
-  if (typeof result === 'string') {
-    if (!result.trim()) return []
-    const parsed = JSON.parse(result)
-    return Array.isArray(parsed) ? parsed : [parsed]
-  }
-  if (Array.isArray(result)) {
-    const rows = result
-      .filter((block) => block?.type === 'text' && typeof block.text === 'string')
-      .map((block) => JSON.parse(block.text))
-    if (rows.length === 1 && Array.isArray(rows[0])) return rows[0]
-    return rows
-  }
-  return result
+  const structured = result?.structuredContent?.result
+  if (structured !== undefined) return Array.isArray(structured) ? structured : [structured]
+
+  const blocks = Array.isArray(result) ? result : [result]
+  const rows = blocks
+    .map((block) => (typeof block === 'string' ? block : block?.text))
+    .filter((text) => typeof text === 'string' && text.trim())
+    .map((text) => JSON.parse(text))
+  // A lone block can itself carry the whole array.
+  if (rows.length === 1 && Array.isArray(rows[0])) return rows[0]
+  return rows
 }
