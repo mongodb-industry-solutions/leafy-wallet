@@ -11,9 +11,9 @@ env:
   AWS_REGION: us-east-1
   BACKEND_URL: http://localhost:8000
   LOCAL_STORE_URL: http://localhost:8090
-  APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.prod.corp.mongodb.com
+  APP_BASE_URL: https://leafy-wallet-frontend.industrysolutions.staging.corp.mongodb.com
   PSP_BASE_URL: http://sec-fsi-pci-dss-backend-web-app:80
-  PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.prod.corp.mongodb.com
+  PSP_FRONTEND_URL: https://sec-fsi-pci-dss-frontend.industrysolutions.staging.corp.mongodb.com
 
 # Secret names only
 envSecrets:
