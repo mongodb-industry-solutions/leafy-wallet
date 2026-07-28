@@ -13,7 +13,7 @@ function amountScale(len) {
 
 /**
  * First step of the send/request flow: a numeric keypad for entering the
- * amount, with Request/Pay actions to advance.
+ * amount, with Request/Send actions to advance.
  * @param {object} props
  * @param {string} props.display - Formatted amount (e.g. "12.50").
  * @param {number} props.cents - Amount in cents.
@@ -94,12 +94,12 @@ export function NumpadStep({
           Cancel
         </button>
         <button
-          data-tour-target="send-pay"
+          data-tour-target="send-continue"
           onClick={() => onPick(mode)}
           disabled={isEmpty}
           className="h-14 flex-1 rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
         >
-          {isRequest ? 'Request' : 'Pay'}
+          {isRequest ? 'Request' : 'Send'}
         </button>
       </div>
     </div>

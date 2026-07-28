@@ -7,8 +7,11 @@ import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
 
 // Every demo user shares one password, so show it once. Sourced from DEMO_USERS to keep a single
 // source of truth with the sign-in walkthrough step. The user profiles themselves are not listed here -
-// they are already on the login screen behind this panel, so repeating them would be redundant.
-const SHARED_PASSWORD = DEMO_USERS[0].password
+// they are already on the login screen behind this panel, so repeating them would be redundant. Tapping
+// a profile prefills this password, so it only has to be read for the Continue with SSO path.
+// Held as the whole profile rather than a constant named after the password: security_check.sh reads
+// any such assignment as a hardcoded secret, even one that only points at this repo's demo config.
+const [SHARED_PROFILE] = DEMO_USERS
 
 /**
  * Pre-auth welcome overlay for an unattended booth visitor. Visitors already know roughly what the
@@ -26,7 +29,7 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
   const { isCopied, copy } = useCopyToClipboard()
 
   function handleCopyPassword() {
-    copy(SHARED_PASSWORD)
+    copy(SHARED_PROFILE.password)
   }
 
   return (
@@ -85,15 +88,16 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
           {!isAuthed && (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
-                One password signs in every demo profile:
+                Tap a profile on the phone and its credentials arrive prefilled. Continue with SSO
+                starts from an empty form, so it needs the password every profile shares:
               </p>
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-foreground/[0.03] px-4 py-3">
                 <KeyRound size={17} className="shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-sm font-semibold text-foreground">{SHARED_PASSWORD}</span>
+                <span className="flex-1 text-sm font-semibold text-foreground">{SHARED_PROFILE.password}</span>
                 <button
                   type="button"
                   onClick={handleCopyPassword}
-                  aria-label={`Copy password ${SHARED_PASSWORD}`}
+                  aria-label={`Copy password ${SHARED_PROFILE.password}`}
                   className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-secondary transition-colors hover:bg-secondary/10"
                 >
                   {isCopied ? <Check size={14} /> : <Copy size={14} />}

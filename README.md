@@ -146,7 +146,9 @@ The demo revolves around three identities, seeded in MongoDB's shared Leafy Pay 
 | Luis Fernandez | `luis.fernandez@back.es` | `demo-password` |
 | Priya Patel | `priya.patel@back.es` | `demo-password` |
 
-> **_Note:_** Running your own Leafy Pay? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains.
+Tapping a profile card on the login screen hands both credentials to Leafy Pay's hosted login form, so it arrives prefilled and you just confirm. Only "Continue with SSO" leaves the form empty and needs the password typed in.
+
+> **_Note:_** Running your own Leafy Pay? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains, and the prefill uses the same passwords.
 
 The services and their ports:
 
