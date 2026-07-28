@@ -38,15 +38,15 @@ export const TOUR = [
 
   // People: pick the first contact, then choose Send in the drawer that opens.
   { type: 'click', target: 'tab-people', say: "First, I'll pick someone.", walkthroughStep: 0, readMs: 1400 },
-  { type: 'click', target: 'contact-0', say: 'Pay them or request from them?', walkthroughStep: 0, readMs: 1200 },
+  { type: 'click', target: 'contact-0', say: 'Send them money or request from them?', walkthroughStep: 0, readMs: 1200 },
   { type: 'click', target: 'contact-send', say: "I'll send them money.", walkthroughStep: 0, readMs: 900 },
 
-  // Compose: tap €10.00 (cents), pick Pay, type a note.
+  // Compose: tap €10.00 (cents), pick Send, type a note.
   { type: 'click', target: 'key-1', say: 'Entering €10.00 on the keypad.', walkthroughStep: 0, readMs: 150 },
   { type: 'click', target: 'key-0', walkthroughStep: 0, readMs: 150 },
   { type: 'click', target: 'key-0', walkthroughStep: 0, readMs: 150 },
   { type: 'click', target: 'key-0', walkthroughStep: 0, readMs: 350 },
-  { type: 'click', target: 'send-pay', say: 'Then hit Pay.', walkthroughStep: 0, readMs: 900 },
+  { type: 'click', target: 'send-continue', say: 'Then hit Send.', walkthroughStep: 0, readMs: 900 },
   { type: 'type', target: 'send-note', text: NOTE_TEXT, say: "I'll add a quick note.", walkthroughStep: 0, readMs: 1000 },
 
   // The offline moment: the cursor leaves the phone to flip the connection off, then sends (it queues).

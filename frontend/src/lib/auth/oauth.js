@@ -41,8 +41,13 @@ function basicAuthHeader() {
   return `Basic ${creds}`
 }
 
-/** Build the browser-facing authorize URL (Leafy Pay's frontend login page). */
-export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefillEmail }) {
+/**
+ * Build the browser-facing authorize URL (Leafy Pay's frontend login page).
+ * @param {object} params
+ * @param {string} [params.prefillEmail] - Demo user's email, prefilled on Leafy Pay's login form.
+ * @param {string} [params.prefillPassword] - Same demo user's password, prefilled alongside it.
+ */
+export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefillEmail, prefillPassword }) {
   const u = new URL(ENV.authorizeUrl())
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', ENV.clientId())
@@ -52,10 +57,14 @@ export function buildAuthorizeUrl({ state, nonce, codeChallenge, scopes, prefill
   u.searchParams.set('nonce', nonce)
   u.searchParams.set('code_challenge', codeChallenge)
   u.searchParams.set('code_challenge_method', 'S256')
-  // Demo convenience: prefill the email on Leafy Pay's login form. The password is never sent - the
-  // PSP ignores `prefill_password` in production builds, so deployed it only leaked the credential
-  // into browser history, proxy logs and Referer headers for nothing. The walkthrough shows it.
+  // Demo convenience: hand Leafy Pay's login form both credentials so tapping a profile card lands on
+  // a form that is already filled in. `login_hint` is standard OIDC; `prefill_password` is Leafy Pay's
+  // own demo-only param (honoured unless its NEXT_PUBLIC_PSP_OIDC_AUTO kill-switch is 'false').
+  // A password in a query string leaks into browser history, proxy logs and Referer headers, so only
+  // the shared demo credential from DEMO_USERS ever goes here - never a real one. The visitor still
+  // clicks the login button; Leafy Pay only auto-submits with an extra `auto_login=1`.
   if (prefillEmail) u.searchParams.set('login_hint', prefillEmail)
+  if (prefillPassword) u.searchParams.set('prefill_password', prefillPassword)
   return u.toString()
 }
 
