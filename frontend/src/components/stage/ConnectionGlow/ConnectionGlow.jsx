@@ -54,7 +54,7 @@ export function ConnectionGlow({ isOnline }) {
           background: 'radial-gradient(115% 90% at 50% 50%, var(--muted) 20%, transparent 80%)',
         }}
       />
-      <GlowFrame background="var(--connection-glow)" opacity={isOnline ? 1 : 0} />
+      <GlowFrame background="var(--primary)" opacity={isOnline ? 1 : 0} />
       <GlowFrame background="var(--muted-foreground)" opacity={isOnline ? 0 : 0.4} />
     </>
   )

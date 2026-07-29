@@ -25,9 +25,6 @@
   --border: oklch(0.9417 0.0060 170.4415);
   --input: oklch(0.9417 0.0060 170.4415);
   --ring: oklch(0.8254 0.2367 148.3680);
-  /* Online rim: --primary is too light to register against the white stage, --secondary too dark to
-     read as live. Lands near oklch(0.66 0.17 156). */
-  --connection-glow: color-mix(in oklch, var(--primary) 55%, var(--secondary));
   --radius: 1rem;
   --shadow-2xs: 0px 4px 16px 0px hsl(198.1395 100.0000% 8.4314% / 0.02);
   --shadow-xs: 0px 4px 16px 0px hsl(198.1395 100.0000% 8.4314% / 0.02);
