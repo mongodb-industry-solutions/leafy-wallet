@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { Ico } from '@/components/common/Icons/Icons'
+import { ThinkingOrb } from 'thinking-orbs'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
-import { BouncingDots } from '@/components/common/BouncingDots/BouncingDots'
 import { cn } from '@/lib/utils'
+import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { ActionCard } from '@/components/wallet/assistant/ActionCard/ActionCard'
 import { SpendingChart } from '@/components/wallet/assistant/SpendingChart/SpendingChart'
 import { ChatHeader } from './ChatHeader'
@@ -42,6 +42,7 @@ function Typewriter({ text, animate, onDone }) {
  */
 export function AiTab({ user }) {
   const c = useAiChat()
+  const { isOnline } = useWalletData()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat)
   // never replays it.
   const streamedRef = useRef(new Set())
@@ -116,6 +117,7 @@ export function AiTab({ user }) {
                 <div key={m.id} className="flex justify-start">
                   <ActionCard
                     msg={m}
+                    isBusy={c.confirmingId === m.id}
                     onConfirm={c.handleConfirmAction}
                     onEditNote={c.handleEditNote}
                     onExpand={c.handleScrollToEnd}
@@ -150,18 +152,11 @@ export function AiTab({ user }) {
             )
           })}
 
-          {c.isListening && c.transcript && (
-            <div className="flex justify-end">
-              <div className="max-w-[82%] rounded-2xl bg-foreground px-3.5 py-2.5 text-sm text-background/70">
-                {c.transcript}
-                <span className="ml-0.5 animate-pulse">|</span>
-              </div>
-            </div>
-          )}
-
           {c.isThinking && (
-            <div className="py-1">
-              <BouncingDots className="w-8 text-muted-foreground" />
+            <div role="status" className="flex items-center gap-2 py-1.5">
+              {/* Pinned: the app is light-only, and `auto` would paint light ink on a dark-mode OS. */}
+              <ThinkingOrb state="working" size={20} theme="light" aria-hidden="true" />
+              <span className="text-sm font-semibold text-foreground">Thinking…</span>
             </div>
           )}
           <div ref={c.endRef} />
@@ -170,7 +165,13 @@ export function AiTab({ user }) {
 
       {/* Full-width floating bar with a fade, so messages slide under it and
           clip at the input rather than a hard edge above it. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10 pb-24">
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10',
+          // Offline, the input lifts so it clears the OfflineBar sitting above the tab bar.
+          isOnline ? 'pb-24' : 'pb-[8.5rem]',
+        )}
+      >
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
             data-tour-target="ai-input"
@@ -180,29 +181,15 @@ export function AiTab({ user }) {
             placeholder="Ask anything…"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
-          {c.hasText ? (
-            <button
-              data-tour-target="ai-send"
-              onClick={c.handleSendText}
-              aria-label="Send"
-              className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background"
-            >
-              <Icon glyph="ArrowUp" size={18} />
-            </button>
-          ) : (
-            <button
-              onClick={c.isListening ? c.handleStop : c.handleStart}
-              aria-label={c.isListening ? 'Stop' : 'Voice'}
-              className={cn(
-                'grid size-9 flex-none place-items-center rounded-full',
-                c.isListening
-                  ? 'bg-gradient-to-br from-[#00A35C] to-[#006EFF] text-white'
-                  : 'bg-foreground text-background',
-              )}
-            >
-              <Ico.Mic size={18} />
-            </button>
-          )}
+          <button
+            data-tour-target="ai-send"
+            onClick={c.handleSendText}
+            disabled={!c.hasText}
+            aria-label="Send"
+            className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-40"
+          >
+            <Icon glyph="ArrowUp" size={18} />
+          </button>
         </div>
       </div>
     </div>

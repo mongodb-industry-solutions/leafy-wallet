@@ -14,6 +14,7 @@ import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen/Profile
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet/AddContactSheet'
 import { ContactActionSheet } from '@/components/wallet/people/ContactActionSheet/ContactActionSheet'
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel/NotificationsPanel'
+import { OfflineBar } from '@/components/wallet/shell/OfflineBar/OfflineBar'
 import { SettlementToast } from '@/components/wallet/shell/SettlementToast/SettlementToast'
 import { ArrivalToast } from '@/components/wallet/shell/ArrivalToast/ArrivalToast'
 
@@ -156,6 +157,8 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
             <ProfileScreen user={user} onClose={() => setIsProfileOpen(false)} onSignOut={onSignOut} />
           </div>
         )}
+        <OfflineBar />
+
         {/* Last, so they layer over whichever screen or sheet is open. */}
         <SettlementToast />
         <ArrivalToast />

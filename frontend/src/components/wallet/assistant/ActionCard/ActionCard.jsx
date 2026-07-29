@@ -44,7 +44,7 @@ function outcomeOf({ isQueued, isRequest, transaction }) {
  * @param {(id: string, note: string) => void} [props.onEditNote] - Edits the draft's note before confirming.
  * @param {() => void} [props.onExpand] - Called when the card expands into review.
  */
-export function ActionCard({ msg, onConfirm, onEditNote, onExpand }) {
+export function ActionCard({ msg, onConfirm, onEditNote, onExpand, isBusy = false }) {
   const { accounts, transactions } = useWalletData()
   const d = msg.actionData
   const isReq = d.mode === 'request'
@@ -55,6 +55,9 @@ export function ActionCard({ msg, onConfirm, onEditNote, onExpand }) {
     ? (transactions.data ?? []).find((t) => t.reference === d.reference)
     : undefined
   const outcome = outcomeOf({ isQueued: d.isQueued, isRequest: isReq, transaction })
+
+  let confirmLabel = `${isReq ? 'Request' : 'Send'} €${fmt(d.amount)}`
+  if (isBusy) confirmLabel = isReq ? 'Requesting…' : 'Sending…'
 
   // When the card expands into review, scroll the thread so it stays in view.
   useEffect(() => {
@@ -117,15 +120,17 @@ export function ActionCard({ msg, onConfirm, onEditNote, onExpand }) {
           <div className="mt-3.5 flex gap-2">
             <button
               onClick={() => setIsReviewing(false)}
-              className="h-11 flex-1 rounded-full bg-foreground/[0.08] text-sm font-semibold"
+              disabled={isBusy}
+              className="h-11 flex-1 rounded-full bg-foreground/[0.08] text-sm font-semibold disabled:opacity-40"
             >
               Cancel
             </button>
             <button
               onClick={() => onConfirm(msg.id)}
-              className="h-11 flex-[1.6] rounded-full bg-secondary text-sm font-semibold text-secondary-foreground"
+              disabled={isBusy}
+              className="h-11 flex-[1.6] rounded-full bg-secondary text-sm font-semibold text-secondary-foreground disabled:opacity-60"
             >
-              {isReq ? 'Request' : 'Send'} €{fmt(d.amount)}
+              {confirmLabel}
             </button>
           </div>
         </div>

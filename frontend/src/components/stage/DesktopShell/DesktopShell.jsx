@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Icon from '@leafygreen-ui/icon'
 import { useConnection } from '@/components/stage/DesktopShell/useConnection'
 import { useAuthGate } from '@/components/stage/DesktopShell/useAuthGate'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow/ConnectionGlow'
@@ -133,9 +134,10 @@ export function DesktopShell() {
           <button
             type="button"
             onClick={showWelcome}
-            className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 text-xs font-medium text-muted-foreground/70 transition-colors hover:text-foreground"
+            className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
           >
-            What is this? Watch the intro
+            <Icon glyph="Play" size={14} className="text-secondary" aria-hidden="true" />
+            Watch the intro
           </button>
         )
       )}
