@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { ThinkingOrb } from 'thinking-orbs'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
-import { cn } from '@/lib/utils'
-import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { ActionCard } from '@/components/wallet/assistant/ActionCard/ActionCard'
 import { SpendingChart } from '@/components/wallet/assistant/SpendingChart/SpendingChart'
 import { ChatHeader } from './ChatHeader'
@@ -42,7 +40,6 @@ function Typewriter({ text, animate, onDone }) {
  */
 export function AiTab({ user }) {
   const c = useAiChat()
-  const { isOnline } = useWalletData()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat)
   // never replays it.
   const streamedRef = useRef(new Set())
@@ -165,13 +162,7 @@ export function AiTab({ user }) {
 
       {/* Full-width floating bar with a fade, so messages slide under it and
           clip at the input rather than a hard edge above it. */}
-      <div
-        className={cn(
-          'pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10',
-          // Offline, the input lifts so it clears the OfflineBar sitting above the tab bar.
-          isOnline ? 'pb-24' : 'pb-[8.5rem]',
-        )}
-      >
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10 pb-24">
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
             data-tour-target="ai-input"
