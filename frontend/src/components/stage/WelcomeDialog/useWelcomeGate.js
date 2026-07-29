@@ -15,20 +15,23 @@ export const TOUR_INTENT_KEY = 'leafy:tour-intent'
  * Gates the pre-auth welcome overlay for the booth. Opens once per browser session, until the visitor
  * dismisses it or signs out. Starting the tour is auth-aware (it may need to outlive the SSO redirect),
  * so that lives in DesktopShell; this hook only owns open/seen state.
+ * @param {boolean} isEntrySettled - Whether the entry screen has resolved; holds the welcome back so
+ *   it never opens underneath the FaceID unlock.
  * @returns {{
  *   isWelcomeOpen: boolean,
  *   showWelcome: () => void,
  *   dismissWelcome: () => void,
  * }}
  */
-export function useWelcomeGate() {
+export function useWelcomeGate(isEntrySettled) {
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false)
 
-  // Open on mount unless already seen this session. Done in an effect (not a lazy initializer) so the
-  // server and first client render agree - sessionStorage is unavailable during SSR.
+  // Open once the entry screen settles, unless already seen this session. Done in an effect (not a lazy
+  // initializer) so the server and first client render agree - sessionStorage is unavailable during SSR.
   useEffect(() => {
+    if (!isEntrySettled) return
     if (window.sessionStorage.getItem(WELCOME_SEEN_KEY) !== '1') setIsWelcomeOpen(true)
-  }, [])
+  }, [isEntrySettled])
 
   // Re-entry point on the stage: reopen without touching the seen flag.
   const showWelcome = useCallback(() => setIsWelcomeOpen(true), [])
