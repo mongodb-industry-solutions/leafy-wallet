@@ -5,8 +5,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { IconButton } from '@/components/ui/IconButton'
 
 /**
- * AI chat top bar: back to history (left) and the current chat title (center, cross-fading when it
- * auto-renames). Starting a chat lives on the history screen, so there is no "+" here.
+ * AI chat top bar: history (left) and the current chat title (center, cross-fading when it
+ * auto-renames). The tab already opens on a fresh chat, so there is no "+" here.
  * @param {object} props
  * @param {string} props.title
  * @param {() => void} props.onBack - Opens the chat history.

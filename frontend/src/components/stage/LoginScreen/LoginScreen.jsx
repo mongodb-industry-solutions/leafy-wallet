@@ -9,8 +9,8 @@ const SSO_LOGIN_URL = '/api/auth/login'
 /**
  * First-run login screen: hero art, a row of demo-user profile cards, then the real SSO button.
  * Tapping a profile card starts the Leafy Pay authorization_code + PKCE flow with that user's email
- * prefilled; "Continue with SSO" starts the same flow with an empty login form. The password is
- * always typed by hand - the walkthrough is where it is shown.
+ * and password already prefilled; "Continue with SSO" starts the same flow with an empty login form,
+ * which is the only path where the password has to be typed by hand (the walkthrough shows it).
  */
 export function LoginScreen() {
   // Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app.

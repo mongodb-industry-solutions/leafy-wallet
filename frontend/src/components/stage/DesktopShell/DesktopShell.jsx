@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Icon from '@leafygreen-ui/icon'
 import { useConnection } from '@/components/stage/DesktopShell/useConnection'
 import { useAuthGate } from '@/components/stage/DesktopShell/useAuthGate'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow/ConnectionGlow'
@@ -32,11 +33,13 @@ function isTourKilled() {
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
   const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
-  const { isWelcomeOpen, showWelcome, dismissWelcome } = useWelcomeGate()
+  const isAuthed = phase === 'authed'
+  // The FaceID unlock covers the stage, so the welcome waits it out.
+  const isEntrySettled = phase === 'login' || isAuthed
+  const { isWelcomeOpen, showWelcome, dismissWelcome } = useWelcomeGate(isEntrySettled)
   const [flow, setFlow] = useState('home')
   const [isTourActive, setIsTourActive] = useState(false)
 
-  const isAuthed = phase === 'authed'
   const stopTour = useCallback(() => setIsTourActive(false), [])
   const tour = useTourDirector({ isActive: isTourActive, onFinish: stopTour })
   const command = tour.command
@@ -80,7 +83,7 @@ export function DesktopShell() {
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-8 py-12">
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-8 py-8">
       <ConnectionGlow isOnline={isOnline} />
 
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-[clamp(48px,8vw,120px)] gap-y-16">
@@ -110,6 +113,10 @@ export function DesktopShell() {
           the phone to the off-phone connection toggle. */}
       {isTourActive && isAuthed && <TourCursor command={command} onStepComplete={tour.onStepComplete} />}
 
+      {/* Swallows real clicks, which would desync the tour. The controls sit above this at z-60, and
+          the tour's own clicks are dispatched straight onto the elements. */}
+      {isTourActive && <div aria-hidden className="fixed inset-0 z-[55]" />}
+
       {/* Bottom of the stage: the tour controls while it runs, otherwise the low-prominence re-entry
           point that lets a presenter restart the intro between conversations. */}
       {isTourActive ? (
@@ -127,9 +134,10 @@ export function DesktopShell() {
           <button
             type="button"
             onClick={showWelcome}
-            className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 text-xs font-medium text-muted-foreground/70 transition-colors hover:text-foreground"
+            className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
           >
-            What is this? Watch the intro
+            <Icon glyph="Play" size={14} className="text-secondary" aria-hidden="true" />
+            Watch the intro
           </button>
         )
       )}

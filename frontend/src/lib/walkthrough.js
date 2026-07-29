@@ -26,12 +26,13 @@ export const WALKTHROUGH = {
   login: {
     label: 'Sign in',
     // One step on purpose: splitting "how to sign in" from "which credentials" left a presenter
-    // waiting out the first slide before the password appeared.
+    // waiting out the first slide before the password appeared. The password is still shown even
+    // though profile cards prefill it, because Continue with SSO leaves the form empty.
     steps: [
       {
         visual: SsoLoginVisual,
         title: 'Sign in as a demo user',
-        body: 'Tap a profile to prefill its email, or use Continue with SSO. Every profile shares one password:',
+        body: 'Tap a profile and its email and password arrive already filled in. Continue with SSO starts from an empty form, so type the password every profile shares:',
         copyable: DEMO_USERS[0].password,
       },
     ],

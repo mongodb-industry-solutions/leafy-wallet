@@ -9,7 +9,7 @@ Leafy Wallet also features **Leafy**, an AI-powered assistant that answers quest
 Leafy Wallet is composed of several interconnected features that demonstrate the capabilities of a modern offline-first wallet. Users can:
 
 1. **Sign in with SSO**
-   - Real authorization-code + PKCE flow against the payment service provider (PSP).
+   - Real authorization-code + PKCE flow against the Leafy Pay payment service provider.
    - No credential ever touches the app; a passwordless (FaceID-style) re-entry path is included.
 
 2. **Check balances and activity**
@@ -17,12 +17,12 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
    - Each row carries its own settlement status, updated as transfers settle.
 
 3. **Send and request money**
-   - Sends execute real PSP transfers with a full review step (amount, recipient, note, source account).
+   - Sends execute real Leafy Pay transfers with a full review step (amount, recipient, note, source account).
    - Offline sends queue on the device and replay automatically on reconnect.
-   - Requests are real PSP requests-to-pay: the payer approves in-app and the PSP moves the money.
+   - Requests are real Leafy Pay requests-to-pay: the payer approves in-app and Leafy Pay moves the money.
 
 4. **Manage contacts**
-   - Add contacts by a registered PSP email or phone number; removing one also cleans up its Atlas replica.
+   - Add contacts by a registered Leafy Pay email or phone number; removing one also cleans up its Atlas replica.
 
 5. **Receive notifications**
    - Money received and incoming payment requests, with swipe-to-clear and a full review flow for paying a request.
@@ -38,10 +38,10 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 ## Where Does MongoDB Shine?
 
 > **[Diagram placeholder: system-architecture]**
-> _Intended diagram: all six services as boxes (frontend, backend, leafy-local-store, objectbox-sync-server, ollama, MongoDB Atlas plus the external PSP), with arrows showing the online path (frontend to backend to Atlas, frontend to the PSP), the offline path (frontend to leafy-local-store), and the sync path (leafy-local-store to objectbox-sync-server to Atlas)._
+> _Intended diagram: all six services as boxes (frontend, backend, leafy-local-store, objectbox-sync-server, ollama, MongoDB Atlas plus the external Leafy Pay PSP), with arrows showing the online path (frontend to backend to Atlas, frontend to Leafy Pay), the offline path (frontend to leafy-local-store), and the sync path (leafy-local-store to objectbox-sync-server to Atlas)._
 
 ### 1. **Offline sync with ObjectBox and Atlas**
-Wallet records written on the device (chats, requests, queued sends) stream up to Atlas through the ObjectBox Sync connector in the background, and Atlas-side changes stream back down. No spinners, no manual retry. On every login the wallet also reconciles against the PSP: enrichment rows for transfers or beneficiaries that no longer exist there are pruned, and transfers made outside the app are adopted, so the offline copy always mirrors the real ledger.
+Wallet records written on the device (chats, requests, queued sends) stream up to Atlas through the ObjectBox Sync connector in the background, and Atlas-side changes stream back down. No spinners, no manual retry. On every login the wallet also reconciles against Leafy Pay: enrichment rows for transfers or beneficiaries that no longer exist there are pruned, and transfers made outside the app are adopted, so the offline copy always mirrors the real ledger.
 
 > **[Diagram placeholder: sync-path]**
 > _Intended diagram: LocalChat / LocalChatMessage / LocalRequest entities on the device flowing through the sync server into their Atlas collections and back, with the MongoDB connector in the middle._
@@ -75,11 +75,90 @@ The assistant routes each question to the right tool (balances, contacts, spendi
   - [Tailwind CSS](https://tailwindcss.com/) v4
   - [LeafyGreen UI](https://github.com/mongodb/leafygreen-ui) accents
 
-## Deployment
+## Leafy Pay dependency
 
-**The demo needs a running payment service provider (PSP) instance.** The PSP owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
+**The demo needs a running Leafy Pay instance.** Leafy Pay is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
 
-See [LOCAL_DEPLOYMENT.md](LOCAL_DEPLOYMENT.md) for the full setup guide - prerequisites, environment variables, running with Docker, and demo user credentials.
+To run the demo outside MongoDB:
+
+1. Run Leafy Pay locally, or deploy it to your own infrastructure.
+2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
+3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
+
+
+## Prerequisites
+
+- [Docker](https://www.docker.com/) with Docker Compose
+- A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
+- A running Leafy Pay instance (see the section above).
+
+> **_Note:_** After cloning, run `./setup-hooks.sh` once. It installs a pre-commit hook (`security_check.sh`) that scans staged files for credentials before every commit.
+
+### Add environment variables
+
+> **_Note:_** Create a `.env.local` file within the `/frontend` directory and a `.env` file within the `/backend` directory. Ask the demo owner for the values.
+
+```bash
+# frontend/.env.local - everything else has a working local default
+CLIENT_ID="<leafy-pay-oauth-client-id>"
+CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
+PSP_BASE_URL="<leafy-pay-api-base-url>"
+PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
+SESSION_SECRET="<random-string>"
+```
+
+Deployed environments additionally set `APP_ENV` (`staging`/`prod`), `GROVE_API_KEY` and
+`VOYAGE_API_KEY`, plus the URLs that only default correctly on localhost - see
+[`environment/`](environment/). `APP_ENV` is what moves the assistant's chat to MongoDB's Grove
+gateway and embeddings to Voyage AI on Atlas (`https://ai.mongodb.com`, which takes an Atlas-managed
+key), so no Ollama container is deployed. The two embedding models have
+different vector widths (768 local, 1024 deployed), so each environment uses its own Atlas database.
+
+```bash
+# backend/.env
+MONGODB_URI="<your-atlas-connection-string>"
+DATABASE_NAME="<your-database-name>"
+```
+
+## Run with Docker
+
+Make sure to run this on the root directory.
+
+1. To run with Docker use the following command:
+```
+make build
+```
+2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
+   and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
+3. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
+4. To delete the containers and images run:
+```
+make clean
+```
+
+### Demo users
+
+The demo revolves around three identities, seeded in MongoDB's shared Leafy Pay environment. Login is by email only:
+
+| Name | Email | Password |
+|---|---|---|
+| Amara Okafor | `amara.okafor@back.es` | `demo-password` |
+| Luis Fernandez | `luis.fernandez@back.es` | `demo-password` |
+| Priya Patel | `priya.patel@back.es` | `demo-password` |
+
+Tapping a profile card on the login screen hands both credentials to Leafy Pay's hosted login form, so it arrives prefilled and you just confirm. Only "Continue with SSO" leaves the form empty and needs the password typed in.
+
+> **_Note:_** Running your own Leafy Pay? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains, and the prefill uses the same passwords.
+
+The services and their ports:
+
+| Service | Port | Purpose |
+|---|---|---|
+| frontend | 8080 | The wallet UI and the AI chat route |
+| backend | 8000 | Atlas enrichment API (FastAPI) |
+| leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
+| objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
+| ollama | 11434 | Local chat + embedding models |
 
 ## Repository Layout
 
@@ -96,7 +175,7 @@ See [LOCAL_DEPLOYMENT.md](LOCAL_DEPLOYMENT.md) for the full setup guide - prereq
   `State condition failed ... : trial`. Activate the trial at http://localhost:9980, or switch to a
   licensed build (below).
 - **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
-- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in the PSP, and both people must have an active account there - the PSP refuses a request from someone who cannot receive money.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
 
 ## ObjectBox Sync server image
 

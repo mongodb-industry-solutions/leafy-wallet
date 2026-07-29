@@ -24,16 +24,37 @@ export function ConnectionControl({ isOnline, onToggle, shouldNudge = false }) {
             <button
               data-tour-target="connection-toggle"
               onClick={onToggle}
-              aria-label={isOnline ? 'Go offline' : 'Go online'}
-              className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-card text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+              role="switch"
+              aria-checked={isOnline}
+              aria-label="Simulated connection"
+              className="flex h-14 w-full items-center gap-2.5 rounded-full bg-foreground pl-[18px] pr-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-foreground/90"
             >
               <Icon
-                className={cn('size-4', isOnline ? 'text-secondary' : 'text-muted-foreground')}
+                className={cn('size-4', isOnline ? 'text-primary' : 'text-white/50')}
                 aria-hidden="true"
               />
-              {isOnline ? 'Connected' : 'Offline'}
-              <span className="ml-1 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className={cn(isOnline ? 'text-white' : 'text-white/75')}>
+                {isOnline ? 'Connected' : 'Offline'}
+              </span>
+
+              <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-xs font-medium text-white/60">
                 ⌘K
+              </span>
+
+              {/* Without this it reads as a status chip, not a control. */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'relative h-[23px] w-10 flex-none rounded-full transition-colors',
+                  isOnline ? 'bg-primary' : 'bg-white/20',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute left-[3px] top-[3px] size-[17px] rounded-full transition-transform',
+                    isOnline ? 'translate-x-[17px] bg-foreground' : 'bg-white',
+                  )}
+                />
               </span>
             </button>
           }

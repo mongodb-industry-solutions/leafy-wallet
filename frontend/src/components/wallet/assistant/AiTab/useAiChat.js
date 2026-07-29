@@ -12,7 +12,6 @@ import {
   sendMoney,
 } from '@/lib/wallet/actions'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
-import { useSpeech } from './useSpeech'
 
 const NEW_CHAT_TITLE = 'New chat'
 
@@ -49,7 +48,7 @@ async function fetchTurn(body) {
 }
 
 /**
- * Chat state machine for the AI assistant tab: conversations, greeting state, voice/text input,
+ * Chat state machine for the AI assistant tab: conversations, greeting state, text input,
  * and the streamed reply. Chats and messages persist per user, from Atlas or the device depending
  * on the connection.
  * @returns {object} Chat state and actions for AiTab to render.
@@ -58,13 +57,11 @@ export function useAiChat() {
   const { isOnline, refresh, watchTransfer } = useWalletData()
   const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
   const [activeId, setActiveId] = useState('draft')
-  // Opens on the history so past conversations are the way in; a user with none skips straight to
-  // composing, since a list holding only the unsaved draft is not worth showing.
-  const [view, setView] = useState('history') // 'chat' | 'history'
-  const hasPickedViewRef = useRef(false)
+  // Opens on a fresh chat; history is one tap away from the thread header.
+  const [view, setView] = useState('chat') // 'chat' | 'history'
   const [textInput, setTextInput] = useState('')
-  const [transcript, setTranscript] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  const [confirmingId, setConfirmingId] = useState(null)
   const endRef = useRef(null)
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
@@ -84,10 +81,6 @@ export function useAiChat() {
     let isStale = false
     getChats(isOnline).then((saved) => {
       if (isStale) return
-      if (!hasPickedViewRef.current) {
-        hasPickedViewRef.current = true
-        if (saved.length === 0) setView('chat')
-      }
       setChats((prev) => {
         const draft = prev.find((c) => c.id === 'draft')
         const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
@@ -109,7 +102,6 @@ export function useAiChat() {
         title: c.messages.length === 0 && c.title === NEW_CHAT_TITLE ? deriveTitle(text) : c.title,
         messages: [...c.messages, userMessage],
       }))
-      setTranscript('')
       setIsThinking(true)
 
       // A chat only becomes real once it has something in it.
@@ -193,21 +185,21 @@ export function useAiChat() {
     [activeId, msgs, patchActive],
   )
 
-  const { isListening, handleStart, handleStop } = useSpeech(handleProcessText, setTranscript)
-
   const handleScrollToEnd = useCallback(() => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }))
   }, [])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [msgs, isThinking, transcript])
+  }, [msgs, isThinking])
 
   /** The card is the confirm step: nothing moved until the user tapped it. */
   async function handleConfirmAction(id) {
     const message = msgs.find((m) => m.id === id)
     const draft = message?.actionData
-    if (!draft || draft.isConfirmed) return
+    // `isConfirmed` is only set once the call resolves, so it cannot guard the window during it.
+    if (!draft || draft.isConfirmed || confirmingId) return
+    setConfirmingId(id)
 
     // The note may have been edited on the card; store the bare phrase, since the card shows "For <note>".
     const note = (draft.note ?? '').trim().replace(/^for\s+/i, '')
@@ -227,6 +219,7 @@ export function useAiChat() {
           })
 
     if (!result.ok) {
+      setConfirmingId(null)
       patchActive((c) => ({
         ...c,
         messages: [
@@ -236,6 +229,7 @@ export function useAiChat() {
       }))
       return
     }
+    setConfirmingId(null)
     // Keep what actually happened, so the card reports it instead of a fixed "Sent". Offline both
     // kinds are only queued; a real send then settles under its reference, which the card follows.
     const isQueued = !isOnline
@@ -288,18 +282,6 @@ export function useAiChat() {
   function resetTransient() {
     setIsThinking(false)
     setTextInput('')
-    setTranscript('')
-  }
-
-  async function handleNewChat() {
-    resetTransient()
-    setChats((prev) =>
-      prev.some((c) => c.id === 'draft')
-        ? prev
-        : [{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }, ...prev],
-    )
-    setActiveId('draft')
-    setView('chat')
   }
 
   /** Removes a chat everywhere: the list (optimistically) and whichever store holds it. */
@@ -336,11 +318,8 @@ export function useAiChat() {
     isEmpty,
     textInput,
     setTextInput,
-    transcript,
     isThinking,
-    isListening,
-    handleStart,
-    handleStop,
+    confirmingId,
     endRef,
     hasText: textInput.trim().length > 0,
     handleScrollToEnd,
@@ -348,7 +327,6 @@ export function useAiChat() {
     handleEditNote,
     handleSendText,
     handleSuggestion,
-    handleNewChat,
     handleOpenChat,
     handleDeleteChat,
   }

@@ -1,7 +1,5 @@
 'use client'
 
-const ONLINE = '#00FF6E, #00F55E, #00F0D2, #00B4FF, #3D7BFF, #00F0D2, #00FF6E'
-const OFFLINE = '#2B353C, #1C242A, #333F46, #232D33, #1C242A, #2B353C, #2B353C'
 const RADIUS = 22
 
 const LAYERS = [
@@ -17,24 +15,18 @@ const MASK = {
   maskComposite: 'exclude',
 }
 
-/** One blurred, masked conic-gradient ring layer for {@link ConnectionGlow}. */
-function GlowFrame({ colors, opacity, shouldAnimate }) {
+/** One blurred, masked ring layer stack for {@link ConnectionGlow}. */
+function GlowFrame({ background, opacity }) {
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-2 z-0 overflow-hidden transition-opacity duration-1000 ease-in-out"
       style={{ borderRadius: RADIUS, opacity, mixBlendMode: 'multiply' }}
     >
-      {LAYERS.map(({ band, blur }, i) => (
-        <div key={i} className="absolute inset-0" style={{ filter: `blur(${blur}px) saturate(3)` }}>
+      {LAYERS.map(({ band, blur }) => (
+        <div key={band} className="absolute inset-0" style={{ filter: `blur(${blur}px) saturate(1.5)` }}>
           <div className="absolute inset-0" style={{ borderRadius: RADIUS, padding: band, ...MASK }}>
-            <div
-              className="absolute inset-[-50%]"
-              style={{
-                background: `conic-gradient(from 210deg, ${colors})`,
-                ...(shouldAnimate && { animation: 'glow-spin 20s linear infinite' }),
-              }}
-            />
+            <div className="absolute inset-0" style={{ background }} />
           </div>
         </div>
       ))}
@@ -43,16 +35,27 @@ function GlowFrame({ colors, opacity, shouldAnimate }) {
 }
 
 /**
- * Edge-of-screen glow that ambiently signals online/offline state around the
- * whole presenter stage (green spinning ring online, dim static ring offline).
+ * Edge-of-screen glow that ambiently signals online/offline state around the whole presenter stage.
+ * The two states differ by chroma rather than lightness - a saturated green rim online, a pale
+ * neutral haze offline - so they stay tellable apart at a glance.
  * @param {object} props
  * @param {boolean} props.isOnline - Whether the simulated connection is up.
  */
 export function ConnectionGlow({ isOnline }) {
   return (
     <>
-      <GlowFrame colors={ONLINE} opacity={isOnline ? 1 : 0} shouldAnimate />
-      <GlowFrame colors={OFFLINE} opacity={isOnline ? 0 : 0.6} />
+      {/* Sits the stage a touch below the lit rim, so the border reads as the brightest edge. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-2 z-0"
+        style={{
+          borderRadius: RADIUS,
+          mixBlendMode: 'multiply',
+          background: 'radial-gradient(115% 90% at 50% 50%, var(--muted) 20%, transparent 80%)',
+        }}
+      />
+      <GlowFrame background="var(--primary)" opacity={isOnline ? 1 : 0} />
+      <GlowFrame background="var(--muted-foreground)" opacity={isOnline ? 0 : 0.4} />
     </>
   )
 }

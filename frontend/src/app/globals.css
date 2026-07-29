@@ -107,13 +107,6 @@
   display: none;
 }
 
-/* Connection glow: slowly rotate an oversized conic layer so the hues sweep around the border */
-@keyframes glow-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Walkthrough active dot fills over the step's auto-advance duration. */
 @keyframes dot-fill {
   from {
