@@ -61,6 +61,7 @@ export function useAiChat() {
   const [view, setView] = useState('chat') // 'chat' | 'history'
   const [textInput, setTextInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  const [confirmingId, setConfirmingId] = useState(null)
   const endRef = useRef(null)
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
@@ -196,7 +197,9 @@ export function useAiChat() {
   async function handleConfirmAction(id) {
     const message = msgs.find((m) => m.id === id)
     const draft = message?.actionData
-    if (!draft || draft.isConfirmed) return
+    // `isConfirmed` is only set once the call resolves, so it cannot guard the window during it.
+    if (!draft || draft.isConfirmed || confirmingId) return
+    setConfirmingId(id)
 
     // The note may have been edited on the card; store the bare phrase, since the card shows "For <note>".
     const note = (draft.note ?? '').trim().replace(/^for\s+/i, '')
@@ -216,6 +219,7 @@ export function useAiChat() {
           })
 
     if (!result.ok) {
+      setConfirmingId(null)
       patchActive((c) => ({
         ...c,
         messages: [
@@ -225,6 +229,7 @@ export function useAiChat() {
       }))
       return
     }
+    setConfirmingId(null)
     // Keep what actually happened, so the card reports it instead of a fixed "Sent". Offline both
     // kinds are only queued; a real send then settles under its reference, which the card follows.
     const isQueued = !isOnline
@@ -314,6 +319,7 @@ export function useAiChat() {
     textInput,
     setTextInput,
     isThinking,
+    confirmingId,
     endRef,
     hasText: textInput.trim().length > 0,
     handleScrollToEnd,
