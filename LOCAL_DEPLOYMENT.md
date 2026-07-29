@@ -29,6 +29,11 @@ Clone both repositories side by side:
 
 ## 2. Topology and ports
 
+![Local deployment topology](./assets/Leafy_Wallet_Deployment.svg)
+
+The recommended local topology runs the PSP natively in development mode and Leafy Wallet in Docker. In this setup, the PSP listens on local host ports, while Leafy Wallet runs through Docker Compose and reaches the PSP through the Docker host gateway. This deployment order is important: bring up the PSP first, then launch Leafy Wallet against it.
+
+
 | Stack | Service | URL | Runtime |
 |-------|---------|-----|---------|
 | Leafy Pay | backend | `http://localhost:8081` | native (`npm run dev`) |
