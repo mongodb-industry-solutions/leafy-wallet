@@ -67,9 +67,8 @@ export const TOUR = [
     readMs: 2600,
   },
 
-  // Assistant: new chat, then typewrite the question and send it.
+  // Assistant: the tab opens on a fresh chat, so typewrite the question straight away and send it.
   { type: 'click', target: 'tab-ai', say: "Last, let's ask the assistant.", walkthroughStep: 0, readMs: 1200 },
-  { type: 'click', target: 'ai-new-chat', say: 'Start a fresh chat.', walkthroughStep: 0, readMs: 900 },
   { type: 'type', target: 'ai-input', text: AI_PROMPT, say: "I'll ask about my spending.", walkthroughStep: 0, readMs: 600 },
   { type: 'click', target: 'ai-send', say: 'And send. It answers from real data.', walkthroughStep: 0, readMs: 5000 },
 ]

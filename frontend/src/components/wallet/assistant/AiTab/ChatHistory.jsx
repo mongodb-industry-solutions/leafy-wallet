@@ -18,9 +18,9 @@ function snippetOf(chat) {
 }
 
 /**
- * Full-screen chat history: the list of conversations, with a "+" to start a new one (right).
- * This is where the assistant opens, so there is nothing to go back to - a chat is reached by
- * tapping its row. Swiping one left reveals delete (one row at a time).
+ * Full-screen chat history: the list of conversations, reached from the thread header. The unsaved
+ * draft sits pinned at the top, so tapping it is how you get back to a blank chat. Swiping a row
+ * left reveals delete (one row at a time).
  * @param {object} props
  * @param {{id: string, title: string, messages: object[]}[]} props.chats
  * @param {string} props.activeId
@@ -49,10 +49,7 @@ export function ChatHistory({ chats, activeId, onOpen, onDelete }) {
               onAction={() => onDelete(c.id)}
               rowClassName="gap-3 bg-card px-3 py-3.5"
             >
-              <span
-                data-tour-target={c.id === DRAFT_CHAT_ID ? 'ai-new-chat' : undefined}
-                className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground"
-              >
+              <span className="grid size-9 flex-none place-items-center rounded-full bg-foreground/10 text-foreground">
                 <Icon glyph="Sparkle" size={16} />
               </span>
               <div className="min-w-0 flex-1">

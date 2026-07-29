@@ -15,6 +15,8 @@ import {
 
 const SETTLE_POLL_MS = 2500
 const SETTLE_MAX_POLLS = 8
+// Leafy Pay pushes nothing, so anything arriving from someone else has to be looked for.
+const ARRIVAL_POLL_MS = 15000
 
 // Each wallet dataset maps to the Server Action that loads it. The read itself runs on the server
 // (session + Bearer never leave it); this provider caches the result on the client and shares it
@@ -34,6 +36,22 @@ const dismissedStorageKey = (ownerKey) => `leafy:notif-dismissed:${ownerKey || '
 
 const isNewerThan = (createdAt, seenAt) =>
   !seenAt || (createdAt ? new Date(createdAt).getTime() > seenAt : false)
+
+/** Received transfers in a getTransactions() result: money in, not out. */
+const receivedRows = (data) => (data ?? []).filter((t) => t.amount > 0)
+
+/**
+ * Banner the first row that turned up since the last load. The first load only records the baseline,
+ * so what was already waiting at login is not announced as new. The seen set only ever grows: the
+ * offline store can hold fewer rows than Leafy Pay, and a row reappearing is not an arrival.
+ */
+function announceNew(rows, seenRef, kind, setArrival) {
+  const known = seenRef.current
+  const ids = new Set(rows.map((r) => r.id))
+  seenRef.current = known ? new Set([...known, ...ids]) : ids
+  const arrived = known && rows.find((r) => !known.has(r.id))
+  if (arrived) setArrival({ kind, ...arrived })
+}
 
 /**
  * Derive the notifications feed: received transfers (the PSP has no received-money notification, so
@@ -102,6 +120,10 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   // Carries only the reference and outcome; the banner reads the row itself, so it never renders a
   // stale amount from before the refresh that settled it.
   const [settlement, setSettlement] = useState(null)
+  const [arrival, setArrival] = useState(null)
+  // What has already been announced, so each row banners once. Null until the first load.
+  const announcedRequestsRef = useRef(null)
+  const announcedReceivedRef = useRef(null)
 
   // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
   // consumer's callbacks on each toggle.
@@ -113,6 +135,11 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     setState((s) => ({ ...s, [key]: { ...s[key], isLoading: s[key].data === null, error: false } }))
     try {
       const data = await LOADERS[key](isOnlineRef.current)
+      if (key === 'requests') {
+        announceNew(data?.incoming ?? [], announcedRequestsRef, 'request', setArrival)
+      } else if (key === 'transactions') {
+        announceNew(receivedRows(data), announcedReceivedRef, 'received', setArrival)
+      }
       setState((s) => ({ ...s, [key]: { data, isLoading: false, error: false } }))
     } catch {
       setState((s) => ({ ...s, [key]: { data: null, isLoading: false, error: true } }))
@@ -193,6 +220,14 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     resync()
   }, [isOnline, refresh, watchTransfer])
 
+  // Poll for what someone else can send: requests addressed to the user and inbound transfers.
+  // Offline there is nothing new to find, since the local store only changes through this device.
+  useEffect(() => {
+    if (!isOnline) return undefined
+    const id = setInterval(() => refresh(['requests', 'transactions']), ARRIVAL_POLL_MS)
+    return () => clearInterval(id)
+  }, [isOnline, refresh])
+
   // Load the persisted "notifications seen" marker and dismissals for this user.
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -234,6 +269,9 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   /** Clear the settlement banner once it has played out. */
   const dismissSettlement = useCallback(() => setSettlement(null), [])
 
+  /** Clear the arrival banner once it has played out. */
+  const dismissArrival = useCallback(() => setArrival(null), [])
+
   const value = {
     ...state,
     isOnline,
@@ -245,6 +283,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     dismissNotifications,
     settlement,
     dismissSettlement,
+    arrival,
+    dismissArrival,
   }
   return <WalletDataContext.Provider value={value}>{children}</WalletDataContext.Provider>
 }

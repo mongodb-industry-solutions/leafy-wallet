@@ -58,10 +58,8 @@ export function useAiChat() {
   const { isOnline, refresh, watchTransfer } = useWalletData()
   const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
   const [activeId, setActiveId] = useState('draft')
-  // Opens on the history so past conversations are the way in; a user with none skips straight to
-  // composing, since a list holding only the unsaved draft is not worth showing.
-  const [view, setView] = useState('history') // 'chat' | 'history'
-  const hasPickedViewRef = useRef(false)
+  // Opens on a fresh chat; history is one tap away from the thread header.
+  const [view, setView] = useState('chat') // 'chat' | 'history'
   const [textInput, setTextInput] = useState('')
   const [transcript, setTranscript] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -84,10 +82,6 @@ export function useAiChat() {
     let isStale = false
     getChats(isOnline).then((saved) => {
       if (isStale) return
-      if (!hasPickedViewRef.current) {
-        hasPickedViewRef.current = true
-        if (saved.length === 0) setView('chat')
-      }
       setChats((prev) => {
         const draft = prev.find((c) => c.id === 'draft')
         const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
