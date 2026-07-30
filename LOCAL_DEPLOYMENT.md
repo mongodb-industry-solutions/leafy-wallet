@@ -1,7 +1,7 @@
-# Local Deployment — Leafy Wallet with a Local Leafy Pay PSP
+# Local Deployment — Leafy Wallet with a Local PSP
 
-This guide describes how to run **Leafy Wallet** locally against a local instance of the **Leafy Pay
-PSP** (`sec-fsi-pci-dss`), with SSO login and payments functioning end to end.
+This guide describes how to run **Leafy Wallet** locally against a local instance of the **Payment
+Platform (PSP)** (`sec-fsi-pci-dss`), with SSO login and payments functioning end to end.
 
 The recommended configuration runs the **PSP in development (native) mode** and **Leafy Wallet in
 Docker**. In development mode the PSP services listen on host ports that match the application defaults,
@@ -23,22 +23,22 @@ the native PSP through the Docker host gateway.
 Clone both repositories side by side:
 
 - [Leafy Wallet](https://github.com/mongodb-industry-solutions/leafy-wallet)
-- [Leafy Pay (`sec-fsi-pci-dss`)](https://github.com/mongodb-industry-solutions/sec-fsi-pci-dss)
+- [Payment Platform (`sec-fsi-pci-dss`)](https://github.com/mongodb-industry-solutions/sec-fsi-pci-dss)
 
 ---
 
 ## 2. Topology and ports
 
-![Local deployment topology](./assets/Leafy_Wallet_Deployment.svg)
+![Local deployment topology](./docs/leafy-wallet-deployment.svg)
 
 The recommended local topology runs the PSP natively in development mode and Leafy Wallet in Docker. In this setup, the PSP listens on local host ports, while Leafy Wallet runs through Docker Compose and reaches the PSP through the Docker host gateway. This deployment order is important: bring up the PSP first, then launch Leafy Wallet against it.
 
 
 | Stack | Service | URL | Runtime |
 |-------|---------|-----|---------|
-| Leafy Pay | backend | `http://localhost:8081` | native (`npm run dev`) |
-| Leafy Pay | frontend (login + OAuth consent) | `http://localhost:8083` | native |
-| Leafy Pay | merchant demo (Espresso) | `http://localhost:8082` | native |
+| PSP | backend | `http://localhost:8081` | native (`npm run dev`) |
+| PSP | frontend (login + OAuth consent) | `http://localhost:8083` | native |
+| PSP | merchant demo (Espresso) | `http://localhost:8082` | native |
 | Leafy Wallet | frontend (UI + BFF/OAuth client) | `http://localhost:8080` | Docker |
 | Leafy Wallet | backend (Atlas enrichment / chat / MCP) | `http://localhost:8000` | Docker |
 | Leafy Wallet | local store (ObjectBox) | `http://localhost:8090` | Docker |
@@ -61,7 +61,7 @@ The PSP seeds two OAuth clients in `backend/data/merchants.json`:
 - **Node.js**, to run the native PSP.
 - **`uv`**, to run the Leafy Wallet backend tooling (for example, the vector search index script).
 - A **MongoDB Atlas cluster** with **two separate databases** — one per project:
-  - A **Leafy Pay** database, used by the PSP (including Queryable Encryption).
+  - A **PSP** database (including Queryable Encryption).
   - A **Leafy Wallet** database, used by the Leafy Wallet backend for data enrichment and vector search.
 
   Each project references its own database through its own environment file; the connection strings are
@@ -105,14 +105,14 @@ Each project is configured through its own (gitignored) environment files. Compl
 before launching. Copy from the corresponding `.example` file where one is provided, then set the values
 described here.
 
-### 5.1 Leafy Pay — `sec-fsi-pci-dss/.env`
+### 5.1 PSP — `sec-fsi-pci-dss/.env`
 
-Copy `.env.example` to `.env` and set at least the following. Refer to the Leafy Pay repository for the
-complete list.
+Copy `.env.example` to `.env` and set at least the following. Refer to the `sec-fsi-pci-dss` repository
+for the complete list.
 
 | Variable | Value |
 |----------|-------|
-| `MONGODB_URI` | Connection string for the **Leafy Pay** database |
+| `MONGODB_URI` | Connection string for the **PSP** database |
 | `JWT_SECRET` | Secret used to sign PSP tokens |
 | `KMS_PROVIDER` | Key management provider for Queryable Encryption (for example, `local`) |
 | `MONGODB_CRYPT_SHARED_LIB_PATH` | Absolute path to `mongo_crypt_v1.dylib` (see Section 4) |
@@ -129,7 +129,7 @@ npm run setup:key:rsa   # writes backend/keys/private.pem
 
 | Variable | Value |
 |----------|-------|
-| `MONGODB_URI` | Connection string for the **Leafy Wallet** database (distinct from Leafy Pay) |
+| `MONGODB_URI` | Connection string for the **Leafy Wallet** database (distinct from the PSP) |
 | `DATABASE_NAME` | Leafy Wallet database name |
 
 ### 5.3 Leafy Wallet frontend — `leafy-wallet/frontend/.env.local`
@@ -148,9 +148,9 @@ Notes:
 
 - `PSP_BASE_URL` must use `host.docker.internal`, not `localhost`. Server-side calls run inside the
   wallet container, where `localhost` refers to the container itself.
-- The OAuth client registered in Leafy Pay must allow the scopes the wallet asks for at login
+- The OAuth client registered in the PSP must allow the scopes the wallet asks for at login
   (`frontend/src/lib/auth/env.js`), including `read:rtp` and `write:rtp` for payment requests.
-  Leafy Pay rejects the whole login with `invalid_scope` if any requested scope is not registered.
+  The PSP rejects the whole login with `invalid_scope` if any requested scope is not registered.
 - The two `MONGODB_URI` values point to different databases and are configured independently.
 
 ---
