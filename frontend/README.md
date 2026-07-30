@@ -7,7 +7,7 @@ Beyond the UI, this half of the demo owns the SSO flow, the Server Actions that 
 ## Components and Features:
 
 1. **Sign in with SSO**
-   - Real authorization-code + PKCE handoff to Leafy Pay's hosted login.
+   - Real authorization-code + PKCE handoff to the Payment Platform (PSP)'s hosted login.
    - A passwordless (FaceID-style) re-entry path for returning users.
 
 2. **Home, Activity, and People tabs**
@@ -28,15 +28,11 @@ Beyond the UI, this half of the demo owns the SSO flow, the Server Actions that 
 
 ## Where Does MongoDB Shine?
 
-Every read in `src/lib/wallet/actions.js` takes the connection state and picks its source: Leafy Pay and Atlas when online, the on-device ObjectBox store when offline. The UI never branches; the Server Action does.
+Every read in `src/lib/wallet/actions.js` takes the connection state and picks its source: the PSP and Atlas when online, the on-device ObjectBox store when offline. The UI never branches; the Server Action does.
 
-> **[Diagram placeholder: data-source-selection]**
-> _Intended diagram: a Server Action box in the middle, with the isOnline flag routing reads either to the backend/Atlas path or to the leafy-local-store path, and the same UI component consuming both._
+The AI chat is a single streaming route, and it can draft a real payment along the way:
 
-The AI chat is a single streaming route:
-
-> **[Diagram placeholder: ai-chat-stream]**
-> _Intended diagram: browser to POST /api/chat to LangGraph graph to Ollama, with the NDJSON events (token, draft, chart, error) flowing back to the browser as they are produced._
+![Sequence diagram of a payment drafted through chat: the LangGraph agent resolves the contact through the MCP server (online) or ObjectBox (offline), drafts the payment, and on confirmation either queues it locally or submits it to the Payment Platform (PSP) and writes the enrichment record to MongoDB Atlas](../docs/payment-via-chatbot.svg)
 
 - `POST /api/chat` streams NDJSON events: `token` (reply text), `draft` (a payment card to confirm), `chart` (a spending breakdown), and `error`.
 - The LangGraph graph and its wallet tools live in `src/lib/ai/`. Online, the read tools call the backend's MCP server (`/mcp`); offline they read the on-device store; balance and drafting stay native.
