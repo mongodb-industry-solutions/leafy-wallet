@@ -95,7 +95,7 @@ function normalizeTransaction(t) {
     reference: t.paymentExecutionInstanceReference ?? t.transferReference,
     counterpartyReference: t.beneficiaryArrangementReference ?? t.counterpartyArrangementReference ?? null,
     direction: t.direction ?? 'sent',
-    value: typeof gross === 'number' ? gross : (gross?.amount ?? 0),
+    value: typeof gross === 'number' ? gross : (gross.amount ?? 0),
     currency: t.currency ?? 'EUR',
     status: t.paymentExecutionStatus ?? t.status ?? 'pending',
     note: t.concept ?? t.paymentExecutionRemittanceInformation ?? t.description ?? '',

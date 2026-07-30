@@ -87,17 +87,16 @@ async def update_transaction(
         raise HTTPException(status_code=400, detail="No fields to update")
 
     object_id = parse_object_id(transaction_id)
-    existing = db.find(COLLECTION, {"_id": object_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Transaction not found")
 
     # Stamp settledAt automatically when the caller doesn't provide one but
     # flips the status to "settled" (e.g. Leafy Pay sent no settlement time).
     if updates.get("leafyPayStatus") == "settled" and "settledAt" not in updates:
         updates["settledAt"] = datetime.now(timezone.utc)
 
-    db.update_one(COLLECTION, {"_id": object_id}, {"$set": updates})
-    return with_str_id(db.find(COLLECTION, {"_id": object_id})[0])
+    updated = db.find_one_and_update(COLLECTION, {"_id": object_id}, {"$set": updates})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return with_str_id(updated)
 
 
 @router.delete("/{transaction_id}", status_code=204)

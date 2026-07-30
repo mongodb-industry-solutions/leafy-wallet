@@ -67,7 +67,7 @@ cd backend && uv run pytest
 ## Common errors
 
 - Check that you've created a `.env` file with `MONGODB_URI` and `DATABASE_NAME`, and that your IP is on the Atlas network access list.
-- Vector search endpoints need the index to exist; run the provisioning script in `scripts/` if searches return nothing.
+- Vector search endpoints need the index to exist; run `uv run python scripts/create_vector_index.py` if searches return nothing. It's idempotent, so re-running is safe.
 
 ## 📄 License
 

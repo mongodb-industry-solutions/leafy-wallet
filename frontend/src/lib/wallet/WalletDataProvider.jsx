@@ -12,6 +12,7 @@ import {
   replayPendingRequests,
   replayPendingSends,
 } from '@/lib/wallet/actions'
+import { byNewestFirst } from '@/lib/wallet/format'
 
 const SETTLE_POLL_MS = 2500
 const SETTLE_MAX_POLLS = 8
@@ -33,6 +34,22 @@ const INITIAL = { data: null, isLoading: true, error: false }
 
 const seenStorageKey = (ownerKey) => `leafy:notif-seen:${ownerKey || 'anon'}`
 const dismissedStorageKey = (ownerKey) => `leafy:notif-dismissed:${ownerKey || 'anon'}`
+
+/** The persisted "notifications seen" marker for a user, or null when nothing has been read yet. */
+function readSeenMarker(ownerKey) {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem(seenStorageKey(ownerKey))
+}
+
+/** The notification ids dismissed on this device for a user. */
+function readDismissedIds(ownerKey) {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(window.localStorage.getItem(dismissedStorageKey(ownerKey)) ?? '[]')
+  } catch {
+    return []
+  }
+}
 
 const isNewerThan = (createdAt, seenAt) =>
   !seenAt || (createdAt ? new Date(createdAt).getTime() > seenAt : false)
@@ -62,21 +79,19 @@ function announceNew(rows, seenRef, kind, setArrival) {
 function deriveNotifications(transactions, requests, lastSeen, dismissedIds) {
   const seenAt = lastSeen ? new Date(lastSeen).getTime() : 0
   const dismissed = new Set(dismissedIds)
-  const received = (transactions ?? [])
-    .filter((t) => t.amount > 0)
-    .map((t) => ({
-      kind: 'received',
-      id: t.id,
-      name: t.name,
-      amount: t.amount,
-      note: t.note,
-      date: t.date,
-      createdAt: t.createdAt,
-      isPending: t.isPending,
-      seed: t.seed,
-      bg: t.bg,
-      isUnread: isNewerThan(t.createdAt, seenAt),
-    }))
+  const received = receivedRows(transactions).map((t) => ({
+    kind: 'received',
+    id: t.id,
+    name: t.name,
+    amount: t.amount,
+    note: t.note,
+    date: t.date,
+    createdAt: t.createdAt,
+    isPending: t.isPending,
+    seed: t.seed,
+    bg: t.bg,
+    isUnread: isNewerThan(t.createdAt, seenAt),
+  }))
   const incoming = (requests?.incoming ?? []).map((r) => ({
     kind: 'request',
     id: r.id,
@@ -90,9 +105,7 @@ function deriveNotifications(transactions, requests, lastSeen, dismissedIds) {
     bg: r.bg,
     isUnread: isNewerThan(r.createdAt, seenAt),
   }))
-  return [...received, ...incoming]
-    .filter((n) => !dismissed.has(n.id))
-    .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+  return [...received, ...incoming].filter((n) => !dismissed.has(n.id)).sort(byNewestFirst)
 }
 
 const WalletDataContext = createContext(null)
@@ -109,14 +122,10 @@ const WalletDataContext = createContext(null)
  * @param {React.ReactNode} props.children
  */
 export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
-  const [state, setState] = useState({
-    accounts: INITIAL,
-    contacts: INITIAL,
-    transactions: INITIAL,
-    requests: INITIAL,
-  })
-  const [lastSeen, setLastSeen] = useState(null)
-  const [dismissedIds, setDismissedIds] = useState([])
+  const [state, setState] = useState(() => Object.fromEntries(ALL_KEYS.map((k) => [k, INITIAL])))
+  // Seeded from localStorage on mount: the provider mounts once per login, so ownerKey is stable under it.
+  const [lastSeen, setLastSeen] = useState(() => readSeenMarker(ownerKey))
+  const [dismissedIds, setDismissedIds] = useState(() => readDismissedIds(ownerKey))
   // Carries only the reference and outcome; the banner reads the row itself, so it never renders a
   // stale amount from before the refresh that settled it.
   const [settlement, setSettlement] = useState(null)
@@ -128,7 +137,10 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
   // consumer's callbacks on each toggle.
   const isOnlineRef = useRef(isOnline)
-  isOnlineRef.current = isOnline
+  // Declared first so it lands before the effects below, which refresh through `load`.
+  useEffect(() => {
+    isOnlineRef.current = isOnline
+  }, [isOnline])
 
   // `isLoading` drives the skeletons: true only when there's nothing to show yet.
   const load = useCallback(async (key) => {
@@ -227,17 +239,6 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     const id = setInterval(() => refresh(['requests', 'transactions']), ARRIVAL_POLL_MS)
     return () => clearInterval(id)
   }, [isOnline, refresh])
-
-  // Load the persisted "notifications seen" marker and dismissals for this user.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    setLastSeen(window.localStorage.getItem(seenStorageKey(ownerKey)))
-    try {
-      setDismissedIds(JSON.parse(window.localStorage.getItem(dismissedStorageKey(ownerKey)) ?? '[]'))
-    } catch {
-      setDismissedIds([])
-    }
-  }, [ownerKey])
 
   /** Mark all notifications read; persists so the badge stays cleared across reloads. */
   const markNotificationsSeen = useCallback(() => {

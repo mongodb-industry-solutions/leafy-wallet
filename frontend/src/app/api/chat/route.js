@@ -2,7 +2,7 @@ import { HumanMessage, AIMessage } from '@langchain/core/messages'
 import { getSession } from '@/lib/auth/session'
 import { buildGraph } from '@/lib/ai/graph'
 
-// The model runs on CPU here, so a long tool-calling turn can take minutes.
+// Inert on this self-hosted deployment; the real ceiling is the ingress read timeout.
 export const maxDuration = 300
 
 const toLangChain = (m) => (m.role === 'assistant' ? new AIMessage(m.text) : new HumanMessage(m.text))
@@ -26,12 +26,13 @@ export async function POST(request) {
     return new Response('Invalid JSON body', { status: 400 })
   }
 
-  const { message, history = [], isOnline = true } = body
+  // `?? {}` because a body of literal `null` parses fine and would throw on destructure.
+  const { message, history = [], isOnline = true } = body ?? {}
   if (!message?.trim()) return new Response('A message is required', { status: 400 })
 
   const drafts = []
   const charts = []
-  const graph = await buildGraph(isOnline, drafts, charts)
+  const graph = await buildGraph(isOnline, drafts, charts, session.sub)
   const messages = [...history.map(toLangChain), new HumanMessage(message)]
 
   try {
@@ -41,6 +42,8 @@ export async function POST(request) {
     // The tools pushed any drafts/charts into these arrays while the graph ran.
     return Response.json({ reply, drafts, charts }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 })
+    // Keep transport details (upstream URLs, driver errors) out of the chat bubble.
+    console.error('[chat] turn failed', error)
+    return Response.json({ error: 'The assistant could not complete that turn.' }, { status: 500 })
   }
 }

@@ -13,6 +13,9 @@ export function avatarFor(key) {
   return { seed: s, bg: AVATAR_BGS[hash % AVATAR_BGS.length] }
 }
 
+/** Sort comparator for rows carrying `createdAt`: newest first. */
+export const byNewestFirst = (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0)
+
 /**
  * Formats an ISO timestamp into a compact list label: "Today", "Yesterday", or "Mon D".
  * @param {string|null} iso
@@ -55,4 +58,36 @@ export function groupByDate(transactions) {
     }
   }
   return groups
+}
+
+/**
+ * The status label for an activity row: a request has moved no money, a transfer may still be in
+ * flight, anything else has landed.
+ * @param {object} tx - Transaction or awaiting-payment row.
+ * @returns {'Completed'|'Awaiting payment'|'Pending'}
+ */
+export function rowStatusOf(tx) {
+  if (tx.kind === 'request') return 'Awaiting payment'
+  if (tx.isPending) return 'Pending'
+  return 'Completed'
+}
+
+/**
+ * The sign shown before an amount. A request carries no direction, since nothing has moved yet.
+ * @param {object} tx - Transaction or awaiting-payment row.
+ * @returns {string} '+', '−', or ''.
+ */
+export function signOf(tx) {
+  if (tx.kind === 'request') return ''
+  return tx.amount > 0 ? '+' : '−'
+}
+
+/**
+ * The text color class for an amount: muted for a request, the accent for money in, default for out.
+ * @param {object} tx - Transaction or awaiting-payment row.
+ * @returns {string} A Tailwind text color class.
+ */
+export function amountToneOf(tx) {
+  if (tx.kind === 'request') return 'text-muted-foreground'
+  return tx.amount > 0 ? 'text-secondary' : 'text-foreground'
 }

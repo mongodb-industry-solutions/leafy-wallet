@@ -29,6 +29,10 @@ const dayOf = (value) => {
   return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : 'unknown date'
 }
 
+// One MCP transaction document as a line of text, the shape the offline tools also produce.
+const toMcpRow = (t) =>
+  `${dayOf(t.createdAt)}: ${money(t.amount)} ${t.direction === 'received' ? 'received' : 'sent'} - ${t.note || 'no note'}`
+
 /**
  * Balances always come from Leafy Pay (or the device cache offline) - the MCP server is
  * read-only over Atlas and deliberately holds no Leafy Pay credentials.
@@ -132,17 +136,13 @@ function buildMcpReadTools(mcp, owner, charts) {
   const searchTx = tool(async ({ query }) => {
     const rows = await call('search_transactions', { q: query, limit: SEARCH_LIMIT })
     if (rows.length === 0) return 'No matching transactions.'
-    return rows
-      .map((t) => `${dayOf(t.createdAt)}: ${money(t.amount)} ${t.direction === 'received' ? 'received' : 'sent'} - ${t.note || 'no note'}`)
-      .join('\n')
+    return rows.map(toMcpRow).join('\n')
   }, CONTRACTS.search)
 
   const recentTx = tool(async ({ limit }) => {
     const rows = await call('list_transactions', { limit })
     if (rows.length === 0) return 'No transactions yet.'
-    return rows
-      .map((t) => `${dayOf(t.createdAt)}: ${money(t.amount)} ${t.direction === 'received' ? 'received' : 'sent'} - ${t.note || 'no note'}`)
-      .join('\n')
+    return rows.map(toMcpRow).join('\n')
   }, CONTRACTS.recent)
 
   return [listContacts, spendingByContact, searchTx, recentTx]
@@ -156,8 +156,10 @@ function buildMcpReadTools(mcp, owner, charts) {
  *   confirmation. No tool moves money - that needs the user.
  * @param {object[]} charts - `get_spending_by_contact` pushes a breakdown here; the caller
  *   renders it as an inline chart card alongside the reply.
+ * @param {string} [owner] - The session's `sub`, whose data the MCP reads are scoped to. Pass it in
+ *   from a route that already read the session; omitted, it is read here.
  */
-export async function walletTools(isOnline, drafts, charts) {
+export async function walletTools(isOnline, drafts, charts, owner) {
   const getBalance = buildBalanceTool(isOnline)
   const spendingByCategory = buildSpendingByCategoryTool(isOnline, charts)
   const draftPayment = buildDraftTool(isOnline, drafts)
@@ -166,6 +168,9 @@ export async function walletTools(isOnline, drafts, charts) {
     return [getBalance, ...buildOfflineReadTools(charts), spendingByCategory, draftPayment]
   }
 
-  const [mcp, session] = await Promise.all([getMcpTools(), getSession()])
-  return [getBalance, ...buildMcpReadTools(mcp, session.sub, charts), spendingByCategory, draftPayment]
+  const [mcp, ownerPartyRef] = await Promise.all([
+    getMcpTools(),
+    owner ?? getSession().then((s) => s?.sub),
+  ])
+  return [getBalance, ...buildMcpReadTools(mcp, ownerPartyRef, charts), spendingByCategory, draftPayment]
 }

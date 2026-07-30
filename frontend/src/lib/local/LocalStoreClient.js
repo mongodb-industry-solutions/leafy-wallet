@@ -57,7 +57,7 @@ export async function searchLocalTransactions({ q, ownerPartyRef, limit = 10 }) 
 
 /**
  * Per-contact totals held on the device.
- * @param {{ownerPartyRef?: string, direction?: 'sent'|'received'}} params
+ * @param {{ownerPartyRef: string, direction?: 'sent'|'received'}} params
  */
 export async function localSpendingByContact({ ownerPartyRef, direction = 'sent' }) {
   const query = new URLSearchParams({
@@ -111,16 +111,10 @@ export async function createLocalChatMessage(chatReference, { role, text }) {
  * Payment requests held on device, synced down from Atlas. Pass `payerPartyRef` for an inbox,
  * `requesterPartyRef` for an outbox, `localSyncStatus` to find the ones queued while offline.
  */
-export async function listLocalRequests({
-  payerPartyRef,
-  requesterPartyRef,
-  status,
-  localSyncStatus,
-} = {}) {
+export async function listLocalRequests({ payerPartyRef, requesterPartyRef, localSyncStatus } = {}) {
   const query = new URLSearchParams({
     ...(payerPartyRef ? { payerPartyRef } : {}),
     ...(requesterPartyRef ? { requesterPartyRef } : {}),
-    ...(status ? { status } : {}),
     ...(localSyncStatus ? { localSyncStatus } : {}),
   }).toString()
   return call('GET', `/requests${query ? `?${query}` : ''}`)
