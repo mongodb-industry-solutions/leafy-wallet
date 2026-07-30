@@ -33,7 +33,7 @@ export function ConnectionControl({ isOnline, onToggle, shouldNudge = false }) {
                 className={cn('size-4', isOnline ? 'text-primary' : 'text-white/50')}
                 aria-hidden="true"
               />
-              <span className={cn(isOnline ? 'text-white' : 'text-white/75')}>
+              <span className={isOnline ? undefined : 'text-white/75'}>
                 {isOnline ? 'Connected' : 'Offline'}
               </span>
 

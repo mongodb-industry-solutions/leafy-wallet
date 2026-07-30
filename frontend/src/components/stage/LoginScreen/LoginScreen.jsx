@@ -6,6 +6,11 @@ import { DEMO_USERS } from '@/lib/demo-users'
 const SSO_PROVIDER = 'Continue with SSO'
 const SSO_LOGIN_URL = '/api/auth/login'
 
+/** Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app. */
+function handleLogin(email) {
+  window.location.assign(email ? `${SSO_LOGIN_URL}?user=${encodeURIComponent(email)}` : SSO_LOGIN_URL)
+}
+
 /**
  * First-run login screen: hero art, a row of demo-user profile cards, then the real SSO button.
  * Tapping a profile card starts the Leafy Pay authorization_code + PKCE flow with that user's email
@@ -13,11 +18,6 @@ const SSO_LOGIN_URL = '/api/auth/login'
  * which is the only path where the password has to be typed by hand (the walkthrough shows it).
  */
 export function LoginScreen() {
-  // Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app.
-  function handleLogin(email) {
-    window.location.href = email ? `${SSO_LOGIN_URL}?user=${encodeURIComponent(email)}` : SSO_LOGIN_URL
-  }
-
   return (
     <div className="relative flex h-full flex-col bg-white pb-8 text-foreground">
       {/* Hero art, centered toward the top. */}
@@ -28,20 +28,17 @@ export function LoginScreen() {
       <div className="relative flex flex-col gap-4 px-6">
         {/* One profile card per demo user. */}
         <div className="flex justify-center gap-3">
-          {DEMO_USERS.map((user) => {
-            const { seed, bg } = user
-            return (
-              <button
-                key={user.email}
-                type="button"
-                onClick={() => handleLogin(user.email)}
-                className="flex flex-1 flex-col items-center gap-2.5 rounded-2xl border border-border bg-card px-2 py-5 shadow-sm transition-opacity hover:opacity-90"
-              >
-                <Peep seed={seed} bg={bg} size={72} />
-                <span className="text-[15px] font-semibold text-foreground">{user.name.split(' ')[0]}</span>
-              </button>
-            )
-          })}
+          {DEMO_USERS.map((user) => (
+            <button
+              key={user.email}
+              type="button"
+              onClick={() => handleLogin(user.email)}
+              className="flex flex-1 flex-col items-center gap-2.5 rounded-2xl border border-border bg-card px-2 py-5 shadow-sm transition-opacity hover:opacity-90"
+            >
+              <Peep seed={user.seed} bg={user.bg} size={72} />
+              <span className="text-[15px] font-semibold text-foreground">{user.name.split(' ')[0]}</span>
+            </button>
+          ))}
         </div>
 
         {/* Divider between the demo profiles and the generic SSO entry point. */}

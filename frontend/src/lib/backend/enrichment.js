@@ -68,10 +68,6 @@ export async function spendingByContactEnrichment({ owner, direction = 'sent' })
 }
 
 /**
- * Write the enrichment doc for a completed transfer. The backend embeds the note via Ollama.
- * @param {object} doc - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, note, direction, leafyPayStatus }`.
- */
-/**
  * Update an enrichment doc.
  * @param {string} id - The Atlas id.
  * @param {object} patch - e.g. `{ leafyPayStatus, settledAt }`.
@@ -80,6 +76,10 @@ export async function updateTransactionEnrichment(id, patch) {
   return backendPatch(`/api/v1/wallet-transactions/${encodeURIComponent(id)}`, patch)
 }
 
+/**
+ * Write the enrichment doc for a completed transfer. The backend embeds the note via Ollama.
+ * @param {object} doc - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, note, direction, leafyPayStatus }`.
+ */
 export async function createTransactionEnrichment(doc) {
   return backendPost('/api/v1/wallet-transactions', doc)
 }
@@ -104,6 +104,11 @@ export async function listContactEnrichment(owner) {
  */
 export async function createContactEnrichment(doc) {
   return backendPost('/api/v1/wallet-contacts', doc)
+}
+
+/** Remove a replica doc by its Atlas id. */
+export async function deleteContactEnrichment(id) {
+  return backendDelete(`/api/v1/wallet-contacts/${encodeURIComponent(id)}`)
 }
 
 /** An owner's chats, newest first. */
@@ -131,11 +136,6 @@ export async function listChatMessageDocs(chatReference) {
 /** Append a message. The server embeds the text for later retrieval. */
 export async function createChatMessageDoc({ chatId, chatReference, role, text }) {
   return backendPost('/api/v1/chat-messages', { chatId, chatReference, role, text })
-}
-
-/** Remove a replica doc by its Atlas id. */
-export async function deleteContactEnrichment(id) {
-  return backendDelete(`/api/v1/wallet-contacts/${encodeURIComponent(id)}`)
 }
 
 /**

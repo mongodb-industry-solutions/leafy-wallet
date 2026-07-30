@@ -6,13 +6,15 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { CardList } from '@/components/ui/Card'
+import { filterContacts } from '@/components/wallet/people/filterContacts'
 
 const SKELETON_ROWS = 6
 
 /** Placeholder row matching a contact row's layout, shown while contacts load. */
 function ContactRowSkeleton() {
   return (
-    <div className="flex w-full items-center gap-3 py-3.5">
+    <div className="flex items-center gap-3 py-3.5">
       <Skeleton className="size-11 flex-none rounded-full" />
       <div className="min-w-0 flex-1 space-y-1.5">
         <Skeleton className="h-3.5 w-1/3" />
@@ -34,15 +36,11 @@ export function PeopleTab({ onSelect, onAddContact }) {
   const {
     contacts: { data, isLoading, error },
   } = useWalletData()
-  const [q, setQ] = useState('')
+  const [search, setSearch] = useState('')
 
   const contacts = data ?? []
-  const query = q.trim().toLowerCase()
-  const filtered = query
-    ? contacts.filter(
-        (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
-      )
-    : contacts
+  const query = search.trim().toLowerCase()
+  const filtered = filterContacts(contacts, search)
 
   let empty = null
   if (error) {
@@ -71,10 +69,10 @@ export function PeopleTab({ onSelect, onAddContact }) {
           <Icon glyph="MagnifyingGlass" size={16} />
         </span>
         <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search people"
-          className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
       </label>
 
@@ -104,7 +102,7 @@ export function PeopleTab({ onSelect, onAddContact }) {
         <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {query ? 'Results' : 'All people'}
         </p>
-        <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
+        <CardList>
           {isLoading &&
             Array.from({ length: SKELETON_ROWS }).map((_, i) => <ContactRowSkeleton key={i} />)}
           {!isLoading &&
@@ -113,7 +111,7 @@ export function PeopleTab({ onSelect, onAddContact }) {
                 key={c.id}
                 data-tour-target={i === 0 ? 'contact-0' : undefined}
                 onClick={() => onSelect(c)}
-                className="flex w-full items-center gap-3 py-3.5 text-left"
+                className="flex items-center gap-3 py-3.5 text-left"
               >
                 <Peep seed={c.seed} bg={c.bg} size={44} />
                 <div className="min-w-0 flex-1">
@@ -123,7 +121,7 @@ export function PeopleTab({ onSelect, onAddContact }) {
               </button>
             ))}
           {!isLoading && empty && <EmptyState {...empty} />}
-        </div>
+        </CardList>
       </section>
     </div>
   )

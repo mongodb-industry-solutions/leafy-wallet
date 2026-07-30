@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useId } from 'react'
 
 const VBW = 1271
 const VBH = 599
+// Eases the bell so the shoulders fall away faster than a straight taper.
+const BELL_EASE_EXPONENT = 1.24
+// Columns overlap slightly, so the blurred field reads as one sheet instead of stripes.
+const COLUMN_OVERLAP = 1.23
 
 // Aurora palette, captured verbatim from the source playground: near-black,
 // deep green, mint, teal, then transparent.
@@ -23,34 +27,27 @@ const AURORA_STOPS = [
   { offset: 1, color: '#D1F8F300' },
 ]
 
+/** Column heights across the field: a bell curve from `valley` at the edges up to `peak` in the middle. */
 function bellHeights(n, peak, valley) {
-  const out = []
   const mid = (n - 1) / 2
-  for (let i = 0; i < n; i++) {
+  return Array.from({ length: n }, (_, i) => {
     const t = mid === 0 ? 0 : Math.abs(i - mid) / mid
-    const eased = 1 - Math.pow(t, 1.24)
-    out.push(peak * VBH * (valley + (1 - valley) * eased))
-  }
-  return out
+    const eased = 1 - Math.pow(t, BELL_EASE_EXPONENT)
+    return peak * VBH * (valley + (1 - valley) * eased)
+  })
 }
 
 /**
- * Blurred aurora columns in a bell curve, anchored to the bottom and rising on mount.
+ * Blurred aurora columns in a bell curve, anchored to the bottom of its container.
  * @param {object} props
  * @param {number} [props.bars] - Number of blurred columns.
  * @param {number} [props.blur] - Gaussian blur stdDeviation.
  * @param {number} [props.peak] - Tallest column as a fraction of the viewbox.
  * @param {number} [props.valley] - Shortest column relative to the peak.
  * @param {{offset: number, color: string}[]} [props.stops] - Bottom-to-top color stops.
- * @param {number} [props.riseMs] - Mount rise duration in ms.
  */
-function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = AURORA_STOPS, riseMs = 1100 }) {
+function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = AURORA_STOPS }) {
   const uid = useId().replace(/:/g, '')
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)))
-    return () => cancelAnimationFrame(id)
-  }, [])
 
   const heights = bellHeights(bars, peak, valley)
   const colW = VBW / bars
@@ -58,17 +55,7 @@ function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = 
   const blurId = `dia-blur-${uid}`
 
   return (
-    <div
-      aria-hidden
-      style={{
-        height: '100%',
-        width: '100%',
-        transformOrigin: 'bottom',
-        transform: shown ? 'scaleY(1)' : 'scaleY(0)',
-        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
-        willChange: 'transform',
-      }}
-    >
+    <div aria-hidden style={{ height: '100%', width: '100%' }}>
       <svg
         style={{ height: '100%', width: '100%' }}
         viewBox={`0 0 ${VBW} ${VBH}`}
@@ -88,7 +75,7 @@ function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = 
         </defs>
         {heights.map((h, i) => (
           <g key={i} filter={`url(#${blurId})`}>
-            <rect x={i * colW} y={VBH - h} width={colW * 1.23} height={h} fill={`url(#${gradId})`} />
+            <rect x={i * colW} y={VBH - h} width={colW * COLUMN_OVERLAP} height={h} fill={`url(#${gradId})`} />
           </g>
         ))}
       </svg>
@@ -103,7 +90,7 @@ function DiaGradient({ bars = 9, blur = 15, peak = 0.98, valley = 0.55, stops = 
  * @param {number} [props.depth] - CSS perspective distance in px.
  * @param {number} [props.softness] - Extra CSS blur (px) melting the bars on the tilted plane.
  * @param {import('react').ReactNode} [props.children] - Custom plane content.
- * Any remaining props are forwarded to the default DiaGradient (bars, blur, peak, valley, stops, riseMs).
+ * Any remaining props are forwarded to the default DiaGradient (bars, blur, peak, valley, stops).
  */
 export function FoldGradient({ fold = 74, depth = 620, softness = 8, children, className, style, ...barProps }) {
   return (

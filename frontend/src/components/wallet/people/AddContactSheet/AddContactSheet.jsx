@@ -5,6 +5,7 @@ import Icon from '@leafygreen-ui/icon'
 import { addContact } from '@/lib/wallet/actions'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { Button } from '@/components/ui/Button'
 
 /**
  * Bottom-sheet form to add a contact by a registered Leafy Pay email or phone, whichever the value
@@ -69,13 +70,13 @@ export function AddContactSheet({ onClose }) {
 
           {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-          <button
+          <Button
             onClick={() => handleSubmit(close)}
             disabled={!value.trim() || !label.trim() || isSubmitting}
-            className="mt-4 h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
+            className="mt-4 w-full"
           >
             {isSubmitting ? 'Adding…' : 'Add contact'}
-          </button>
+          </Button>
         </>
       )}
     </BottomSheet>

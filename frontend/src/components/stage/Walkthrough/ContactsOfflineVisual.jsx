@@ -2,6 +2,7 @@
 
 import { WifiOff } from 'lucide-react'
 import { Peep } from '@/components/common/Peep/Peep'
+import { VisualCard } from '@/components/stage/Walkthrough/VisualCard'
 
 const CONTACTS = [
   { name: 'Luis', sub: 'Colleague', seed: 'Luis', bg: 'c7f6d5' },
@@ -17,29 +18,27 @@ const CONTACTS = [
  */
 export function ContactsOfflineVisual() {
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="w-56 rounded-2xl border border-border bg-white p-3 shadow-md">
-        {/* Offline badge that fades in to show the list survives no signal. */}
-        <div className="mb-2 flex items-center justify-end">
-          <span
-            className="flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[9px] font-semibold text-muted-foreground"
-            style={{ animation: 'status-badge-done 4s ease-in-out infinite' }}
-          >
-            <WifiOff className="size-2.5" /> Offline
-          </span>
-        </div>
-        <div className="flex flex-col divide-y divide-border">
-          {CONTACTS.map((c) => (
-            <div key={c.name} className="flex items-center gap-2.5 py-2">
-              <Peep seed={c.seed} bg={c.bg} size={30} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-bold text-foreground">{c.name}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{c.sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+    <VisualCard className="w-56 p-3">
+      {/* Offline badge that fades in to show the list survives no signal. */}
+      <div className="mb-2 flex items-center justify-end">
+        <span
+          className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground"
+          style={{ animation: 'status-badge-done 4s ease-in-out infinite' }}
+        >
+          <WifiOff className="size-2.5" /> Offline
+        </span>
       </div>
-    </div>
+      <div className="flex flex-col divide-y divide-border">
+        {CONTACTS.map((c) => (
+          <div key={c.name} className="flex items-center gap-2.5 py-2">
+            <Peep seed={c.seed} bg={c.bg} size={30} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-bold text-foreground">{c.name}</p>
+              <p className="truncate text-[10px] text-muted-foreground">{c.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </VisualCard>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { ThinkingOrb } from 'thinking-orbs'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
@@ -8,16 +8,12 @@ import { ActionCard } from '@/components/wallet/assistant/ActionCard/ActionCard'
 import { SpendingChart } from '@/components/wallet/assistant/SpendingChart/SpendingChart'
 import { ChatHeader } from './ChatHeader'
 import { ChatHistory } from './ChatHistory'
-import { EmptyState } from './EmptyState'
+import { ChatGreeting } from './ChatGreeting'
 import { useAiChat } from './useAiChat'
 
 const TYPE_SPEED_MS = 16
 
-/**
- * Typewrites `text` when `animate` is true (else renders in full). While streaming, `text` keeps
- * growing and the reveal simply trails it; `onDone` (passed only once the stream is sealed) fires
- * when the reveal catches up, so a mid-stream pause never ends the animation early.
- */
+/** Reveals `text` one character at a time when `animate`, else renders it in full. */
 function Typewriter({ text, animate, onDone }) {
   const [count, setCount] = useState(animate ? 0 : text.length)
   useEffect(() => {
@@ -39,31 +35,55 @@ function Typewriter({ text, animate, onDone }) {
  * @param {{name: string}} props.user - The authenticated identity, for the greeting.
  */
 export function AiTab({ user }) {
-  const c = useAiChat()
-  // Ids whose typewriter has finished, so re-rendering (or re-opening a chat)
-  // never replays it.
-  const streamedRef = useRef(new Set())
+  const {
+    chats,
+    activeId,
+    view,
+    setView,
+    msgs,
+    title,
+    isEmpty,
+    textInput,
+    setTextInput,
+    isThinking,
+    confirmingId,
+    endRef,
+    hasText,
+    handleScrollToEnd,
+    handleConfirmAction,
+    handleEditNote,
+    handleSendText,
+    handleSuggestion,
+    handleOpenChat,
+    handleDeleteChat,
+  } = useAiChat()
+  // Ids whose typewriter has finished, so re-rendering (or re-opening a chat) never replays it.
+  const [revealedIds, setRevealedIds] = useState(() => new Set())
 
   const handleInputKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) c.handleSendText()
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) handleSendText()
   }
 
-  if (c.view === 'history') {
+  function handleRevealed(id) {
+    setRevealedIds((prev) => new Set(prev).add(id))
+  }
+
+  if (view === 'history') {
     return (
       <ChatHistory
-        chats={c.chats}
-        activeId={c.activeId}
-        onOpen={c.handleOpenChat}
-        onDelete={c.handleDeleteChat}
+        chats={chats}
+        activeId={activeId}
+        onOpen={handleOpenChat}
+        onDelete={handleDeleteChat}
       />
     )
   }
 
   // Greeting shows until the user starts composing or the thread has messages.
-  const showEmpty = c.isEmpty && !c.hasText
-  const auroraShown = c.isThinking || showEmpty
+  const showEmpty = isEmpty && !hasText
+  const auroraShown = isThinking || showEmpty
   let auroraOpacity = 0
-  if (c.isThinking) auroraOpacity = 1
+  if (isThinking) auroraOpacity = 1
   else if (showEmpty) auroraOpacity = 0.55
 
   return (
@@ -93,31 +113,31 @@ export function AiTab({ user }) {
               className="h-full w-full"
               style={{
                 transformOrigin: 'bottom',
-                animation: c.isThinking ? 'aurora-pulse 2s ease-in-out infinite' : 'none',
+                animation: isThinking ? 'aurora-pulse 2s ease-in-out infinite' : 'none',
               }}
             >
-              <FoldGradient riseMs={0} />
+              <FoldGradient />
             </div>
           </div>
         </div>
       </div>
 
-      <ChatHeader title={c.title} onBack={() => c.setView('history')} />
+      <ChatHeader title={title} onBack={() => setView('history')} />
 
       {showEmpty ? (
-        <EmptyState user={user} onSuggestion={c.handleSuggestion} />
+        <ChatGreeting user={user} onSuggestion={handleSuggestion} />
       ) : (
         <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-44">
-          {c.msgs.map((m) => {
+          {msgs.map((m) => {
             if (m.type === 'action') {
               return (
                 <div key={m.id} className="flex justify-start">
                   <ActionCard
                     msg={m}
-                    isBusy={c.confirmingId === m.id}
-                    onConfirm={c.handleConfirmAction}
-                    onEditNote={c.handleEditNote}
-                    onExpand={c.handleScrollToEnd}
+                    isBusy={confirmingId === m.id}
+                    onConfirm={handleConfirmAction}
+                    onEditNote={handleEditNote}
+                    onExpand={handleScrollToEnd}
                   />
                 </div>
               )
@@ -138,25 +158,26 @@ export function AiTab({ user }) {
                 </div>
               )
             }
+            const isUnrevealed = m.stream === 'done' && !revealedIds.has(m.id)
             return (
               <p key={m.id} className="max-w-[92%] text-sm leading-relaxed text-foreground">
                 <Typewriter
                   text={m.text}
-                  animate={Boolean(m.stream) && !streamedRef.current.has(m.id)}
-                  onDone={m.stream === 'done' ? () => streamedRef.current.add(m.id) : undefined}
+                  animate={isUnrevealed}
+                  onDone={() => handleRevealed(m.id)}
                 />
               </p>
             )
           })}
 
-          {c.isThinking && (
+          {isThinking && (
             <div role="status" className="flex items-center gap-2 py-1.5">
               {/* Pinned: the app is light-only, and `auto` would paint light ink on a dark-mode OS. */}
               <ThinkingOrb state="working" size={20} theme="light" aria-hidden="true" />
               <span className="text-sm font-semibold text-foreground">Thinking…</span>
             </div>
           )}
-          <div ref={c.endRef} />
+          <div ref={endRef} />
         </div>
       )}
 
@@ -166,16 +187,16 @@ export function AiTab({ user }) {
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
             data-tour-target="ai-input"
-            value={c.textInput}
-            onChange={(e) => c.setTextInput(e.target.value)}
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Ask anything…"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <button
             data-tour-target="ai-send"
-            onClick={c.handleSendText}
-            disabled={!c.hasText}
+            onClick={handleSendText}
+            disabled={!hasText}
             aria-label="Send"
             className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-40"
           >

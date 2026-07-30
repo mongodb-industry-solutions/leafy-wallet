@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   appendChatCard,
   appendChatMessage,
@@ -14,6 +14,11 @@ import {
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 
 const NEW_CHAT_TITLE = 'New chat'
+
+/** The unsaved chat pinned at the top of the history; it isn't in any store yet. */
+export const DRAFT_CHAT_ID = 'draft'
+
+const createDraftChat = () => ({ id: DRAFT_CHAT_ID, title: NEW_CHAT_TITLE, messages: [] })
 
 let seq = 1
 const nextId = () => `msg-${Date.now()}-${seq++}`
@@ -55,19 +60,22 @@ async function fetchTurn(body) {
  */
 export function useAiChat() {
   const { isOnline, refresh, watchTransfer } = useWalletData()
-  const [chats, setChats] = useState([{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }])
-  const [activeId, setActiveId] = useState('draft')
+  const [chats, setChats] = useState([createDraftChat()])
+  const [activeId, setActiveId] = useState(DRAFT_CHAT_ID)
   // Opens on a fresh chat; history is one tap away from the thread header.
   const [view, setView] = useState('chat') // 'chat' | 'history'
   const [textInput, setTextInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [confirmingId, setConfirmingId] = useState(null)
   const endRef = useRef(null)
+  // Mirrored so the turn callbacks read the live connection without taking it as a dependency.
   const isOnlineRef = useRef(isOnline)
-  isOnlineRef.current = isOnline
+  useEffect(() => {
+    isOnlineRef.current = isOnline
+  }, [isOnline])
 
   const active = chats.find((c) => c.id === activeId) ?? chats[0]
-  const msgs = active?.messages ?? []
+  const msgs = useMemo(() => active?.messages ?? [], [active])
   const title = active?.title ?? NEW_CHAT_TITLE
   const isEmpty = msgs.length === 0
 
@@ -82,7 +90,7 @@ export function useAiChat() {
     getChats(isOnline).then((saved) => {
       if (isStale) return
       setChats((prev) => {
-        const draft = prev.find((c) => c.id === 'draft')
+        const draft = prev.find((c) => c.id === DRAFT_CHAT_ID)
         const withMessages = new Map(prev.map((c) => [c.id, c.messages]))
         const rows = saved.map((c) => ({ ...c, messages: withMessages.get(c.id) ?? [] }))
         return draft ? [draft, ...rows] : rows
@@ -105,15 +113,15 @@ export function useAiChat() {
       setIsThinking(true)
 
       // A chat only becomes real once it has something in it.
-      let reference = activeId === 'draft' ? null : activeId
+      let reference = activeId === DRAFT_CHAT_ID ? null : activeId
       if (!reference) {
         const created = await createChat(deriveTitle(text), isOnlineRef.current)
         if (created.ok) {
           reference = created.chat.reference
           setChats((prev) => [
-            { id: 'draft', title: NEW_CHAT_TITLE, messages: [] },
+            createDraftChat(),
             ...prev.map((c) =>
-              c.id === 'draft' ? { ...c, id: reference, title: created.chat.title } : c,
+              c.id === DRAFT_CHAT_ID ? { ...c, id: reference, title: created.chat.title } : c,
             ),
           ])
           setActiveId(reference)
@@ -150,7 +158,6 @@ export function useAiChat() {
         )
       try {
         const { reply, drafts, charts } = await fetchTurn({ message: text, history, isOnline: isOnlineRef.current })
-        setIsThinking(false)
         // Cards land first (above the reply); then the reply reveals via the typewriter. `done` lets
         // the typewriter run once over the finished text and mark itself so it never replays.
         drafts.forEach(upsertDraftCard)
@@ -165,19 +172,12 @@ export function useAiChat() {
           if (reference) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
         }
       } catch (error) {
-        setChats((prev) =>
-          prev.map((c) =>
-            c.id === (reference ?? activeId)
-              ? {
-                  ...c,
-                  messages: [
-                    ...c.messages.filter((m) => m.id !== replyId),
-                    { id: replyId, role: 'assistant', type: 'text', text: `I couldn't answer that: ${error.message}` },
-                  ],
-                }
-              : c,
-          ),
-        )
+        appendToThread({
+          id: replyId,
+          role: 'assistant',
+          type: 'text',
+          text: `I couldn't answer that: ${error.message}`,
+        })
       } finally {
         setIsThinking(false)
       }
@@ -286,16 +286,14 @@ export function useAiChat() {
 
   /** Removes a chat everywhere: the list (optimistically) and whichever store holds it. */
   function handleDeleteChat(id) {
-    if (id === 'draft') return
+    if (id === DRAFT_CHAT_ID) return
     setChats((prev) => {
       const rest = prev.filter((c) => c.id !== id)
-      return rest.some((c) => c.id === 'draft')
-        ? rest
-        : [{ id: 'draft', title: NEW_CHAT_TITLE, messages: [] }, ...rest]
+      return rest.some((c) => c.id === DRAFT_CHAT_ID) ? rest : [createDraftChat(), ...rest]
     })
     if (activeId === id) {
       resetTransient()
-      setActiveId('draft')
+      setActiveId(DRAFT_CHAT_ID)
     }
     deleteChat(id, isOnlineRef.current)
   }

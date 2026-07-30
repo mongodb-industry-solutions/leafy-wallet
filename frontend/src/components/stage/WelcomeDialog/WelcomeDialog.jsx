@@ -36,7 +36,7 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
     <div className="absolute inset-0 z-50 flex items-center justify-center p-6">
       <button aria-label="Dismiss" onClick={onDismiss} className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)]">
+      <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-border bg-card shadow-(--shadow-panel)">
         <button
           type="button"
           aria-label="Dismiss"

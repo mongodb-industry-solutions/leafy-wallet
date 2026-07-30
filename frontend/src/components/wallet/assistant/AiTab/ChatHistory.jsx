@@ -4,9 +4,7 @@ import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { SwipeableRow } from '@/components/ui/SwipeableRow'
 import { cn } from '@/lib/utils'
-
-// The unsaved draft chat isn't in any store yet, so there's nothing to delete.
-const DRAFT_CHAT_ID = 'draft'
+import { DRAFT_CHAT_ID } from './useAiChat'
 
 /** Last message text of a chat, for the history row subtitle. */
 function snippetOf(chat) {

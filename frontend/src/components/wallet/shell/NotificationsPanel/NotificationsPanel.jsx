@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SwipeableRow } from '@/components/ui/SwipeableRow'
 import { Peep } from '@/components/common/Peep/Peep'
@@ -46,20 +47,18 @@ function RequestRow({ notification, isBusy, onPay, onDecline }) {
         {notification.date}
       </p>
       <div className="mt-2 flex gap-2">
-        <button
-          onClick={onPay}
-          disabled={isBusy}
-          className="h-8 rounded-full bg-secondary px-4 text-xs font-semibold text-secondary-foreground disabled:opacity-40"
-        >
+        <Button size="sm" onClick={onPay} disabled={isBusy}>
           Pay
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="neutral"
+          size="sm"
           onClick={onDecline}
           disabled={isBusy}
-          className="h-8 rounded-full bg-foreground/[0.06] px-4 text-xs font-semibold text-muted-foreground disabled:opacity-40"
+          className="text-muted-foreground"
         >
           Decline
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -104,9 +103,9 @@ export function NotificationsPanel({ onPayRequest, onClose }) {
           ) : (
             <>
               {error && <p className="mb-3 flex-none text-sm text-destructive">{error}</p>}
-              {/* -mx-6 lets the swipe reveal bleed to the sheet's edges; rows pad it back.
-                  min-h-0 is what lets the list shrink into the sheet's height cap and scroll. */}
-              <div className="no-scrollbar -mx-6 flex min-h-0 flex-col divide-y divide-border overflow-y-auto">
+              {/* -mx-5 cancels the sheet's p-5 so the swipe reveal bleeds to its edges; rows pad it
+                  back. min-h-0 is what lets the list shrink into the sheet's height cap and scroll. */}
+              <div className="no-scrollbar -mx-5 flex min-h-0 flex-col divide-y divide-border overflow-y-auto">
                 {notifications.map((n) => (
                   <SwipeableRow
                     key={`${n.kind}-${n.id}`}
@@ -114,7 +113,7 @@ export function NotificationsPanel({ onPayRequest, onClose }) {
                     onOpenChange={(isOpen) => setOpenId(isOpen ? n.id : null)}
                     actionLabel="Clear"
                     onAction={() => dismissNotifications([n.id])}
-                    rowClassName="gap-3 bg-card px-6 py-3"
+                    rowClassName="gap-3 bg-card px-5 py-3"
                   >
                     <Peep seed={n.seed} bg={n.bg} size={40} />
                     {n.kind === 'request' ? (

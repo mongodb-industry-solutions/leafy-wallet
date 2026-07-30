@@ -7,12 +7,14 @@ import { groupByDate } from '@/lib/wallet/format'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { HomeHero } from '@/components/wallet/home/HomeHero/HomeHero'
 import { TxRow, TxRowSkeleton } from '@/components/wallet/transactions/TxRow/TxRow'
-import { toAwaitingPaymentRows } from '@/lib/wallet/requests'
+import { ActivityEmpty } from '@/components/wallet/activity/ActivityEmpty/ActivityEmpty'
+import { toActivityRows } from '@/lib/wallet/requests'
 import { FoldGradient } from '@/components/common/FoldGradient/FoldGradient'
+import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { EmptyState } from '@/components/ui/EmptyState'
 
 const TX_SKELETON_ROWS = 4
+const LOAD_ERROR_TITLE = "Couldn't load transactions"
 
 const EU_STAR_COUNT = 12
 const EU_BLUE = '#003399'
@@ -71,14 +73,14 @@ function EuFlag({ size = 40 }) {
 /** Placeholder card matching an account card's layout, shown while accounts load. */
 function AccountCardSkeleton() {
   return (
-    <div className="flex w-[86%] flex-none items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+    <Card className="flex w-[86%] flex-none items-center gap-3">
       <Skeleton className="size-10 flex-none rounded-full" />
       <div className="min-w-0 flex-1 space-y-1.5">
         <Skeleton className="h-3.5 w-24" />
         <Skeleton className="h-3 w-16" />
       </div>
       <Skeleton className="h-4 w-20" />
-    </div>
+    </Card>
   )
 }
 
@@ -114,9 +116,7 @@ export function HomeTab({
   const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
   const balance = formatBalance(primaryAccount?.balanceValue ?? 0)
   // Requests awaiting payment sit inline with the payments, newest first, not in their own section.
-  const rows = [...(txState.data ?? []), ...toAwaitingPaymentRows(requestsState.data?.outgoing)].sort(
-    (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
-  )
+  const rows = toActivityRows(txState.data, requestsState.data?.outgoing)
   const groups = groupByDate(rows.slice(0, HOME_TX_PREVIEW))
   const showTxEmpty = !txState.isLoading && groups.length === 0
 
@@ -149,7 +149,7 @@ export function HomeTab({
               transition: animateHero ? 'transform 1100ms cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
             }}
           >
-            <FoldGradient riseMs={0} />
+            <FoldGradient />
           </div>
         </div>
       </div>
@@ -186,10 +186,10 @@ export function HomeTab({
             ) : (
               <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-pl-4 px-4">
                 {accounts.map((acct) => (
-                  <div
+                  <Card
                     key={acct.reference}
                     className={cn(
-                      'flex flex-none snap-start items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm',
+                      'flex flex-none snap-start items-center gap-3',
                       accounts.length > 1 ? 'w-[86%]' : 'w-full',
                     )}
                   >
@@ -199,7 +199,7 @@ export function HomeTab({
                       <p className="text-xs font-medium tracking-tight text-muted-foreground tabular-nums">•••• {acct.last4}</p>
                     </div>
                     <span className="whitespace-nowrap text-sm font-bold tabular-nums text-foreground">{acct.amount} €</span>
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -228,20 +228,9 @@ export function HomeTab({
                   ))}
                 </div>
               )}
-              {showTxEmpty &&
-                (txState.error ? (
-                  <EmptyState
-                    glyph="Warning"
-                    title="Couldn't load transactions"
-                    subtitle="Check your connection and try again."
-                  />
-                ) : (
-                  <EmptyState
-                    glyph="CreditCard"
-                    title="No transactions yet"
-                    subtitle="Your payments and requests will show up here."
-                  />
-                ))}
+              {showTxEmpty && (
+                <ActivityEmpty hasError={Boolean(txState.error)} errorTitle={LOAD_ERROR_TITLE} />
+              )}
               {!txState.isLoading &&
                 groups.map((group) => (
                 <div key={group.date} className="px-1">

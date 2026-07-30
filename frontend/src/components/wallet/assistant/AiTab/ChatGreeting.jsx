@@ -17,7 +17,7 @@ function greetingFor(hour) {
  * @param {{name: string, email: string}} props.user
  * @param {(query: string) => void} props.onSuggestion
  */
-export function EmptyState({ user, onSuggestion }) {
+export function ChatGreeting({ user, onSuggestion }) {
   const { contacts } = useWalletData()
   const firstName = user.name.split(' ')[0]
   const greeting = greetingFor(new Date().getHours())

@@ -1,6 +1,7 @@
 'use client'
 
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { Button } from '@/components/ui/Button'
 import { Peep } from '@/components/common/Peep/Peep'
 
 /**
@@ -26,19 +27,12 @@ export function ContactActionSheet({ contact, onSend, onRequest, onClose }) {
           </div>
 
           <div className="mt-5 flex flex-col gap-2.5">
-            <button
-              data-tour-target="contact-send"
-              onClick={onSend}
-              className="h-14 rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
-            >
+            <Button data-tour-target="contact-send" onClick={onSend}>
               Send money
-            </button>
-            <button
-              onClick={onRequest}
-              className="h-14 rounded-full bg-foreground/[0.06] text-base font-semibold text-foreground"
-            >
+            </Button>
+            <Button variant="neutral" onClick={onRequest}>
               Request money
-            </button>
+            </Button>
             <button onClick={close} className="h-12 text-sm font-semibold text-muted-foreground">
               Cancel
             </button>

@@ -50,8 +50,6 @@ export function TourCursor({ command, onStepComplete }) {
     if (!command) return undefined
     let cancelled = false
 
-    if (command.say) setBubble(command.say)
-
     const resolve = async (target) => {
       for (let i = 0; i < RESOLVE_TRIES; i += 1) {
         const el = document.querySelector(`[data-tour-target="${target}"]`)
@@ -83,6 +81,8 @@ export function TourCursor({ command, onStepComplete }) {
     }
 
     const run = async () => {
+      // An action without its own line keeps the previous one's bubble up.
+      if (command.say) setBubble(command.say)
       const el = await resolve(command.target)
       if (cancelled) return
       if (!el) {

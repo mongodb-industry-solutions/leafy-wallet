@@ -2,6 +2,7 @@
 
 import Icon from '@leafygreen-ui/icon'
 import { Ico } from '@/components/common/Icons/Icons'
+import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
@@ -17,12 +18,12 @@ function amountScale(len) {
  * @param {object} props
  * @param {string} props.display - Formatted amount (e.g. "12.50").
  * @param {number} props.cents - Amount in cents.
- * @param {object} props.currency - Account currency, `{ code, symbol, balance }`.
+ * @param {object} props.currency - Account currency, `{ symbol, balance }`.
  * @param {object} [props.recipient] - Pre-selected recipient, if any.
  * @param {'send'|'request'} props.mode - The chosen intent; the primary button reflects it.
  * @param {(updater: (cents: number) => number) => void} props.setCents
  * @param {() => void} props.onClose
- * @param {(mode: 'send'|'request') => void} props.onPick
+ * @param {() => void} props.onContinue - Advances to the next step of the flow.
  */
 export function NumpadStep({
   display,
@@ -32,7 +33,7 @@ export function NumpadStep({
   mode,
   setCents,
   onClose,
-  onPick,
+  onContinue,
 }) {
   const isRequest = mode === 'request'
   const handleDigit = (d) =>
@@ -87,20 +88,17 @@ export function NumpadStep({
       </div>
 
       <div className="flex gap-3 px-4 pt-4 pb-6">
-        <button
-          onClick={onClose}
-          className="h-14 flex-1 rounded-full bg-foreground/10 text-base font-semibold text-foreground"
-        >
+        <Button variant="neutral" onClick={onClose} className="flex-1">
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           data-tour-target="send-continue"
-          onClick={() => onPick(mode)}
+          onClick={onContinue}
           disabled={isEmpty}
-          className="h-14 flex-1 rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
+          className="flex-1"
         >
           {isRequest ? 'Request' : 'Send'}
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -10,12 +10,21 @@ export const money = (n, currency = 'EUR') => `${currency} ${Math.abs(n).toFixed
 /** The card renders the note as "For <note>", so store the bare phrase: drop a leading "for ", trim. */
 export const cleanNote = (note) => (note ?? '').trim().replace(/^for\s+/i, '').trim()
 
+const totalOf = (rows) => rows.reduce((sum, r) => sum + r.total, 0)
+const currencyOf = (rows) => rows[0].currency ?? 'EUR'
+
+// One breakdown as a chart card: the bars are capped, and `toLabel` names each row.
+function pushChart(charts, title, rows, toLabel) {
+  charts.push({
+    title,
+    rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: toLabel(r), value: r.total })),
+  })
+}
+
 /** Record a per-contact spending breakdown for the inline chart card. */
 export function pushSpendingChart(charts, direction, rows) {
-  charts.push({
-    title: direction === 'received' ? 'Received by contact' : 'Sent by contact',
-    rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: r.contact, value: r.total })),
-  })
+  const title = direction === 'received' ? 'Received by contact' : 'Sent by contact'
+  pushChart(charts, title, rows, (r) => r.contact)
 }
 
 /**
@@ -25,26 +34,22 @@ export function pushSpendingChart(charts, direction, rows) {
 export function formatSpending(rows, direction) {
   const label = direction === 'received' ? 'received' : 'sent'
   const verb = direction === 'received' ? 'received from' : 'sent to'
-  const currency = rows[0].currency ?? 'EUR'
-  const total = rows.reduce((sum, r) => sum + r.total, 0)
   const lines = rows.map((r) => `${verb} ${r.contact}: ${money(r.total, r.currency)} across ${r.count} payment(s)`)
-  return [`Total ${label}: ${money(total, currency)} across ${rows.length} contact(s).`, ...lines].join('\n')
+  const header = `Total ${label}: ${money(totalOf(rows), currencyOf(rows))} across ${rows.length} contact(s).`
+  return [header, ...lines].join('\n')
 }
 
 /** Record a by-category spending breakdown (emoji-prefixed labels) for the inline chart card. */
 export function pushCategoryChart(charts, rows) {
-  charts.push({
-    title: 'Spending by category',
-    rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: `${r.emoji} ${r.category}`, value: r.total })),
-  })
+  pushChart(charts, 'Spending by category', rows, (r) => `${r.emoji} ${r.category}`)
 }
 
 /** Text form of a by-category spending breakdown, leading with the pre-computed total. */
 export function formatCategory(rows) {
-  const currency = rows[0].currency ?? 'EUR'
-  const total = rows.reduce((sum, r) => sum + r.total, 0)
+  const currency = currencyOf(rows)
   const lines = rows.map((r) => `${r.emoji} ${r.category}: ${money(r.total, currency)} across ${r.count} payment(s)`)
-  return [`Total spent: ${money(total, currency)} across ${rows.length} categories.`, ...lines].join('\n')
+  const header = `Total spent: ${money(totalOf(rows), currency)} across ${rows.length} categories.`
+  return [header, ...lines].join('\n')
 }
 
 /** The prompt the draft tool returns when the note is missing, so the model asks before drafting. */

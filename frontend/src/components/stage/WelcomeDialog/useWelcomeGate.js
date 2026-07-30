@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 // Key-naming shape follows WalletDataProvider's `leafy:<domain>:<detail>`. Deliberately sessionStorage,
 // not localStorage: a booth kiosk is one browser profile with many first-time visitors, so a permanent
@@ -10,6 +10,11 @@ export const WELCOME_SEEN_KEY = 'leafy:welcome-seen'
 // "Watch the tour" intent has to survive the SSO round-trip (a full-page navigation), so it cannot live
 // in React state. DesktopShell consumes it once the session reports `authed` (Phase 2).
 export const TOUR_INTENT_KEY = 'leafy:tour-intent'
+
+/** Reads the seen flag, guarded because sessionStorage is unavailable during SSR. */
+function hasSeenWelcome() {
+  return typeof window !== 'undefined' && window.sessionStorage.getItem(WELCOME_SEEN_KEY) === '1'
+}
 
 /**
  * Gates the pre-auth welcome overlay for the booth. Opens once per browser session, until the visitor
@@ -24,21 +29,20 @@ export const TOUR_INTENT_KEY = 'leafy:tour-intent'
  * }}
  */
 export function useWelcomeGate(isEntrySettled) {
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false)
+  // Snapshot at mount, which is equivalent to reading on settle: within one page life only dismiss
+  // writes the flag, and that records the override below too. Sign-out clears it via a full reload.
+  const [wasSeenAtMount] = useState(hasSeenWelcome)
+  // null until the visitor acts; their explicit choice then wins over the automatic open.
+  const [isOpenOverride, setIsOpenOverride] = useState(null)
 
-  // Open once the entry screen settles, unless already seen this session. Done in an effect (not a lazy
-  // initializer) so the server and first client render agree - sessionStorage is unavailable during SSR.
-  useEffect(() => {
-    if (!isEntrySettled) return
-    if (window.sessionStorage.getItem(WELCOME_SEEN_KEY) !== '1') setIsWelcomeOpen(true)
-  }, [isEntrySettled])
+  const isWelcomeOpen = isOpenOverride ?? (isEntrySettled && !wasSeenAtMount)
 
   // Re-entry point on the stage: reopen without touching the seen flag.
-  const showWelcome = useCallback(() => setIsWelcomeOpen(true), [])
+  const showWelcome = useCallback(() => setIsOpenOverride(true), [])
 
   const dismissWelcome = useCallback(() => {
     window.sessionStorage.setItem(WELCOME_SEEN_KEY, '1')
-    setIsWelcomeOpen(false)
+    setIsOpenOverride(false)
   }, [])
 
   return { isWelcomeOpen, showWelcome, dismissWelcome }

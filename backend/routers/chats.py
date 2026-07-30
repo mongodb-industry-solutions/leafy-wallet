@@ -35,16 +35,14 @@ async def list_chats(ownerPartyRef: str | None = None, db: MongoDBConnector = De
 
 @router.delete("/{chat_id}", status_code=204)
 async def delete_chat(chat_id: str, db: MongoDBConnector = Depends(get_db)):
-    object_id = parse_object_id(chat_id)
-    existing = db.find(COLLECTION, {"_id": object_id})
-    if not existing:
+    deleted = db.find_one_and_delete(COLLECTION, {"_id": parse_object_id(chat_id)})
+    if not deleted:
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    db.delete_one(COLLECTION, {"_id": object_id})
     # Cascade: a chat's messages have no meaning without their parent. Matches
     # on either join key, since a message may carry only one of the two.
     message_filters = [{"chatId": chat_id}]
-    chat_reference = existing[0].get("chatReference")
+    chat_reference = deleted.get("chatReference")
     if chat_reference:
         message_filters.append({"chatReference": chat_reference})
     db.delete_many(MESSAGES_COLLECTION, {"$or": message_filters})

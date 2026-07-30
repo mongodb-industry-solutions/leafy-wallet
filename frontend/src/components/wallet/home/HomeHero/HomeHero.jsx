@@ -23,7 +23,7 @@ export function HomeHero({ user, onSignOut, onProfile, onOpenNotifications }) {
     <div className="relative px-4 pt-12 pb-2 text-white">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 rounded-full bg-white/15 py-1 pr-4 pl-1 backdrop-blur-sm">
-          <ProfileMenu user={user} onLogout={onSignOut} onProfile={onProfile} size={30} align="start" />
+          <ProfileMenu user={user} onLogout={onSignOut} onProfile={onProfile} size={30} />
           <span className="text-sm font-medium tracking-tight">{user.name}</span>
         </div>
         <button

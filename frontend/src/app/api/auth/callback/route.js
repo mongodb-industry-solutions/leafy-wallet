@@ -44,7 +44,7 @@ export async function GET(req) {
     if (!sub) return fail('token_exchange_failed')
 
     const info = await fetchUserinfo(tokens.access_token)
-    const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email) ?? undefined
+    const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email)
 
     const res = NextResponse.redirect(new URL('/', ENV.appBaseUrl()))
     attachSession(res, {

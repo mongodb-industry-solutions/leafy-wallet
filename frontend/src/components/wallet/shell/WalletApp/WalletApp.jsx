@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { WalletDataProvider } from '@/lib/wallet/WalletDataProvider'
 import { BottomNav } from '@/components/wallet/shell/BottomNav/BottomNav'
 import { HomeTab } from '@/components/wallet/home/HomeTab/HomeTab'
@@ -38,7 +38,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
   const [payRequestNotification, setPayRequestNotification] = useState(null)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
   // aurora intro plays once per login, not on every return to the Home tab.
-  const heroIntroPlayedRef = useRef(false)
+  const [hasPlayedHeroIntro, setHasPlayedHeroIntro] = useState(false)
 
   let flow
   if (isSendOpen || payRequestNotification) {
@@ -67,7 +67,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
   }, [])
 
   const handleHeroIntroPlayed = useCallback(() => {
-    heroIntroPlayedRef.current = true
+    setHasPlayedHeroIntro(true)
   }, [])
 
   // Contact action sheet (opened from a People row's chevron): send to, or request from, that contact.
@@ -105,7 +105,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
                     onDetail={setDetail}
                     onSend={() => handleOpenSend('send')}
                     onRequest={() => handleOpenSend('request')}
-                    playHeroIntro={!heroIntroPlayedRef.current}
+                    playHeroIntro={!hasPlayedHeroIntro}
                     onHeroIntroPlayed={handleHeroIntroPlayed}
                   />
                 )}

@@ -3,17 +3,14 @@
 import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { Peep } from '@/components/common/Peep/Peep'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { DetailRow } from '@/components/ui/DetailRow'
 import { IconButton } from '@/components/ui/IconButton'
 import { AccountPickerSheet } from '@/components/wallet/send/AccountPickerSheet/AccountPickerSheet'
 
-function Row({ label, value }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold tabular-nums">{value}</span>
-    </div>
-  )
-}
+/** Shown on the review screen and reused as the guard's message, so the two never drift apart. */
+export const INSUFFICIENT_BALANCE_MESSAGE = 'Not enough balance in this account.'
 
 /**
  * Third step of the send/request flow: review the amount, recipient, source account, and note before
@@ -26,9 +23,9 @@ function Row({ label, value }) {
  * @param {string} props.note
  * @param {(note: string) => void} props.setNote
  * @param {object} [props.fromAccount] - The selected source account.
- * @param {object[]} [props.accounts] - All accounts (for the picker).
- * @param {boolean} [props.canPickAccount] - Whether there's more than one account to choose from.
- * @param {(account: object) => void} [props.onPickAccount]
+ * @param {object[]} props.accounts - All accounts (for the picker).
+ * @param {boolean} props.canPickAccount - Whether there's more than one account to choose from.
+ * @param {(account: object) => void} props.onPickAccount
  * @param {boolean} [props.insufficient] - The amount exceeds the source account's balance.
  * @param {string} props.remaining - Formatted balance remaining after this send.
  * @param {boolean} [props.isSubmitting] - The transfer is in flight.
@@ -44,7 +41,7 @@ export function ConfirmStep({
   note,
   setNote,
   fromAccount,
-  accounts = [],
+  accounts,
   canPickAccount,
   onPickAccount,
   insufficient,
@@ -81,17 +78,17 @@ export function ConfirmStep({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <Card className="flex items-center gap-3">
           <Peep seed={recipient.seed} bg={recipient.bg} size={48} />
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{isRequest ? 'From' : 'To'}</p>
             <p className="truncate text-base font-bold">{recipient.name}</p>
             <p className="truncate text-sm text-muted-foreground">{recipient.lookupHint}</p>
           </div>
-        </div>
+        </Card>
 
-        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3 text-sm">
+        <Card className="mt-3 flex flex-col gap-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Note</span>
             <input
               data-tour-target="send-note"
@@ -103,14 +100,14 @@ export function ConfirmStep({
             />
           </div>
           {isRequest ? (
-            <Row label="You'll receive" value={`${symbol}${display}`} />
+            <DetailRow label="You'll receive" value={`${symbol}${display}`} />
           ) : (
             <>
               <button
                 type="button"
                 onClick={() => setIsPickerOpen(true)}
                 disabled={!canPickAccount}
-                className="flex items-center justify-between gap-3 text-sm disabled:cursor-default"
+                className="flex items-center justify-between gap-3 disabled:cursor-default"
               >
                 <span className="text-muted-foreground">From</span>
                 <span className="flex min-w-0 items-center gap-1.5 font-semibold">
@@ -121,27 +118,25 @@ export function ConfirmStep({
                   )}
                 </span>
               </button>
-              <Row label="Remaining" value={`${symbol}${remaining}`} />
+              <DetailRow label="Remaining" value={`${symbol}${remaining}`} />
             </>
           )}
-        </div>
+        </Card>
       </div>
 
       <div className="px-4 pt-2 pb-6">
         {insufficient && (
-          <p className="mb-2 text-center text-sm text-destructive">
-            Not enough balance in this account.
-          </p>
+          <p className="mb-2 text-center text-sm text-destructive">{INSUFFICIENT_BALANCE_MESSAGE}</p>
         )}
         {error && !insufficient && <p className="mb-2 text-center text-sm text-destructive">{error}</p>}
-        <button
+        <Button
           data-tour-target="send-submit"
           onClick={onSubmit}
           disabled={isSubmitting || insufficient}
-          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-60"
+          className="w-full"
         >
           {submitLabel}
-        </button>
+        </Button>
       </div>
 
       {isPickerOpen && (

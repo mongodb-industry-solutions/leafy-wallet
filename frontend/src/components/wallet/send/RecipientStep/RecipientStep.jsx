@@ -4,7 +4,10 @@ import { useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
+import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { CardList } from '@/components/ui/Card'
+import { filterContacts } from '@/components/wallet/people/filterContacts'
 
 /**
  * Second step of the send/request flow: pick or search for a recipient and
@@ -34,12 +37,7 @@ export function RecipientStep({
   const { contacts: contactsState } = useWalletData()
   const contacts = contactsState.data ?? []
   const [search, setSearch] = useState('')
-  const query = search.trim().toLowerCase()
-  const filtered = query
-    ? contacts.filter(
-        (c) => c.name.toLowerCase().includes(query) || c.lookupHint.toLowerCase().includes(query),
-      )
-    : contacts
+  const filtered = filterContacts(contacts, search)
 
   function handleSelectRecipient(c) {
     setRecipient(c)
@@ -102,12 +100,12 @@ export function RecipientStep({
         <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Suggested
         </p>
-        <div className="flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-3 shadow-sm">
+        <CardList>
           {filtered.map((c) => (
             <button
               key={c.id}
               onClick={() => handleSelectRecipient(c)}
-              className="flex w-full items-center gap-3 py-3 text-left"
+              className="flex items-center gap-3 py-3 text-left"
             >
               <Peep seed={c.seed} bg={c.bg} size={44} />
               <div className="min-w-0 flex-1">
@@ -121,17 +119,13 @@ export function RecipientStep({
               )}
             </button>
           ))}
-        </div>
+        </CardList>
       </div>
 
       <div className="px-4 pt-2 pb-6">
-        <button
-          onClick={onNext}
-          disabled={!recipient}
-          className="h-14 w-full rounded-full bg-secondary text-base font-semibold text-secondary-foreground disabled:opacity-40"
-        >
+        <Button onClick={onNext} disabled={!recipient} className="w-full">
           Next
-        </button>
+        </Button>
       </div>
     </div>
   )

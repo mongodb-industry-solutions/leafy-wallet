@@ -68,11 +68,11 @@ export function DesktopShell() {
 
   // Before authentication the wallet reports no flow - narrate the sign-in itself.
   const activeFlow = isAuthed ? flow : 'login'
-  const shouldNudge = !isTourActive && isOnline && Boolean(WALKTHROUGH[activeFlow]?.offlineMoment)
+  const shouldNudge = !isTourActive && isOnline && Boolean(WALKTHROUGH[activeFlow].offlineMoment)
   const walkthroughStep = isTourActive && command ? command.walkthroughStep : undefined
 
   let phoneContent
-  if (phase === 'authed') {
+  if (isAuthed) {
     phoneContent = <WalletApp user={user} onSignOut={handleSignOut} onFlowChange={setFlow} isOnline={isOnline} />
   } else if (phase === 'faceid') {
     phoneContent = <FaceIdEntry onAuthed={handleAuthed} onFallback={handlePasswordlessFallback} />
@@ -91,7 +91,7 @@ export function DesktopShell() {
 
         <div className="flex w-[400px] max-w-[90vw] flex-col gap-3">
           <div
-            className={`rounded-[2rem] border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(0,30,43,0.35)] transition-all duration-500 ${
+            className={`rounded-[2rem] border bg-card p-6 shadow-(--shadow-panel) transition-all duration-500 ${
               isTourActive ? 'border-secondary/40 ring-2 ring-secondary/25' : 'border-border'
             }`}
           >

@@ -5,6 +5,7 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Peep } from '@/components/common/Peep/Peep'
 import { Ico } from '@/components/common/Icons/Icons'
 import { usePasswordless } from '@/components/wallet/profile/ProfileScreen/usePasswordless'
+import { Card } from '@/components/ui/Card'
 import { IconButton } from '@/components/ui/IconButton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
@@ -87,7 +88,7 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
 
         <div>
           <SectionLabel icon={<Ico.Card size={13} />}>Linked account</SectionLabel>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <Card>
             <p className="text-sm font-semibold">{LINKED_PROVIDER}</p>
             <p className="mt-2 font-mono text-xs tracking-tight text-muted-foreground tabular-nums">
               {linkedAccount?.maskedIban ?? '••••'}
@@ -95,12 +96,12 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
             <p className="mt-0.5 text-xs text-muted-foreground">
               {linkedAccount?.currency ?? 'EUR'} account
             </p>
-          </div>
+          </Card>
         </div>
 
         <div>
           <SectionLabel icon={<Ico.FaceId size={14} />}>Passwordless login</SectionLabel>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <Card>
             <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">Face ID on this device</p>
@@ -115,7 +116,7 @@ export function ProfileScreen({ user, onClose, onSignOut }) {
                 disabled={isBusy}
               />
             </div>
-          </div>
+          </Card>
         </div>
 
         <button

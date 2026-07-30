@@ -6,7 +6,10 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { formatMoney } from '@/lib/wallet/format'
 import { NumpadStep } from '@/components/wallet/send/NumpadStep/NumpadStep'
 import { RecipientStep } from '@/components/wallet/send/RecipientStep/RecipientStep'
-import { ConfirmStep } from '@/components/wallet/send/ConfirmStep/ConfirmStep'
+import {
+  ConfirmStep,
+  INSUFFICIENT_BALANCE_MESSAGE,
+} from '@/components/wallet/send/ConfirmStep/ConfirmStep'
 import { SuccessStep } from '@/components/wallet/send/SuccessStep/SuccessStep'
 
 const EUR_SYMBOL = '€'
@@ -26,7 +29,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
   const accounts = accountsState.data ?? []
   const primaryAccount = accounts.find((a) => a.isDefault) ?? accounts[0]
 
-  const [mode, setMode] = useState(initialMode)
+  const mode = initialMode
   const [step, setStep] = useState('numpad')
   const [cents, setCents] = useState(0)
   const [recipient, setRecipient] = useState(initialContact || null)
@@ -45,9 +48,8 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
   const currency = { symbol: EUR_SYMBOL, balance: formatMoney(balanceValue) }
   const shared = { display, isRequest, recipient, symbol: EUR_SYMBOL }
 
-  function handlePickMode(nextMode) {
-    setMode(nextMode)
-    if (cents > 0) setStep(recipient ? 'confirm' : 'recipient')
+  function handleContinue() {
+    setStep(recipient ? 'confirm' : 'recipient')
   }
 
   async function handleRequest() {
@@ -73,8 +75,9 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
       await handleRequest()
       return
     }
+    // Unreachable from the UI (the submit button is disabled), kept as insurance for a future caller.
     if (insufficient) {
-      setError('Not enough balance in this account.')
+      setError(INSUFFICIENT_BALANCE_MESSAGE)
       return
     }
     setIsSubmitting(true)
@@ -108,7 +111,7 @@ export function SendFlow({ initialContact, initialMode = 'send', isOnline = true
         mode={mode}
         setCents={setCents}
         onClose={onClose}
-        onPick={handlePickMode}
+        onContinue={handleContinue}
       />
     )
   }

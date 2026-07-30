@@ -28,8 +28,10 @@ async def upsert_request(payload: WalletRequestUpsert, db: MongoDBConnector = De
     update = {"$set": {k: v for k, v in doc.items() if k not in blank_refs}}
     if blank_refs:
         update["$setOnInsert"] = {field: "" for field in blank_refs}
-    db.update_one(COLLECTION, {"requestReference": payload.requestReference}, update, upsert=True)
-    return with_str_id(db.find(COLLECTION, {"requestReference": payload.requestReference})[0])
+    upserted = db.find_one_and_update(
+        COLLECTION, {"requestReference": payload.requestReference}, update, upsert=True
+    )
+    return with_str_id(upserted)
 
 
 @router.get("", response_model=list[WalletRequestOut])

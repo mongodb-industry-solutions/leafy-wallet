@@ -3,7 +3,9 @@
 import { Peep } from '@/components/common/Peep/Peep'
 import { cn } from '@/lib/utils'
 import { BottomSheet } from '@/components/ui/BottomSheet'
+import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { amountToneOf, rowStatusOf, signOf } from '@/lib/wallet/format'
 import { useCancelRequest } from './useCancelRequest'
 
 /** Text color for a detail row value: pending/settled tint on the status row, default otherwise. */
@@ -21,21 +23,13 @@ function valueColor(isStatusRow, isPending) {
  */
 export function TxDetail({ tx, onClose }) {
   const isRequest = tx.kind === 'request'
-  const isInbound = tx.amount > 0
   const abs = Math.abs(tx.amount).toFixed(2)
   const cancel = useCancelRequest(onClose)
 
-  let status = 'Completed'
-  if (isRequest) status = 'Awaiting payment'
-  else if (tx.isPending) status = 'Pending'
-
   const rows = [
     { label: 'Date', value: tx.date },
-    { label: 'Status', value: status, isStatusRow: true },
+    { label: 'Status', value: rowStatusOf(tx), isStatusRow: true },
   ]
-
-  let sign = isInbound ? '+' : '−'
-  if (isRequest) sign = ''
 
   return (
     <>
@@ -48,14 +42,8 @@ export function TxDetail({ tx, onClose }) {
             {isRequest ? `You requested from ${tx.name}` : tx.name}
           </p>
           <p className="text-sm text-muted-foreground">{tx.lookupHint}</p>
-          <p
-            className={cn(
-              'mt-4 text-3xl font-bold tabular-nums',
-              isRequest && 'text-muted-foreground',
-              !isRequest && (isInbound ? 'text-secondary' : 'text-foreground'),
-            )}
-          >
-            {sign}€{abs}
+          <p className={cn('mt-4 text-3xl font-bold tabular-nums', amountToneOf(tx))}>
+            {signOf(tx)}€{abs}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{tx.note}</p>
         </div>
@@ -70,12 +58,14 @@ export function TxDetail({ tx, onClose }) {
         </div>
 
         {isRequest && (
-          <button
+          <Button
+            variant="neutral"
+            size="md"
             onClick={cancel.ask}
-            className="mt-5 h-11 w-full rounded-full bg-foreground/[0.06] text-sm font-semibold text-destructive"
+            className="mt-5 w-full text-destructive"
           >
             Cancel request
-          </button>
+          </Button>
         )}
       </BottomSheet>
 

@@ -90,6 +90,7 @@ For the full walkthrough, ports, and environment files, see [LOCAL_DEPLOYMENT.md
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) with Docker Compose
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), to run the vector search index script
 - A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
 - A running PSP instance (see the section above).
 
@@ -118,14 +119,19 @@ DATABASE_NAME="<your-database-name>"
 
 Make sure to run this on the root directory.
 
-1. To run with Docker use the following command:
+1. Create the Atlas vector search index that backs semantic transaction search (first run only). It reads
+   `backend/.env`, so fill that in first:
+```bash
+cd backend && uv run python scripts/create_vector_index.py
 ```
+2. Build and start every container:
+```bash
 make build
 ```
-2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
-3. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
-4. To delete the containers and images run:
-```
+3. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
+4. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
+5. To delete the containers and images run:
+```bash
 make clean
 ```
 

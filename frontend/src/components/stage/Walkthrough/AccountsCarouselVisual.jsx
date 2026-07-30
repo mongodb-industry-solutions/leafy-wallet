@@ -1,5 +1,7 @@
 'use client'
 
+import { VisualCard } from '@/components/stage/Walkthrough/VisualCard'
+
 /** Mini account card, mirroring the real Home carousel cards. */
 function MiniCard({ name, amount }) {
   return (
@@ -21,16 +23,11 @@ function MiniCard({ name, amount }) {
  */
 export function AccountsCarouselVisual() {
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="w-52 overflow-hidden rounded-2xl border border-border bg-white p-3 shadow-md">
-        <div
-          className="flex flex-col gap-2"
-          style={{ animation: 'home-cards-slide 6s ease-in-out infinite' }}
-        >
-          <MiniCard name="Okafor Digital…" amount="1,535.20 €" />
-          <MiniCard name="Savings Pot" amount="4,200.00 €" />
-        </div>
+    <VisualCard className="w-52 overflow-hidden p-3">
+      <div className="flex flex-col gap-2" style={{ animation: 'home-cards-slide 6s ease-in-out infinite' }}>
+        <MiniCard name="Okafor Digital…" amount="1,535.20 €" />
+        <MiniCard name="Savings Pot" amount="4,200.00 €" />
       </div>
-    </div>
+    </VisualCard>
   )
 }

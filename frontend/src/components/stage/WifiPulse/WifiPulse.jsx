@@ -1,7 +1,7 @@
 /** Pulsing wifi glyph used inside the "good moment to go offline" tooltip. */
 export function WifiPulse() {
   return (
-    <div className="grid h-20 place-items-center rounded-[10px] bg-[#00ed64]/[0.12] text-[#00ed64] animate-[wifi-state_3.4s_ease-in-out_infinite] motion-reduce:animate-none">
+    <div className="grid h-20 place-items-center rounded-[10px] bg-primary/[0.12] text-primary animate-[wifi-state_3.4s_ease-in-out_infinite] motion-reduce:animate-none">
       <svg
         className="size-[38px]"
         viewBox="0 0 24 24"

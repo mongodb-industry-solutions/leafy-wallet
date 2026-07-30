@@ -21,7 +21,7 @@ class WalletContactCreate(BaseModel):
 
 class WalletContactOut(BaseModel):
     """Outbound shape returned to the client: the full stored document,
-    including the server-managed fields that never appear in `Create`/`Update`.
+    including the server-managed fields that never appear in `WalletContactCreate`.
     """
 
     model_config = ConfigDict(populate_by_name=True)

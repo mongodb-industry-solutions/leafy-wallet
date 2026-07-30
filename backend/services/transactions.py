@@ -29,6 +29,8 @@ def list_transactions(
     pipeline = [{"$match": query}, {"$sort": {"createdAt": -1}}]
     if limit is not None:
         pipeline.append({"$limit": limit})
+    # No caller consumes the raw vector, and it dwarfs the rest of the row.
+    pipeline.append({"$project": {"noteEmbedding": 0}})
     return [with_str_id(doc) for doc in db.aggregate(COLLECTION, pipeline)]
 
 

@@ -19,7 +19,7 @@ export function FaceIdEntry({ onAuthed, onFallback }) {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 grid place-items-center bg-[rgba(0,20,28,0.34)] px-6 backdrop-blur-xl transition-opacity duration-500',
+        'fixed inset-0 z-50 grid place-items-center bg-foreground/35 px-6 backdrop-blur-xl transition-opacity duration-500',
         isExiting ? 'opacity-0' : 'opacity-100',
       )}
     >
@@ -35,10 +35,8 @@ export function FaceIdEntry({ onAuthed, onFallback }) {
           className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/70 to-transparent"
         />
 
-        <div className="relative flex flex-col items-center">
-          <div className="grid size-52 place-items-center">
-            <DotLottieReact src={FACE_ID_LOTTIE} autoplay loop className="size-48" />
-          </div>
+        <div className="relative mx-auto grid size-52 place-items-center">
+          <DotLottieReact src={FACE_ID_LOTTIE} autoplay loop className="size-48" />
         </div>
       </div>
     </div>

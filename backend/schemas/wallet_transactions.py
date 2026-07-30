@@ -61,7 +61,7 @@ class WalletTransactionUpdate(BaseModel):
 
     Covers only what legitimately changes after creation: the status transition and
     its settlement time. Identifying fields (`ownerPartyRef`, `amount`, `direction`,
-    ...) are immutable and therefore not offered here, mirroring WalletContactUpdate.
+    ...) are immutable and therefore not offered here.
     """
 
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"] | None = None
@@ -106,28 +106,12 @@ class SpendingByContact(BaseModel):
     lastAt: datetime | None = None
 
 
-class WalletTransactionSearchResult(BaseModel):
+class WalletTransactionSearchResult(WalletTransactionOut):
     """Outbound shape for GET /wallet-transactions/search.
 
-    Same core fields as `WalletTransactionOut`, but omits the raw
-    `noteEmbedding` vector (not useful to callers, and needlessly bloats
-    a results list) and adds the vector-search relevance `score`.
+    The stored document plus the vector-search relevance `score`. The search
+    pipeline projects `noteEmbedding` away (not useful to callers, and it
+    needlessly bloats a results list), so it serializes as null here.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str = Field(alias="_id")
-    leafyPayTransferReference: str
-    ownerPartyRef: str
-    counterpartyArrangementReference: str
-    amount: float
-    currency: str
-    note: str | None = None
-    direction: Literal["sent", "received"]
-    leafyPayStatus: Literal["pending", "settled", "failed", "exception"]
-    localSyncStatus: Literal["local_pending", "synced"]
-    createdAt: datetime
-    settledAt: datetime | None = None
     score: float
-
-    _validate_settled_at = field_validator("settledAt", mode="before")(_none_if_epoch_zero)
