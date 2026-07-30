@@ -1,6 +1,6 @@
 # Leafy Wallet Backend
 
-**Leafy Wallet Backend is the enrichment API for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It is a [FastAPI](https://fastapi.tiangolo.com/) service, managed with [uv](https://docs.astral.sh/uv/), that owns the wallet data living in [MongoDB Atlas](https://www.mongodb.com/atlas): contacts, payment requests, chats, and the metadata plus semantic-search index for transactions. Balances and real transfers live in Leafy Pay (the PSP), not here; this service holds no money-moving credentials.
+**Leafy Wallet Backend is the enrichment API for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It is a [FastAPI](https://fastapi.tiangolo.com/) service, managed with [uv](https://docs.astral.sh/uv/), that owns the wallet data living in [MongoDB Atlas](https://www.mongodb.com/atlas): contacts, payment requests, chats, and the metadata plus semantic-search index for transactions. Balances and real transfers live in the Payment Platform (PSP), not here; this service holds no money-moving credentials.
 
 ## Components and Features:
 
@@ -13,14 +13,12 @@
 3. **Spending summaries**
    - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
 
-4. **Read-only 
-server**
+4. **Read-only MCP server**
    - A mounted MCP app exposes the collections as read-only tools. The wallet's own assistant calls it for online reads, and any external MCP client can connect to the same endpoint.
 
 ## Where Does MongoDB Shine?
 
-> **[Diagram placeholder: request-collection-map]**
-> _Intended diagram: each router prefix (/api/v1/wallet-contacts, /wallet-requests, /wallet-transactions, /chats, /chat-messages) mapped to its Atlas collection, with the /search endpoint pointing at the vector index and /summary at the aggregation pipeline._
+Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts`, `/wallet-requests`, `/wallet-transactions`, `/chats`, and `/chat-messages`. The `/wallet-transactions/search` endpoint queries the vector index directly, and `/wallet-transactions/summary` runs the spending aggregation.
 
 - **Flexible schema** lets enrichment documents evolve (notes, embeddings, settlement metadata) without migrations.
 - **Atlas Vector Search** powers meaning-based transaction search from a single index definition.
@@ -43,7 +41,6 @@ server**
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - A MongoDB Atlas cluster (M0 or higher)
 - A running Ollama with the embedding model pulled (the repo's Docker Compose handles this)
-- Deployed only: `APP_ENV` and `VOYAGE_API_KEY` (an Atlas-managed key, not a voyageai.com one)
 
 ### Add environment variables
 
@@ -70,7 +67,7 @@ cd backend && uv run pytest
 ## Common errors
 
 - Check that you've created a `.env` file with `MONGODB_URI` and `DATABASE_NAME`, and that your IP is on the Atlas network access list.
-- Vector search endpoints need the index to exist; run the provisioning script in `scripts/` if searches return nothing.
+- Vector search endpoints need the index to exist; run `uv run python scripts/create_vector_index.py` if searches return nothing. It's idempotent, so re-running is safe.
 
 ## 📄 License
 

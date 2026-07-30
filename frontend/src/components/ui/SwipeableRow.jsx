@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 const SWIPE_REVEAL_PX = 88
 const SWIPE_TRIGGER_PX = 44
@@ -36,14 +36,18 @@ export function SwipeableRow({
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef({ startX: 0, startOffset: 0, isPointerDown: false, didMove: false })
 
-  // Snap closed whenever the parent opens another row (or after the action ran).
-  useEffect(() => {
-    if (!isOpen) setOffset(0)
-  }, [isOpen])
+  // The parent owns the single open slot, so a row it closed renders shut whatever the last drag
+  // left behind - and the next drag starts from there.
+  const translateX = isOpen ? offset : 0
 
   function handlePointerDown(e) {
     if (!canSwipe) return
-    dragRef.current = { startX: e.clientX, startOffset: offset, isPointerDown: true, didMove: false }
+    dragRef.current = {
+      startX: e.clientX,
+      startOffset: translateX,
+      isPointerDown: true,
+      didMove: false,
+    }
   }
 
   function handlePointerMove(e) {
@@ -65,14 +69,14 @@ export function SwipeableRow({
     if (!drag.isPointerDown) return
     drag.isPointerDown = false
     setIsDragging(false)
-    const shouldStayOpen = offset <= -SWIPE_TRIGGER_PX
+    const shouldStayOpen = translateX <= -SWIPE_TRIGGER_PX
     onOpenChange(shouldStayOpen)
     setOffset(shouldStayOpen ? -SWIPE_REVEAL_PX : 0)
   }
 
   function handleRowClick() {
     if (dragRef.current.didMove) return
-    if (offset !== 0) {
+    if (translateX !== 0) {
       onOpenChange(false)
       return
     }
@@ -104,7 +108,7 @@ export function SwipeableRow({
         onPointerCancel={handlePointerEnd}
         className={`flex w-full touch-pan-y items-center text-left ${rowClassName}`}
         style={{
-          transform: `translateX(${offset}px)`,
+          transform: `translateX(${translateX}px)`,
           transition: isDragging ? 'none' : SWIPE_EASE,
         }}
       >

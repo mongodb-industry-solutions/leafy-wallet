@@ -11,6 +11,9 @@ import {
   OAuthUpstreamError,
 } from './oauth'
 
+// Leafy Pay mints auth_req_ids from this alphabet; anything else never reaches the upstream.
+const AUTH_REQ_ID_PATTERN = /^[A-Za-z0-9._-]+$/
+
 const localPart = (v) => (v && v.includes('@') ? v.split('@')[0] : v)
 
 /** Relay a request to Leafy Pay and return { res, data } with the body parsed as JSON. */
@@ -80,7 +83,7 @@ export async function cibaStart({ login_hint_token: loginHintToken } = {}) {
 
 /** Fetch the challenge + binding message for a pending backchannel request. */
 export async function cibaChallenge(authReqId) {
-  if (!authReqId || !/^[A-Za-z0-9._-]+$/.test(authReqId)) return { ok: false, error: 'invalid auth_req_id' }
+  if (!authReqId || !AUTH_REQ_ID_PATTERN.test(authReqId)) return { ok: false, error: 'invalid auth_req_id' }
   const { res, data } = await pspFetch(`/api/v1/auth/bc-authorize/${encodeURIComponent(authReqId)}`)
   if (!res.ok) return { ok: false, error: data.error_description ?? data.error }
   return { ok: true, ...data }
@@ -89,7 +92,7 @@ export async function cibaChallenge(authReqId) {
 /** Submit the signed assertion. On 401/400 the caller should treat the credential as revoked. */
 export async function cibaApprove({ auth_req_id: authReqId, credentialId, signature } = {}) {
   if (!authReqId || !credentialId || !signature) return { ok: false, status: 400, error: 'missing fields' }
-  if (!/^[A-Za-z0-9._-]+$/.test(authReqId)) return { ok: false, status: 400, error: 'invalid auth_req_id' }
+  if (!AUTH_REQ_ID_PATTERN.test(authReqId)) return { ok: false, status: 400, error: 'invalid auth_req_id' }
   const { res, data } = await pspFetch(`/api/v1/auth/bc-authorize/${encodeURIComponent(authReqId)}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -127,7 +130,7 @@ export async function cibaPoll({ auth_req_id: authReqId } = {}) {
   if (!sub) return { status: 'error', error: 'missing subject' }
 
   const info = await fetchUserinfo(tokens.access_token)
-  const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email) ?? undefined
+  const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email)
 
   await setSession({
     accessToken: tokens.access_token,

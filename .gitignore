@@ -247,3 +247,5 @@ frontend/package-lock.json
 objectbox-sync-server/objectbox/
 # macOS Finder metadata
 .DS_Store
+# Intermediate for `npm run licenses`; frontend/THIRD-PARTY-NOTICES.md is the committed output.
+frontend/third-party-licenses.json

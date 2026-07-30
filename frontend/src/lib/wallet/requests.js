@@ -1,6 +1,8 @@
 // Leafy Pay models a payment request in sixteen states; the wallet renders five. This is the single
 // place the two vocabularies meet.
 
+import { byNewestFirst } from './format'
+
 // Still with the payer: nothing has been decided, so the request is payable and declinable.
 const AWAITING_PAYER = ['draft', 'created', 'validated', 'presented', 'delivered', 'viewed']
 
@@ -77,4 +79,15 @@ export function toRequestPaymentRows(requests, knownReferences) {
       createdAt: r.updatedAt ?? r.createdAt,
       status: r.status === 'payment_settled' ? 'completed' : 'pending',
     }))
+}
+
+/**
+ * The rows an activity list renders: payments merged with requests still awaiting payment, newest
+ * first, so the two read as one history instead of separate sections.
+ * @param {object[]} [transactions] - Rows from `getTransactions`.
+ * @param {object[]} [outgoingRequests] - Outgoing request views from `getRequests`.
+ * @returns {object[]}
+ */
+export function toActivityRows(transactions, outgoingRequests) {
+  return [...(transactions ?? []), ...toAwaitingPaymentRows(outgoingRequests)].sort(byNewestFirst)
 }

@@ -1,5 +1,3 @@
-import { cn } from '@/lib/utils'
-
 /**
  * A centered confirmation dialog: title, message, an optional error line, and Cancel + confirm
  * buttons. Tapping the backdrop or Cancel dismisses. Both buttons disable while `isBusy`.
@@ -10,7 +8,6 @@ import { cn } from '@/lib/utils'
  * @param {string} [props.confirmLabel]
  * @param {string} [props.busyLabel] - Shown on the confirm button while `isBusy`.
  * @param {boolean} [props.isBusy]
- * @param {boolean} [props.isDestructive] - Styles the confirm button as destructive.
  * @param {() => void} props.onCancel
  * @param {() => void} props.onConfirm
  */
@@ -21,7 +18,6 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   busyLabel,
   isBusy = false,
-  isDestructive = true,
   onCancel,
   onConfirm,
 }) {
@@ -43,12 +39,7 @@ export function ConfirmDialog({
           <button
             onClick={onConfirm}
             disabled={isBusy}
-            className={cn(
-              'h-11 flex-1 rounded-full text-sm font-semibold disabled:opacity-50',
-              isDestructive
-                ? 'bg-destructive text-destructive-foreground'
-                : 'bg-secondary text-secondary-foreground',
-            )}
+            className="h-11 flex-1 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground disabled:opacity-50"
           >
             {isBusy && busyLabel ? busyLabel : confirmLabel}
           </button>

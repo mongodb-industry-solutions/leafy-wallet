@@ -15,7 +15,7 @@ export function TooltipTrigger(props) {
 }
 
 /** The tooltip's floating content, positioned relative to its trigger. */
-export function TooltipPopup(
+export function TooltipContent(
   {
     className,
     align = "center",
@@ -53,5 +53,3 @@ export function TooltipPopup(
     </TooltipPrimitive.Portal>
   );
 }
-
-export { TooltipPopup as TooltipContent };

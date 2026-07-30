@@ -55,7 +55,7 @@ import {
 } from '@/lib/local/LocalStoreClient'
 import { detectLookupType } from './contacts'
 import { isAwaitingPayer, toRequestPaymentRows, toRequestStatus } from './requests'
-import { avatarFor, formatDate, formatMoney } from './format'
+import { avatarFor, byNewestFirst, formatDate, formatMoney } from './format'
 import { DEMO_USERS } from '@/lib/demo-users'
 
 // Contacts keep only a masked hint of the address they were found by, so a demo user is recognized
@@ -326,7 +326,7 @@ async function localTransactions(owner) {
         isPending: status !== 'completed',
       })
     })
-  rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+  rows.sort(byNewestFirst)
   return rows
 }
 
@@ -396,7 +396,7 @@ export async function getTransactions(isOnline = true) {
     )
   }
 
-  rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+  rows.sort(byNewestFirst)
   return rows
 }
 
@@ -942,10 +942,7 @@ export async function getRequests(isOnline = true) {
     outgoing = outbox.map((r) => view(r, false))
   }
 
-  const sortNewestFirst = (rows) =>
-    rows.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
-
-  return { incoming: sortNewestFirst(incoming), outgoing: sortNewestFirst(outgoing) }
+  return { incoming: incoming.sort(byNewestFirst), outgoing: outgoing.sort(byNewestFirst) }
 }
 
 /**
@@ -1116,6 +1113,13 @@ function decodeChatMessage(m) {
   return { id: String(m.id), role: m.role, type: 'text', text: m.text }
 }
 
+/** The Atlas id of an owner's chat, or null when it is not theirs / does not exist. */
+async function chatIdFor(reference, owner) {
+  if (!owner) return null
+  const chats = await listChatDocs(owner)
+  return (chats ?? []).find((c) => c.chatReference === reference)?.id ?? null
+}
+
 /**
  * A chat's messages, oldest first. Text and any inline cards (e.g. a spending chart) both round-trip.
  * @param {string} reference - The `chatReference`.
@@ -1142,10 +1146,9 @@ export async function deleteChat(reference, isOnline = true) {
     if (isOnline) {
       const owner = await ownerRef()
       if (!owner) return { ok: false, error: 'You need to be signed in' }
-      const chats = await listChatDocs(owner)
-      const chat = (chats ?? []).find((c) => c.chatReference === reference)
-      if (!chat?.id) return { ok: false, error: 'Chat not found.' }
-      await deleteChatDoc(chat.id)
+      const chatId = await chatIdFor(reference, owner)
+      if (!chatId) return { ok: false, error: 'Chat not found.' }
+      await deleteChatDoc(chatId)
     } else {
       await deleteLocalChat(reference)
     }
@@ -1165,11 +1168,9 @@ export async function appendChatMessage(reference, { role, text }, isOnline = tr
   if (!reference || !text?.trim()) return { ok: false }
   try {
     if (isOnline) {
-      const owner = await ownerRef()
-      const chats = await listChatDocs(owner)
-      const chat = (chats ?? []).find((c) => c.chatReference === reference)
-      if (!chat?.id) return { ok: false }
-      await createChatMessageDoc({ chatId: chat.id, chatReference: reference, role, text })
+      const chatId = await chatIdFor(reference, await ownerRef())
+      if (!chatId) return { ok: false }
+      await createChatMessageDoc({ chatId, chatReference: reference, role, text })
     } else {
       await createLocalChatMessage(reference, { role, text })
     }

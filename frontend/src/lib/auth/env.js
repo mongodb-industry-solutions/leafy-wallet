@@ -14,6 +14,8 @@ export const REQUESTED_SCOPES = [
   'write:rtp',
 ]
 
+const DEFAULT_APP_BASE_URL = 'http://localhost:8080'
+
 /** Read an env var, treating empty strings as unset. */
 function envVar(name) {
   const v = process.env[name]
@@ -26,9 +28,8 @@ export const ENV = {
   pspBaseUrl: () => envVar('PSP_BASE_URL') ?? '',
   clientId: () => envVar('CLIENT_ID') ?? '',
   clientSecret: () => envVar('CLIENT_SECRET') ?? '',
-  appBaseUrl: () => envVar('APP_BASE_URL') ?? 'http://localhost:8080',
-  redirectUri: () =>
-    envVar('REDIRECT_URI') ?? `${envVar('APP_BASE_URL') ?? 'http://localhost:8080'}/api/auth/callback`,
+  appBaseUrl: () => envVar('APP_BASE_URL') ?? DEFAULT_APP_BASE_URL,
+  redirectUri: () => envVar('REDIRECT_URI') ?? `${ENV.appBaseUrl()}/api/auth/callback`,
   sessionSecret: () => envVar('SESSION_SECRET') ?? '',
   // Browser-facing login page, on the frontend host (a different host from the API).
   authorizeUrl: () => `${envVar('PSP_FRONTEND_URL') ?? ''}/auth/authorize`,

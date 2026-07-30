@@ -1,5 +1,5 @@
 import os
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,8 +26,6 @@ class MongoDBConnector:
 
     def get_collection(self, collection_name):
         """Retrieve a collection."""
-        if not collection_name:
-            raise ValueError("Collection name must be provided.")
         return self.db[collection_name]
 
     def insert_one(self, collection_name, document):
@@ -52,6 +50,18 @@ class MongoDBConnector:
         collection = self.get_collection(collection_name)
         result = collection.update_one(query, update, upsert=upsert)
         return result.modified_count
+
+    def find_one_and_update(self, collection_name, query, update, upsert=False):
+        """Apply an update and return the resulting document, or None when nothing matched."""
+        collection = self.get_collection(collection_name)
+        return collection.find_one_and_update(
+            query, update, upsert=upsert, return_document=ReturnDocument.AFTER
+        )
+
+    def find_one_and_delete(self, collection_name, query):
+        """Delete a single document and return it, or None when nothing matched."""
+        collection = self.get_collection(collection_name)
+        return collection.find_one_and_delete(query)
 
     def delete_one(self, collection_name, query):
         """Delete a single document from a collection."""

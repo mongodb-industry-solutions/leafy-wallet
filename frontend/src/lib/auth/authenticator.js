@@ -26,16 +26,16 @@ function openDb() {
   })
 }
 
-// Each helper closes its connection once the transaction settles (avoids leaked connections on Safari).
-function idbPut(store, key, value) {
+// Closes the connection once the transaction settles (avoids leaked connections on Safari).
+function withStore(store, mode, run) {
   return openDb().then(
     (db) =>
       new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readwrite')
-        tx.objectStore(store).put(value, key)
+        const tx = db.transaction(store, mode)
+        const req = run(tx.objectStore(store))
         tx.oncomplete = () => {
           db.close()
-          resolve()
+          resolve(req?.result)
         }
         tx.onerror = () => {
           db.close()
@@ -45,41 +45,9 @@ function idbPut(store, key, value) {
   )
 }
 
-function idbGet(store, key) {
-  return openDb().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readonly')
-        const req = tx.objectStore(store).get(key)
-        req.onsuccess = () => {
-          db.close()
-          resolve(req.result)
-        }
-        req.onerror = () => {
-          db.close()
-          reject(req.error)
-        }
-      }),
-  )
-}
-
-function idbDelete(store, key) {
-  return openDb().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readwrite')
-        tx.objectStore(store).delete(key)
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => {
-          db.close()
-          reject(tx.error)
-        }
-      }),
-  )
-}
+const idbPut = (store, key, value) => withStore(store, 'readwrite', (os) => os.put(value, key))
+const idbGet = (store, key) => withStore(store, 'readonly', (os) => os.get(key))
+const idbDelete = (store, key) => withStore(store, 'readwrite', (os) => os.delete(key))
 
 function toB64(bytes) {
   const b = new Uint8Array(bytes)
@@ -88,8 +56,10 @@ function toB64(bytes) {
   return btoa(s)
 }
 
+const toUrlSafe = (b64) => b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
 function b64UrlFromBuffer(buf) {
-  return toB64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return toUrlSafe(toB64(buf))
 }
 
 function spkiToPem(spki) {
@@ -151,8 +121,7 @@ export async function sign(challenge) {
 
 /** Build a compact login_hint_token (base64url JSON of the opaque sub), no raw PII. */
 export function loginHintToken(sub) {
-  const json = JSON.stringify({ sub })
-  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return toUrlSafe(btoa(JSON.stringify({ sub })))
 }
 
 /** Remove the local login credential (key + metadata). */

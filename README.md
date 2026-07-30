@@ -9,7 +9,7 @@ Leafy Wallet also features **Leafy**, an AI-powered assistant that answers quest
 Leafy Wallet is composed of several interconnected features that demonstrate the capabilities of a modern offline-first wallet. Users can:
 
 1. **Sign in with SSO**
-   - Real authorization-code + PKCE flow against the Leafy Pay payment service provider.
+   - Real authorization-code + PKCE flow against the Payment Platform (PSP).
    - No credential ever touches the app; a passwordless (FaceID-style) re-entry path is included.
 
 2. **Check balances and activity**
@@ -17,12 +17,12 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
    - Each row carries its own settlement status, updated as transfers settle.
 
 3. **Send and request money**
-   - Sends execute real Leafy Pay transfers with a full review step (amount, recipient, note, source account).
+   - Sends execute real PSP transfers with a full review step (amount, recipient, note, source account).
    - Offline sends queue on the device and replay automatically on reconnect.
-   - Requests are real Leafy Pay requests-to-pay: the payer approves in-app and Leafy Pay moves the money.
+   - Requests are real PSP requests-to-pay: the payer approves in-app and the PSP moves the money.
 
 4. **Manage contacts**
-   - Add contacts by a registered Leafy Pay email or phone number; removing one also cleans up its Atlas replica.
+   - Add contacts by a registered PSP email or phone number; removing one also cleans up its Atlas replica.
 
 5. **Receive notifications**
    - Money received and incoming payment requests, with swipe-to-clear and a full review flow for paying a request.
@@ -37,14 +37,14 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 
 ## Where Does MongoDB Shine?
 
-> **[Diagram placeholder: system-architecture]**
-> _Intended diagram: all six services as boxes (frontend, backend, leafy-local-store, objectbox-sync-server, ollama, MongoDB Atlas plus the external Leafy Pay PSP), with arrows showing the online path (frontend to backend to Atlas, frontend to Leafy Pay), the offline path (frontend to leafy-local-store), and the sync path (leafy-local-store to objectbox-sync-server to Atlas)._
+![System architecture: edge devices (Leafy Wallet, ObjectBox, Ollama) sync through the ObjectBox Sync Server to MongoDB Atlas (database, Vector Search, MCP), while the edge also talks directly to the external Payment Platform (PSP)](docs/architecture-diagram.svg)
+
+The edge (the wallet, its on-device ObjectBox store, and the local Ollama model) can run the whole experience alone. When it's online, it also syncs through the ObjectBox Sync Server into MongoDB Atlas, and talks directly to the Payment Platform for real transfers.
 
 ### 1. **Offline sync with ObjectBox and Atlas**
-Wallet records written on the device (chats, requests, queued sends) stream up to Atlas through the ObjectBox Sync connector in the background, and Atlas-side changes stream back down. No spinners, no manual retry. On every login the wallet also reconciles against Leafy Pay: enrichment rows for transfers or beneficiaries that no longer exist there are pruned, and transfers made outside the app are adopted, so the offline copy always mirrors the real ledger.
+Wallet records written on the device (chats, requests, queued sends) stream up to Atlas through the ObjectBox Sync connector in the background, and Atlas-side changes stream back down. No spinners, no manual retry. On every login the wallet also reconciles against the PSP: enrichment rows for transfers or beneficiaries that no longer exist there are pruned, and transfers made outside the app are adopted, so the offline copy always mirrors the real ledger.
 
-> **[Diagram placeholder: sync-path]**
-> _Intended diagram: LocalChat / LocalChatMessage / LocalRequest entities on the device flowing through the sync server into their Atlas collections and back, with the MongoDB connector in the middle._
+![Sequence diagram of a send made while offline: the wallet queues the transaction locally, then on reconnect submits it to the Payment Platform (PSP) and syncs the settled transaction up to MongoDB Atlas](docs/offline-payment.svg)
 
 ### 2. **Multi-document ACID transactions**
 Transfers and their enrichment records stay consistent even when several offline writes land at once on reconnect. No double-spends, no drift.
@@ -68,29 +68,31 @@ The assistant routes each question to the right tool (balances, contacts, spendi
   - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
 
 - **AI**:
-  - [Ollama](https://ollama.com/) (qwen2.5:3b chat model, nomic-embed-text embeddings)
+  - [Ollama](https://ollama.com/) (qwen2.5:7b chat model, nomic-embed-text embeddings)
   - [LangGraph](https://www.langchain.com/langgraph)
 
 - **Styling**:
   - [Tailwind CSS](https://tailwindcss.com/) v4
   - [LeafyGreen UI](https://github.com/mongodb/leafygreen-ui) accents
 
-## Leafy Pay dependency
+## Payment Platform (PSP) dependency
 
-**The demo needs a running Leafy Pay instance.** Leafy Pay is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
+**The demo needs a running PSP instance.** The PSP (`sec-fsi-pci-dss`) is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
 
-To run the demo outside MongoDB:
+To run the demo, you'll need to:
 
-1. Run Leafy Pay locally, or deploy it to your own infrastructure.
-2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your Leafy Pay instance.
+1. Run the PSP locally, or deploy it to your own infrastructure.
+2. Point `PSP_BASE_URL` and `PSP_FRONTEND_URL` in `frontend/.env.local` at your PSP instance.
 3. Register the wallet's OAuth client (`CLIENT_ID`, `CLIENT_SECRET`, and a redirect URI of `<APP_BASE_URL>/api/auth/callback`) in that instance.
 
+For the full walkthrough, ports, and environment files, see [LOCAL_DEPLOYMENT.md](LOCAL_DEPLOYMENT.md).
 
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) with Docker Compose
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), to run the vector search index script
 - A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
-- A running Leafy Pay instance (see the section above).
+- A running PSP instance (see the section above).
 
 > **_Note:_** After cloning, run `./setup-hooks.sh` once. It installs a pre-commit hook (`security_check.sh`) that scans staged files for credentials before every commit.
 
@@ -100,19 +102,12 @@ To run the demo outside MongoDB:
 
 ```bash
 # frontend/.env.local - everything else has a working local default
-CLIENT_ID="<leafy-pay-oauth-client-id>"
-CLIENT_SECRET="<leafy-pay-oauth-client-secret>"
-PSP_BASE_URL="<leafy-pay-api-base-url>"
-PSP_FRONTEND_URL="<leafy-pay-hosted-login-url>"
+CLIENT_ID="<psp-oauth-client-id>"
+CLIENT_SECRET="<psp-oauth-client-secret>"
+PSP_BASE_URL="<psp-api-base-url>"
+PSP_FRONTEND_URL="<psp-hosted-login-url>"
 SESSION_SECRET="<random-string>"
 ```
-
-Deployed environments additionally set `APP_ENV` (`staging`/`prod`), `GROVE_API_KEY` and
-`VOYAGE_API_KEY`, plus the URLs that only default correctly on localhost - see
-[`environment/`](environment/). `APP_ENV` is what moves the assistant's chat to MongoDB's Grove
-gateway and embeddings to Voyage AI on Atlas (`https://ai.mongodb.com`, which takes an Atlas-managed
-key), so no Ollama container is deployed. The two embedding models have
-different vector widths (768 local, 1024 deployed), so each environment uses its own Atlas database.
 
 ```bash
 # backend/.env
@@ -124,21 +119,25 @@ DATABASE_NAME="<your-database-name>"
 
 Make sure to run this on the root directory.
 
-1. To run with Docker use the following command:
+1. Create the Atlas vector search index that backs semantic transaction search (first run only). It reads
+   `backend/.env`, so fill that in first:
+```bash
+cd backend && uv run python scripts/create_vector_index.py
 ```
+2. Build and start every container:
+```bash
 make build
 ```
-2. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only,
-   and not needed if you loaded a licensed build - see "ObjectBox Sync server image" below).
-3. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
-4. To delete the containers and images run:
-```
+3. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
+4. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
+5. To delete the containers and images run:
+```bash
 make clean
 ```
 
 ### Demo users
 
-The demo revolves around three identities, seeded in MongoDB's shared Leafy Pay environment. Login is by email only:
+The demo revolves around three identities, seeded in MongoDB's shared PSP environment. Login is by email only:
 
 | Name | Email | Password |
 |---|---|---|
@@ -146,9 +145,9 @@ The demo revolves around three identities, seeded in MongoDB's shared Leafy Pay 
 | Luis Fernandez | `luis.fernandez@back.es` | `demo-password` |
 | Priya Patel | `priya.patel@back.es` | `demo-password` |
 
-Tapping a profile card on the login screen hands both credentials to Leafy Pay's hosted login form, so it arrives prefilled and you just confirm. Only "Continue with SSO" leaves the form empty and needs the password typed in.
+Tapping a profile card on the login screen hands both credentials to the PSP's hosted login form, so it arrives prefilled and you just confirm. Only "Continue with SSO" leaves the form empty and needs the password typed in.
 
-> **_Note:_** Running your own Leafy Pay? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains, and the prefill uses the same passwords.
+> **_Note:_** Running your own PSP instance? These users won't exist there. Edit `frontend/src/lib/demo-users.js` to list the users seeded in your instance; the sign-in walkthrough displays whatever that file contains, and the prefill uses the same passwords.
 
 The services and their ports:
 
@@ -170,28 +169,11 @@ The services and their ports:
 ## Common errors
 
 - **The first AI reply is slow or times out.** The chat model loads into memory on first use; the `ollama-pull` container warms it at startup, so wait for that container to exit before chatting.
-- **Chats or requests don't sync.** The sync server defaults to ObjectBox's public trial image, which
+- **Chats or requests don't sync.** The sync server uses ObjectBox's public trial image, which
   stops accepting transactions once the trial window closes - its logs then repeat
-  `State condition failed ... : trial`. Activate the trial at http://localhost:9980, or switch to a
-  licensed build (below).
+  `State condition failed ... : trial`. Activate the trial at http://localhost:9980.
 - **"fetch failed" in the AI chat.** The frontend container can't reach Ollama; check that all containers are up with `docker ps`.
-- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in Leafy Pay, and both people must have an active account there - Leafy Pay refuses a request from someone who cannot receive money.
-
-## ObjectBox Sync server image
-
-`docker-compose.yml` pulls ObjectBox's public **trial** sync server by default, so a fresh clone runs
-with no extra steps. A licensed build ships as a tarball rather than a public image, so it has to be
-loaded into your local Docker daemon once and then selected by name:
-
-```bash
-docker load -i <objectbox-sync-server-docker.tar.gz>   # prints the image name it loaded
-echo 'OBJECTBOX_SYNC_IMAGE=<that image name>' >> .env  # root .env, gitignored
-docker compose up -d --force-recreate objectbox-sync-server
-```
-
-`docker load` only populates the machine it runs on - it does not publish anywhere. To use a licensed
-build somewhere else (CI, a deployment), push it to a registry that host can pull from and set
-`OBJECTBOX_SYNC_IMAGE` to that address instead.
+- **Payment requests never arrive.** The OAuth client must be allowed the `read:rtp` and `write:rtp` scopes in the PSP, and both people must have an active account there - the PSP refuses a request from someone who cannot receive money.
 
 ## 📄 License
 

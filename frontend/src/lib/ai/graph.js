@@ -224,9 +224,11 @@ export function compileGraph(tools, { isOnline }) {
  * @param {boolean} isOnline - Passed to the tools, which pick their own source from it.
  * @param {object[]} drafts - Collects any payment the model drafts for confirmation.
  * @param {object[]} charts - Collects any spending breakdown a tool produces for inline display.
+ * @param {string} [owner] - The session's `sub`; pass it from a caller that already read the session,
+ *   so the online tools do not decrypt the cookie a second time.
  */
-export async function buildGraph(isOnline, drafts, charts) {
+export async function buildGraph(isOnline, drafts, charts, owner) {
   const { walletTools } = await import('./tools')
-  const tools = await walletTools(isOnline, drafts, charts)
+  const tools = await walletTools(isOnline, drafts, charts, owner)
   return compileGraph(tools, { isOnline })
 }
