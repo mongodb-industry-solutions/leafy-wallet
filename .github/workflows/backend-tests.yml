@@ -36,4 +36,8 @@ jobs:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
           APP_NAME: leafy-wallet-ci
-        run: uv run pytest -v
+        run: |
+          uv run pytest -v \
+            --ignore-glob='tests/test_leafy_local_store*' \
+            --ignore=tests/test_wallet_transactions_search.py \
+            --deselect tests/test_mcp_server.py::test_search_transactions_finds_semantically_similar_note

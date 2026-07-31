@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
 import { useConnection } from '@/components/stage/useConnection'
 import { useAuthGate } from '@/components/stage/useAuthGate'
@@ -32,13 +32,26 @@ function isTourKilled() {
  */
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
-  const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } = useAuthGate()
+  const [flow, setFlow] = useState('home')
+  const [isTourActive, setIsTourActive] = useState(false)
+
+  // Consume a tour intent parked before the SSO round-trip. Hung off the auth event rather than
+  // watched from an effect: the session resolving is the thing that happened, and reading the flag
+  // here means it is consumed exactly once per sign-in.
+  const handleSessionResolved = useCallback(() => {
+    if (isTourKilled()) return
+    if (window.sessionStorage.getItem(TOUR_INTENT_KEY) === '1') {
+      window.sessionStorage.removeItem(TOUR_INTENT_KEY)
+      setIsTourActive(true)
+    }
+  }, [])
+
+  const { phase, user, handleAuthed, handleSignOut, handlePasswordlessFallback } =
+    useAuthGate(handleSessionResolved)
   const isAuthed = phase === 'authed'
   // The FaceID unlock covers the stage, so the welcome waits it out.
   const isEntrySettled = phase === 'login' || isAuthed
   const { isWelcomeOpen, showWelcome, dismissWelcome } = useWelcomeGate(isEntrySettled)
-  const [flow, setFlow] = useState('home')
-  const [isTourActive, setIsTourActive] = useState(false)
 
   const stopTour = useCallback(() => setIsTourActive(false), [])
   const tour = useTourDirector({ isActive: isTourActive, onFinish: stopTour })
@@ -56,15 +69,6 @@ export function DesktopShell() {
       window.sessionStorage.setItem(TOUR_INTENT_KEY, '1')
     }
   }, [dismissWelcome, isAuthed])
-
-  // Consume a parked tour intent once authenticated.
-  useEffect(() => {
-    if (!isAuthed || isTourKilled()) return
-    if (window.sessionStorage.getItem(TOUR_INTENT_KEY) === '1') {
-      window.sessionStorage.removeItem(TOUR_INTENT_KEY)
-      setIsTourActive(true)
-    }
-  }, [isAuthed])
 
   // Before authentication the wallet reports no flow - narrate the sign-in itself.
   const activeFlow = isAuthed ? flow : 'login'

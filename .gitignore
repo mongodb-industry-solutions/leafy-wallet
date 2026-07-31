@@ -216,6 +216,12 @@ frontend/.yarn/*
 # Testing
 frontend/coverage
 
+# Playwright run artifacts
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/playwright/.cache/
+
 # Next.js
 frontend/.next/
 frontend/out/

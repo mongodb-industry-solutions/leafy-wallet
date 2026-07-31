@@ -12,6 +12,9 @@
     "test:unit": "vitest run tests/unit",
     "test:ai": "vitest run tests/ai",
     "test:ai:grove": "APP_ENV=staging vitest run tests/ai",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "lint:fix": "eslint . --fix",
     "licenses": "license-checker --json --production > third-party-licenses.json && node scripts/generate-third-party-notices.js"
   },
@@ -40,6 +43,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.55.1",
     "@tailwindcss/postcss": "4.3.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.11",
