@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { me } from '@/lib/auth/actions'
 import { hasCredential } from '@/lib/auth/authenticator'
 import { demoAvatarFor } from '@/lib/demo-users'
@@ -27,12 +27,21 @@ function toUser(identity) {
  * Resolves the entry phase from the real Leafy Pay session and exposes the transitions the shell needs.
  * On mount it checks me(). With no session it checks for a local passwordless credential to decide
  * between the FaceID path and the SSO login.
+ * @param {() => void} [onAuthenticated] - Fired once each time a session is established, by either
+ *   entry path. Lets the caller treat "the session resolved" as the event it is, rather than watching
+ *   `phase` from an effect.
  * @returns {{phase: string, user: object|null, handleAuthed: () => void, handleSignOut: () => void, handlePasswordlessFallback: () => void}}
  */
-export function useAuthGate() {
+export function useAuthGate(onAuthenticated) {
   // 'loading' | 'login' | 'faceid' | 'authed'
   const [phase, setPhase] = useState('loading')
   const [user, setUser] = useState(null)
+
+  // Held in a ref so a caller's inline callback never restarts the boot below.
+  const onAuthenticatedRef = useRef(onAuthenticated)
+  useEffect(() => {
+    onAuthenticatedRef.current = onAuthenticated
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -42,6 +51,7 @@ export function useAuthGate() {
       if (identity) {
         setUser(toUser(identity))
         setPhase('authed')
+        onAuthenticatedRef.current?.()
         return
       }
       const enrolled = await hasCredential().catch(() => false)
@@ -60,6 +70,7 @@ export function useAuthGate() {
     if (identity) {
       setUser(toUser(identity))
       setPhase('authed')
+      onAuthenticatedRef.current?.()
     } else {
       setPhase('login')
     }
