@@ -26,7 +26,7 @@ services:
     restart: "no"
   # Falls back to the public trial image; point OBJECTBOX_SYNC_IMAGE at a licensed one in .env.
   objectbox-sync-server:
-    image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync-server-trial}
+    image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync:sync-server-2026-07-14}
     container_name: leafy-wallet-objectbox-sync
     user: "${UID:-1000}:${GID:-1000}"
     env_file:

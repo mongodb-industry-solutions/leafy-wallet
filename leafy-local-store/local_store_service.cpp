@@ -824,6 +824,9 @@ json transaction_to_json(const LocalTransaction& t) {
         {"amount", t.amount},
         {"currency", t.currency},
         {"note", t.note.empty() ? json(nullptr) : json(t.note)},
+        // The vector itself is never serialized (it dwarfs the row); its width is, so callers can
+        // tell an embedded row from an un-embedded one - mirrors Atlas's `noteEmbeddingDims`.
+        {"noteEmbeddingDims", t.noteEmbedding.size()},
         {"direction", t.direction},
         {"leafyPayStatus", t.leafyPayStatus},
         {"localSyncStatus", t.localSyncStatus},
