@@ -14,6 +14,13 @@ const STATUS_TONE = {
   exception: 'bg-red-500/15 text-red-600',
 }
 
+/** True if `next` would be a step backwards in time relative to `prev` (see refresh() below). */
+function isOlder(next, prev) {
+  if (!next) return Boolean(prev)
+  if (!prev) return false
+  return new Date(next.createdAt ?? 0) < new Date(prev.createdAt ?? 0)
+}
+
 /** One `key: value` line of the document preview, monospaced so both panels line up. */
 function Field({ label, value }) {
   return (
@@ -71,7 +78,16 @@ export function DbSyncCard() {
 
   const refresh = useCallback(() => {
     getDbSyncSnapshot()
-      .then(setSnapshot)
+      .then((next) => {
+        // ObjectBox Sync reconciles a locally-created object's ID against the server on reconnect
+        // by deleting the old id and re-inserting under a new one; the two aren't atomic from a
+        // reader's perspective, so a poll landing in that gap sees the object gone and "newest"
+        // falls back to the previous (already-settled) transaction. Never step backwards in time.
+        setSnapshot((prev) => ({
+          atlas: isOlder(next.atlas, prev.atlas) ? prev.atlas : next.atlas,
+          local: isOlder(next.local, prev.local) ? prev.local : next.local,
+        }))
+      })
       .catch(() => {})
   }, [])
 
