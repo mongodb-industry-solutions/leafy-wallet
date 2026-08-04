@@ -83,6 +83,9 @@ class WalletTransactionOut(BaseModel):
     currency: str
     note: str | None = None
     noteEmbedding: list[float] | None = None
+    # Width of the stored vector (0 when there is none). The list route projects the vector itself
+    # away, so this is how a caller can tell an embedded row from an un-embedded one.
+    noteEmbeddingDims: int = 0
     direction: Literal["sent", "received"]
     leafyPayStatus: Literal["pending", "settled", "failed", "exception"]
     localSyncStatus: Literal["local_pending", "synced"]

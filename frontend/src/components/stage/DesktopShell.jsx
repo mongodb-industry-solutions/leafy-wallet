@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
+import { motion, useReducedMotion } from 'motion/react'
 import { useConnection } from '@/components/stage/useConnection'
 import { useAuthGate } from '@/components/stage/useAuthGate'
 import { ConnectionGlow } from '@/components/stage/ConnectionGlow'
@@ -10,6 +11,7 @@ import { ConnectionControl } from '@/components/stage/ConnectionControl'
 import { LoginScreen } from '@/components/stage/LoginScreen'
 import { FaceIdEntry } from '@/components/stage/FaceIdEntry'
 import { Walkthrough } from '@/components/stage/walkthrough/Walkthrough'
+import { DbSyncCard } from '@/components/stage/DbSyncCard'
 import { WalletApp } from '@/components/wallet/shell/WalletApp'
 import { WelcomeDialog } from '@/components/stage/WelcomeDialog'
 import { useWelcomeGate, TOUR_INTENT_KEY } from '@/components/stage/useWelcomeGate'
@@ -18,6 +20,39 @@ import { useTourDirector } from '@/components/stage/useTourDirector'
 import { TourCursor } from '@/components/stage/TourCursor'
 import { LeafLogo } from '@/components/common/LeafLogo'
 import { WALKTHROUGH } from '@/lib/walkthrough'
+
+/**
+ * One side of the flippable info card: the shared panel chrome (border, tour highlight, heading) plus
+ * the corner flip button. `isBack` hides its own backface and lets long content scroll, since the back
+ * is absolutely positioned over the front, so both faces fill the card's fixed height.
+ */
+function CardFace({ isBack, isTourActive, onFlip, title, children }) {
+  return (
+    <div
+      className={`absolute inset-0 flex flex-col overflow-y-auto rounded-[2rem] border bg-card p-6 shadow-(--shadow-panel) transition-colors duration-500 [backface-visibility:hidden] ${
+        isTourActive ? 'border-secondary/40 ring-2 ring-secondary/25' : 'border-border'
+      } ${isBack ? '[transform:rotateY(180deg)]' : ''}`}
+    >
+      <div className="flex items-center gap-2.5">
+        <LeafLogo size={22} />
+        <h2 className="flex-1 text-base font-bold text-foreground">{title}</h2>
+        {/* Labelled, because an icon alone does not tell a first-time viewer there is a second face. */}
+        <button
+          type="button"
+          onClick={onFlip}
+          className="flex items-center gap-1.5 rounded-full bg-foreground/[0.06] px-3 py-1.5 text-xs font-semibold text-secondary transition hover:bg-foreground/10"
+        >
+          <Icon glyph={isBack ? 'Return' : 'Database'} size={14} aria-hidden="true" />
+          {isBack ? 'Back' : 'See the data'}
+        </button>
+      </div>
+
+      {/* Fills the fixed-height card and spreads the face's own blocks (narration up top, the step dots
+          at the bottom) instead of letting them bunch up under the heading. */}
+      <div className="mt-5 flex flex-1 flex-col justify-between">{children}</div>
+    </div>
+  )
+}
 
 /** The presenter can disable the whole tour with ?tour=0 if it misbehaves mid-event. */
 function isTourKilled() {
@@ -34,6 +69,8 @@ export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()
   const [flow, setFlow] = useState('home')
   const [isTourActive, setIsTourActive] = useState(false)
+  const [isFlipped, setIsFlipped] = useState(false)
+  const prefersReduced = useReducedMotion()
 
   // Consume a tour intent parked before the SSO round-trip. Hung off the auth event rather than
   // watched from an effect: the session resolving is the thing that happened, and reading the flag
@@ -94,19 +131,34 @@ export function DesktopShell() {
         <PhoneFrame>{phoneContent}</PhoneFrame>
 
         <div className="flex w-[400px] max-w-[90vw] flex-col gap-3">
-          <div
-            className={`rounded-[2rem] border bg-card p-6 shadow-(--shadow-panel) transition-all duration-500 ${
-              isTourActive ? 'border-secondary/40 ring-2 ring-secondary/25' : 'border-border'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <LeafLogo size={22} />
-              <h2 className="text-base font-bold text-foreground">Built on MongoDB</h2>
-            </div>
+          {/* The info card flips: the walkthrough narration on the front, the two-store sync inspector
+              on the back. Both faces are mounted so the rotation reveals a real back side. */}
+          <div className="[perspective:1600px]">
+            <motion.div
+              animate={{ rotateY: isFlipped ? 180 : 0 }}
+              transition={prefersReduced ? { duration: 0 } : { duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+              // Fixed height: both faces are absolutely positioned, so the card never resizes when it
+              // flips or when a step's content is shorter than the last one's.
+              className="relative h-[570px] [transform-style:preserve-3d]"
+            >
+              <CardFace
+                isTourActive={isTourActive}
+                onFlip={() => setIsFlipped((f) => !f)}
+                title="Built on MongoDB"
+              >
+                <Walkthrough flow={activeFlow} controlledStep={walkthroughStep} />
+              </CardFace>
 
-            <div className="mt-5">
-              <Walkthrough flow={activeFlow} controlledStep={walkthroughStep} />
-            </div>
+              {/* Pre-rotated, so it faces the viewer only once the container is flipped. */}
+              <CardFace
+                isBack
+                isTourActive={isTourActive}
+                onFlip={() => setIsFlipped((f) => !f)}
+                title="Atlas ⇄ ObjectBox"
+              >
+                <DbSyncCard />
+              </CardFace>
+            </motion.div>
           </div>
 
           <ConnectionControl isOnline={isOnline} onToggle={handleToggle} shouldNudge={shouldNudge} />

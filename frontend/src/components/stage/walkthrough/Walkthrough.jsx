@@ -7,8 +7,10 @@ import { WALKTHROUGH } from '@/lib/walkthrough'
 import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
 
 const AUTO_ADVANCE_MS = 10000
-// Reserved height for the talking point, so the illustration below it never shifts between steps.
-const TALKING_POINT_MIN_H = 'min-h-[104px]'
+// Fixed (not just minimum) height for the talking point: steps differ by a line or two of title and
+// body, and anything less pins the illustration to a different y on each step. Sized for the longest
+// talking point, so the illustration sits at one position for every step and flow.
+const TALKING_POINT_H = 'h-[168px]'
 
 // Crossfade the talking point on each change so tour-driven (and manual) step changes read as a
 // transition, not a hard swap. Reduced motion collapses it to an instant cut.
@@ -76,7 +78,7 @@ export function Walkthrough({ flow, controlledStep }) {
     <>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={`${flow}-${step}`} {...fade}>
-          <div className={TALKING_POINT_MIN_H}>
+          <div className={TALKING_POINT_H}>
             <h3 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
               {current.title}
             </h3>
@@ -102,7 +104,7 @@ export function Walkthrough({ flow, controlledStep }) {
           )}
 
           {/* Illustration area: a step's own visual when it has one, its icon otherwise. */}
-          <div className="mt-4 grid h-48 place-items-center overflow-hidden rounded-2xl bg-secondary/[0.06]">
+          <div className="mt-4 grid h-60 place-items-center overflow-hidden rounded-2xl bg-secondary/[0.06]">
             {Visual ? (
               <Visual />
             ) : (

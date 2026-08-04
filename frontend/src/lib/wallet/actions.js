@@ -1190,3 +1190,44 @@ export async function appendChatMessage(reference, { role, text }, isOnline = tr
 export async function appendChatCard(reference, card, isOnline = true) {
   return appendChatMessage(reference, { role: 'assistant', text: encodeCard(card) }, isOnline)
 }
+
+/** The handful of fields the sync inspector shows, from either store's raw document. */
+function toSyncDoc(doc) {
+  if (!doc) return null
+  return {
+    id: String(doc.id ?? ''),
+    reference: doc.leafyPayTransferReference ?? null,
+    amount: doc.amount ?? 0,
+    currency: doc.currency ?? 'EUR',
+    note: doc.note || null,
+    embeddingDims: doc.noteEmbeddingDims ?? 0,
+    status: doc.leafyPayStatus ?? 'pending',
+    syncStatus: doc.localSyncStatus ?? 'synced',
+    createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
+  }
+}
+
+/**
+ * Newest stored transaction document on each side, for the "sync inspector" face of the info card:
+ * Atlas (`walletTransactions`) above, ObjectBox (device) below. Read unconditionally from both,
+ * regardless of the simulated connection - the whole point is to show them diverge while a send is in
+ * flight (the device has it, Atlas does not yet) and converge once it settles.
+ *
+ * The Atlas side deliberately only reports *settled* documents. The demo containers never actually
+ * lose connectivity, so an unfiltered read would show the same in-flight row on both sides and the
+ * card would never show a divergence; gating on settlement makes the device-first write visible.
+ *
+ * Both are best-effort: a store that can't be reached reads as `null` rather than failing the card.
+ * @returns {Promise<{atlas: object|null, local: object|null}>}
+ */
+export async function getDbSyncSnapshot() {
+  const owner = await ownerRef()
+  const [atlasRows, localRows] = await Promise.all([
+    owner ? listTransactionEnrichment(owner).catch(() => []) : [],
+    listLocalTransactions().catch(() => []),
+  ])
+  // Atlas already sorts newest first; the local store returns insertion order, so sort it here.
+  const local = [...localRows].filter((t) => !owner || t.ownerPartyRef === owner).sort(byNewestFirst)
+  const atlas = atlasRows.find((t) => t.leafyPayStatus === SETTLED_STATUS)
+  return { atlas: toSyncDoc(atlas), local: toSyncDoc(local[0]) }
+}
