@@ -47,7 +47,7 @@ export function RecipientStep({
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center gap-3 px-4 py-3">
-        <IconButton onClick={onBack} aria-label="Back">
+        <IconButton data-tour-target="flow-exit" onClick={onBack} aria-label="Back">
           <Icon glyph="ArrowLeft" size={18} />
         </IconButton>
         <span className="flex-1 text-center text-lg font-bold tabular-nums">

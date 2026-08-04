@@ -44,7 +44,8 @@ export function NumpadStep({
   return (
     <div className="flex h-full flex-col bg-muted text-foreground">
       <div className="flex items-center px-4 py-3">
-        <IconButton onClick={onClose} aria-label="Close">
+        {/* Tour-targeted: the send flow hides the tab bar, so this is the only way back to the tabs. */}
+        <IconButton data-tour-target="flow-exit" onClick={onClose} aria-label="Close">
           <Icon glyph="ArrowLeft" size={18} />
         </IconButton>
         {recipient && (
