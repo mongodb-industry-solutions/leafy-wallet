@@ -24,12 +24,20 @@ const NOTE_TEXT = 'Thanks for lunch!'
  *   previous bubble stays up (so a run of digit taps does not flicker).
  * @property {string} [sayDone] - Bubble shown after `waitFor` resolves (e.g. "it settled").
  * @property {string} [waitFor] - data-tour-signal to poll for before finishing (e.g. settlement).
+ * @property {boolean} [optional] - Act only if the target happens to be on screen; skipped at once
+ *   otherwise, instead of waiting out the usual resolve budget.
  * @property {number} walkthroughStep - Narration step for the current screen.
  * @property {number} readMs - Hold after the action so the narration can be read.
  */
 
 /** @type {TourAction[]} */
 export const TOUR = [
+  // The tour may be started from anywhere, and the send flow replaces the tab bar - so `tab-home`
+  // would not exist. These optional steps back out of it first; they are skipped instantly (no resolve
+  // wait) when their target is absent, which is the usual case.
+  { type: 'click', target: 'flow-exit', optional: true, walkthroughStep: 0, readMs: 300 },
+  { type: 'click', target: 'flow-exit', optional: true, walkthroughStep: 0, readMs: 300 },
+
   // Home: balance from the device, then scroll through accounts and history.
   { type: 'click', target: 'tab-home', say: 'Let me show you around. This is home.', walkthroughStep: 0, readMs: 1800 },
   { type: 'scroll', target: 'wallet-scroll', by: 300, say: 'Your balance and accounts, all on the device.', walkthroughStep: 1, readMs: 2600 },
@@ -52,6 +60,9 @@ export const TOUR = [
   // The offline moment: the cursor leaves the phone to flip the connection off, then sends (it queues).
   // Held long so the visitor can actually read what is happening at the demo's key moment.
   { type: 'click', target: 'connection-toggle', say: "Now watch, I'll go offline.", walkthroughStep: 1, readMs: 3000 },
+  // Flip the info card to its sync inspector, so the two stores are on screen while the send happens
+  // offline: the device document appears first, Atlas only once it settles upstream.
+  { type: 'click', target: 'card-flip', say: "Let's watch both databases while I do it.", walkthroughStep: 1, readMs: 3000 },
   { type: 'click', target: 'send-submit', say: 'Sending it, even with no connection.', walkthroughStep: 1, readMs: 3400 },
   { type: 'click', target: 'send-done', say: 'Saved on the device, queued to sync.', walkthroughStep: 1, readMs: 2600 },
 
@@ -66,6 +77,9 @@ export const TOUR = [
     walkthroughStep: 1,
     readMs: 2600,
   },
+
+  // Both stores now hold the same document, so flip the card back to the narration for the last act.
+  { type: 'click', target: 'card-flip', say: 'Same document on both sides now.', walkthroughStep: 1, readMs: 3000 },
 
   // Assistant: the tab opens on a fresh chat, so typewrite the question straight away and send it.
   { type: 'click', target: 'tab-ai', say: "Last, let's ask the assistant.", walkthroughStep: 0, readMs: 1200 },
