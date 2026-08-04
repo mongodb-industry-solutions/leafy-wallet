@@ -50,8 +50,11 @@ export function TourCursor({ command, onStepComplete }) {
     if (!command) return undefined
     let cancelled = false
 
+    // An `optional` action is a "if this screen is open, get out of it" step: it must not spend the
+    // full resolve budget waiting for an element that is legitimately absent, so it looks exactly once.
     const resolve = async (target) => {
-      for (let i = 0; i < RESOLVE_TRIES; i += 1) {
+      const tries = command.optional ? 1 : RESOLVE_TRIES
+      for (let i = 0; i < tries; i += 1) {
         const el = document.querySelector(`[data-tour-target="${target}"]`)
         if (el) return el
         await delay(RESOLVE_INTERVAL_MS)

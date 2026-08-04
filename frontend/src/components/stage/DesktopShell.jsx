@@ -39,6 +39,7 @@ function CardFace({ isBack, isTourActive, onFlip, title, children }) {
         {/* Labelled, because an icon alone does not tell a first-time viewer there is a second face. */}
         <button
           type="button"
+          data-tour-target="card-flip"
           onClick={onFlip}
           className="flex items-center gap-1.5 rounded-full bg-foreground/[0.06] px-3 py-1.5 text-xs font-semibold text-secondary transition hover:bg-foreground/10"
         >
@@ -90,7 +91,11 @@ export function DesktopShell() {
   const isEntrySettled = phase === 'login' || isAuthed
   const { isWelcomeOpen, showWelcome, dismissWelcome } = useWelcomeGate(isEntrySettled)
 
-  const stopTour = useCallback(() => setIsTourActive(false), [])
+  // The tour flips the card mid-script; ending it (finished or aborted) leaves the narration face up.
+  const stopTour = useCallback(() => {
+    setIsTourActive(false)
+    setIsFlipped(false)
+  }, [])
   const tour = useTourDirector({ isActive: isTourActive, onFinish: stopTour })
   const command = tour.command
 
