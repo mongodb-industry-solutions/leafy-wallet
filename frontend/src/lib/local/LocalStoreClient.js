@@ -133,3 +133,13 @@ export async function createLocalRequest(request) {
 export async function deleteLocalRequest(id) {
   return call('DELETE', `/requests/${encodeURIComponent(id)}`)
 }
+
+/** Stop the on-device ObjectBox Sync connection so "going offline" severs sync for real. */
+export async function pauseLocalSync() {
+  return call('POST', '/sync/pause')
+}
+
+/** Resume the on-device ObjectBox Sync connection; queued local writes replay to Atlas. */
+export async function resumeLocalSync() {
+  return call('POST', '/sync/resume')
+}

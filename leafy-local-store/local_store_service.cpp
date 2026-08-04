@@ -755,6 +755,17 @@ std::vector<float> get_embedding(const std::string& text) {
 
 std::shared_ptr<obx::Store> store;
 std::unique_ptr<obx::SyncClient> syncClient;
+std::string g_sync_url;
+
+// obx_sync_start() may only be called once per SyncClient instance - calling it again after
+// stop() fails with an "startedOnce" illegal-state error. So "resuming" means replacing the
+// client with a fresh one rather than restarting the existing object.
+bool start_sync_client() {
+    if (g_sync_url.empty() || !obx_has_feature(OBXFeature_Sync)) return false;
+    syncClient = std::make_unique<obx::SyncClient>(*store, g_sync_url, obx::SyncCredentials::none());
+    syncClient->start();
+    return true;
+}
 
 bool init_objectbox(const std::string& db_path, const std::string& sync_url) {
     std::cout << "=== leafy-local-store ===" << std::endl;
@@ -772,11 +783,10 @@ bool init_objectbox(const std::string& db_path, const std::string& sync_url) {
                    << store->box<LocalAccountBalance>().count() << " cached accounts, "
                    << store->box<LocalRequest>().count() << " requests)" << std::endl;
 
+        g_sync_url = sync_url;
         if (!sync_url.empty()) {
-            if (obx_has_feature(OBXFeature_Sync)) {
+            if (start_sync_client()) {
                 std::cout << "Connecting to sync server: " << sync_url << std::endl;
-                syncClient = std::make_unique<obx::SyncClient>(*store, sync_url, obx::SyncCredentials::none());
-                syncClient->start();
                 std::cout << "Sync client started" << std::endl;
             } else {
                 std::cerr << "Warning: ObjectBox Sync not available in this build" << std::endl;
@@ -824,6 +834,9 @@ json transaction_to_json(const LocalTransaction& t) {
         {"amount", t.amount},
         {"currency", t.currency},
         {"note", t.note.empty() ? json(nullptr) : json(t.note)},
+        // The vector itself is never serialized (it dwarfs the row); its width is, so callers can
+        // tell an embedded row from an un-embedded one - mirrors Atlas's `noteEmbeddingDims`.
+        {"noteEmbeddingDims", t.noteEmbedding.size()},
         {"direction", t.direction},
         {"leafyPayStatus", t.leafyPayStatus},
         {"localSyncStatus", t.localSyncStatus},
@@ -980,6 +993,49 @@ int main(int argc, char* argv[]) {
         response["chat_message_count"] = store->box<LocalChatMessage>().count();
         response["account_count"] = store->box<LocalAccountBalance>().count();
         response["request_count"] = store->box<LocalRequest>().count();
+        res.set_content(response.dump(), "application/json");
+    });
+
+    // The "go offline" presenter toggle calls these so the demo's offline mode is a real severed
+    // sync connection, not just the app routing reads/writes to this store instead of Atlas.
+    // Writes made while stopped queue as localSyncStatus="local_pending" and replay on resume(),
+    // same as a real network drop - stop()/start() just trigger that path on demand.
+    svr.Post("/local/v1/sync/pause", [](const httplib::Request&, httplib::Response& res) {
+        if (!syncClient) {
+            res.status = 409;
+            res.set_content(json{{"error", "Sync is not configured for this store"}}.dump(), "application/json");
+            return;
+        }
+        syncClient->stop();
+        res.set_content(json{{"state", "stopped"}}.dump(), "application/json");
+    });
+
+    svr.Post("/local/v1/sync/resume", [](const httplib::Request&, httplib::Response& res) {
+        if (!start_sync_client()) {
+            res.status = 409;
+            res.set_content(json{{"error", "Sync is not configured for this store"}}.dump(), "application/json");
+            return;
+        }
+        res.set_content(json{{"state", "started"}}.dump(), "application/json");
+    });
+
+    svr.Get("/local/v1/sync/status", [](const httplib::Request&, httplib::Response& res) {
+        json response;
+        if (!syncClient) {
+            response["state"] = "unavailable";
+            res.set_content(response.dump(), "application/json");
+            return;
+        }
+        switch (syncClient->state()) {
+            case OBXSyncState_CREATED: response["state"] = "created"; break;
+            case OBXSyncState_STARTED: response["state"] = "started"; break;
+            case OBXSyncState_CONNECTED: response["state"] = "connected"; break;
+            case OBXSyncState_LOGGED_IN: response["state"] = "logged_in"; break;
+            case OBXSyncState_DISCONNECTED: response["state"] = "disconnected"; break;
+            case OBXSyncState_STOPPED: response["state"] = "stopped"; break;
+            case OBXSyncState_DEAD: response["state"] = "dead"; break;
+            default: response["state"] = "unknown"; break;
+        }
         res.set_content(response.dump(), "application/json");
     });
 

@@ -19,7 +19,17 @@ export function useConnection() {
   const [override, setOverride] = useState(null)
   const isOnline = override ?? !isBootOffline
 
-  const handleToggle = useCallback(() => setOverride(!isOnline), [isOnline])
+  const handleToggle = useCallback(() => {
+    const nextIsOnline = !isOnline
+    setOverride(nextIsOnline)
+    // Best-effort: the demo's offline story stands on its own via local reads/writes even if this
+    // fails (e.g. leafy-local-store is down), so a network hiccup here shouldn't block the toggle.
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: nextIsOnline ? 'resume' : 'pause' }),
+    }).catch(() => {})
+  }, [isOnline])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
