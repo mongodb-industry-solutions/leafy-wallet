@@ -31,7 +31,8 @@ function toNudgeLine(event, user) {
   const peerFirst = firstNameOf(peer?.name ?? event.peerName)
 
   if (event.kind === 'send') {
-    return peer ? `${SIGN_IN_LEAD} ${peerFirst} to see it arrive` : `${peerFirst} has been paid`
+    // Past tense: the nudge only fires once the transfer settled, so the money is already there.
+    return peer ? `${SIGN_IN_LEAD} ${peerFirst} to check it arrived` : `${peerFirst} has been paid`
   }
   return peer ? `${SIGN_IN_LEAD} ${peerFirst} to pay ${selfFirst}` : `Waiting on ${peerFirst} to pay`
 }
