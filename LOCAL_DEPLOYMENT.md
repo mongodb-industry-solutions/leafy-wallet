@@ -180,6 +180,15 @@ cd leafy-wallet
 docker compose up -d --build
 ```
 
+### ObjectBox Sync Server first-run steps
+
+The sync server requires two manual actions on a fresh volume, otherwise no data reaches ObjectBox:
+
+1. Open the admin UI at <http://localhost:9980> and **accept the ObjectBox license agreement**.
+2. Trigger a **manual sync request** from the admin UI (MongoDB Connector → sync) to perform the
+   initial Atlas → ObjectBox load. Until this runs, the local store stays empty and offline mode
+   returns no results.
+
 Open `http://localhost:8080` and select **Continue with SSO**.
 
 ### Demo credentials
