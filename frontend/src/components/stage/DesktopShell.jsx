@@ -18,6 +18,8 @@ import { useWelcomeGate, TOUR_INTENT_KEY } from '@/components/stage/useWelcomeGa
 import { TourController } from '@/components/stage/TourController'
 import { useTourDirector } from '@/components/stage/useTourDirector'
 import { TourCursor } from '@/components/stage/TourCursor'
+import { PeerPhoneNudge } from '@/components/stage/PeerPhoneNudge'
+import { usePeerPhone } from '@/components/stage/usePeerPhone'
 import { LeafLogo } from '@/components/common/LeafLogo'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
@@ -72,6 +74,7 @@ export function DesktopShell() {
   const [isTourActive, setIsTourActive] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
   const prefersReduced = useReducedMotion()
+  const peerPhone = usePeerPhone()
 
   // Consume a tour intent parked before the SSO round-trip. Hung off the auth event rather than
   // watched from an effect: the session resolving is the thing that happened, and reading the flag
@@ -119,7 +122,15 @@ export function DesktopShell() {
 
   let phoneContent
   if (isAuthed) {
-    phoneContent = <WalletApp user={user} onSignOut={handleSignOut} onFlowChange={setFlow} isOnline={isOnline} />
+    phoneContent = (
+      <WalletApp
+        user={user}
+        onSignOut={handleSignOut}
+        onFlowChange={setFlow}
+        isOnline={isOnline}
+        onPeerEvent={peerPhone.showEvent}
+      />
+    )
   } else if (phase === 'faceid') {
     phoneContent = <FaceIdEntry onAuthed={handleAuthed} onFallback={handlePasswordlessFallback} />
   } else if (phase === 'login') {
@@ -133,7 +144,11 @@ export function DesktopShell() {
       <ConnectionGlow isOnline={isOnline} />
 
       <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-[clamp(48px,8vw,120px)] gap-y-16">
-        <PhoneFrame>{phoneContent}</PhoneFrame>
+        {/* Relative, so the counterparty's mock phone can hang off this phone's top right corner. */}
+        <div className="relative flex-none">
+          <PhoneFrame>{phoneContent}</PhoneFrame>
+          <PeerPhoneNudge event={peerPhone.event} user={user} />
+        </div>
 
         <div className="flex w-[400px] max-w-[90vw] flex-col gap-3">
           {/* The info card flips: the walkthrough narration on the front, the two-store sync inspector

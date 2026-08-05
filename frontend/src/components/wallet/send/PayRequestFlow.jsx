@@ -58,7 +58,7 @@ export function PayRequestFlow({ notification, isOnline = true, onClose }) {
     // request would otherwise resurface in the feed and invite paying it twice.
     dismissNotifications([notification.id])
     refresh(['accounts', 'transactions', 'requests'])
-    watchTransfer(res.reference)
+    watchTransfer(res.reference, 'request-payment')
     setStep('success')
   }
 
