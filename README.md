@@ -77,7 +77,7 @@ The assistant routes each question to the right tool (balances, contacts, spendi
 
 ## Payment Platform (PSP) dependency
 
-**The demo needs a running PSP instance.** The PSP (`sec-fsi-pci-dss`) is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
+**The demo needs a running PSP instance.** The [PSP (`sec-fsi-pci-dss`)](https://github.com/mongodb-industry-solutions/sec-fsi-pci-dss) is the payment service provider that owns the demo identities, accounts, and transfers, and it hosts the SSO login the wallet signs in through. The wallet is deliberately thin on purpose: money and identity live in the PSP, and this repo only enriches them.
 
 To run the demo, you'll need to:
 
@@ -92,7 +92,7 @@ For the full walkthrough, ports, and environment files, see [LOCAL_DEPLOYMENT.md
 - [Docker](https://www.docker.com/) with Docker Compose
 - [uv](https://docs.astral.sh/uv/getting-started/installation/), to run the vector search index script
 - A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
-- A running PSP instance (see the section above).
+- A running [PSP (`sec-fsi-pci-dss`)](https://github.com/mongodb-industry-solutions/sec-fsi-pci-dss) instance (see the section above).
 
 > **_Note:_** After cloning, run `./setup-hooks.sh` once. It installs a pre-commit hook (`security_check.sh`) that scans staged files for credentials before every commit.
 
