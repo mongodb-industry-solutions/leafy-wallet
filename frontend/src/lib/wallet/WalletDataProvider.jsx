@@ -165,9 +165,12 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
    * Watch a just-sent transfer until it settles (`completed`/`failed`) or times out, refreshing after
    * each poll so the balance and Activity flip Pending → Completed on their own - independent of the
    * success screen staying open.
+   * @param {string} reference - The Leafy Pay transfer reference.
+   * @param {'send'|'request-payment'} [origin] - Which screen initiated it. Carried on the settlement so
+   *   listeners can tell a send the user composed from a request someone else asked them to pay.
    */
   const watchTransfer = useCallback(
-    (reference) => {
+    (reference, origin = 'send') => {
       if (!reference) return
       let polls = 0
       async function tick() {
@@ -183,7 +186,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
         if (isSettled) await markTransferSettled(reference, status)
         await refresh(['accounts', 'transactions'])
         // Announce it: settling can outlast the screen the payment was made from.
-        if (isSettled) setSettlement({ reference, status })
+        if (isSettled) setSettlement({ reference, status, origin })
         polls += 1
         if (isSettled || polls >= SETTLE_MAX_POLLS) return
         setTimeout(tick, SETTLE_POLL_MS)
@@ -225,7 +228,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
           replayPendingSends().catch(() => null),
           replayPendingRequests().catch(() => null),
         ])
-        sends?.references?.forEach(watchTransfer)
+        // Wrapped, so forEach's index never lands in watchTransfer's `origin`.
+        sends?.references?.forEach((reference) => watchTransfer(reference))
       }
       refresh()
     }

@@ -16,6 +16,7 @@ import { ContactActionSheet } from '@/components/wallet/people/ContactActionShee
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel'
 import { SettlementToast } from '@/components/wallet/shell/SettlementToast'
 import { ArrivalToast } from '@/components/wallet/shell/ArrivalToast'
+import { PeerEventRelay } from '@/components/wallet/shell/PeerEventRelay'
 
 /**
  * The wallet app shell: switches between tab screens, the send/request flow, and the detail sheet, reporting the active screen via `onFlowChange`.
@@ -24,8 +25,10 @@ import { ArrivalToast } from '@/components/wallet/shell/ArrivalToast'
  * @param {() => void} props.onSignOut
  * @param {(flow: string) => void} [props.onFlowChange] - Called whenever the active screen changes.
  * @param {boolean} [props.isOnline] - Whether the simulated connection is up.
+ * @param {(event: object) => void} [props.onPeerEvent] - Called when the user sends money or asks for it,
+ *   so the stage can mirror it on the other side's device. Must be stable across renders.
  */
-export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
+export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true, onPeerEvent }) {
   const [tab, setTab] = useState('home')
   const [detail, setDetail] = useState(null)
   const [sendContact, setSendContact] = useState(null)
@@ -159,6 +162,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true }) {
         {/* Last, so they layer over whichever screen or sheet is open. */}
         <SettlementToast />
         <ArrivalToast />
+        {onPeerEvent && <PeerEventRelay onEvent={onPeerEvent} />}
       </div>
     </WalletDataProvider>
   )

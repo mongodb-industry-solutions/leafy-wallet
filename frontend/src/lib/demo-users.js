@@ -17,6 +17,20 @@ export const DEMO_USERS = [
 ]
 
 /**
+ * The demo profile a contact or transaction row is about, i.e. an identity the presenter can actually
+ * sign in as, or undefined. Matches on the pinned avatar seed first: a row's `name` is whatever the user
+ * saved the contact as ("Luis (work)"), while the seed is only ever set by matching a demo identity.
+ * @param {{name?: string, seed?: string}} row
+ * @returns {{name: string, email: string, seed: string} | undefined}
+ */
+export function demoUserFor({ name, seed }) {
+  const bySeed = seed ? DEMO_USERS.find((u) => u.seed === seed) : undefined
+  if (bySeed) return bySeed
+  const key = name?.trim().toLowerCase()
+  return key ? DEMO_USERS.find((u) => u.name.toLowerCase() === key) : undefined
+}
+
+/**
  * Look up a demo user's pinned avatar by email, so the in-app profile picture matches the login card.
  * @param {string} [email]
  * @returns {{seed: string, bg: string} | undefined}
