@@ -106,7 +106,6 @@ class SpendingByContact(BaseModel):
     total: float
     count: int
     currency: str
-    lastAt: datetime | None = None
 
 
 class WalletTransactionSearchResult(WalletTransactionOut):

@@ -139,9 +139,8 @@ export async function createChatMessageDoc({ chatId, chatReference, role, text }
 }
 
 /**
- * The Atlas `walletRequests` replica for a user: requests they raised (`requesterPartyRef`) or are
- * asked to pay (`payerPartyRef`). Leafy Pay owns the requests themselves; this copy exists so they
- * can be read on the device with no connection.
+ * The Atlas `walletRequests` replica for a user: requests they raised or are asked to pay. Exists so
+ * they can be read on the device with no connection.
  * @param {{requesterPartyRef?: string, payerPartyRef?: string}} filter
  */
 export async function listRequestDocs(filter) {

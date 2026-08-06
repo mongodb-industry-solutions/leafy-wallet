@@ -25,26 +25,17 @@ export const emojiForCategory = (label) => EMOJI_BY_LABEL.get(label)
 let categoryVectorsPromise = null
 const noteCategoryCache = new Map()
 
-/** Euclidean length of a vector. */
-function normOf(v) {
-  let total = 0
-  for (let i = 0; i < v.length; i++) total += v[i] * v[i]
-  return Math.sqrt(total)
-}
-
-/** Cosine similarity of two equal-length vectors, given their precomputed norms. */
-function cosine(a, b, normA, normB) {
+// The provider returns unit-norm vectors at every width, so cosine similarity is just the dot product.
+function similarity(a, b) {
   let dot = 0
   for (let i = 0; i < a.length; i++) dot += a[i] * b[i]
-  return dot / (normA * normB || 1)
+  return dot
 }
 
 function getCategoryVectors() {
   if (!categoryVectorsPromise) {
     categoryVectorsPromise = embed(CATEGORIES.map((c) => `${c.label}: ${c.hint}`))
-      .then((vectors) =>
-        CATEGORIES.map((c, i) => ({ label: c.label, vector: vectors[i], norm: normOf(vectors[i]) })),
-      )
+      .then((vectors) => CATEGORIES.map((c, i) => ({ label: c.label, vector: vectors[i] })))
       .catch((error) => {
         categoryVectorsPromise = null
         throw error
@@ -72,9 +63,8 @@ export async function classifyNotes(notes) {
     toEmbed.forEach((note, i) => {
       let best = OTHER
       let bestScore = -Infinity
-      const noteNorm = normOf(vectors[i])
       for (const category of categoryVectors) {
-        const score = cosine(vectors[i], category.vector, noteNorm, category.norm)
+        const score = similarity(vectors[i], category.vector)
         if (score > bestScore) {
           bestScore = score
           best = category.label

@@ -8,7 +8,7 @@
    - CRUD routers for contacts, requests, transactions enrichment, chats, and chat messages.
 
 2. **Semantic search**
-   - Transaction notes are embedded (local Ollama, or Voyage once deployed) and searched with Atlas `$vectorSearch`.
+   - Transaction notes are embedded with Voyage AI (`voyage-4-nano`) and searched with Atlas `$vectorSearch`.
 
 3. **Spending summaries**
    - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
@@ -34,13 +34,13 @@ Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts`, 
   - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
 
 - **AI**:
-  - Embeddings: [Ollama](https://ollama.com/) (nomic-embed-text) locally, [Voyage AI on Atlas](https://www.mongodb.com/docs/voyageai/) when deployed
+  - Embeddings: [voyage-4-nano](https://huggingface.co/voyageai/voyage-4-nano), served by the `leafy-embed` container at 1024 dimensions
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - A MongoDB Atlas cluster (M0 or higher)
-- A running Ollama with the embedding model pulled (the repo's Docker Compose handles this)
+- A running `leafy-embed` for embeddings (the repo's Docker Compose handles this)
 
 ### Add environment variables
 
@@ -49,7 +49,6 @@ Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts`, 
 ```bash
 MONGODB_URI="<your-atlas-connection-string>"
 DATABASE_NAME="<your-database-name>"
-OLLAMA_BASE_URL="http://localhost:11434"
 ```
 
 ## Running

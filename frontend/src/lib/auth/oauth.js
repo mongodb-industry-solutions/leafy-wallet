@@ -109,6 +109,18 @@ export async function refreshTokens(refreshToken) {
   return res.json()
 }
 
+const localPart = (v) => (v && v.includes('@') ? v.split('@')[0] : v)
+
+/**
+ * The display name for a session, preferring userinfo over the id_token claim over an email local part.
+ * @param {object} [info] - The userinfo response.
+ * @param {string} [idName] - `name` from the id_token.
+ * @param {string} [email]
+ * @returns {string|undefined}
+ */
+export const displayNameFrom = (info, idName, email) =>
+  info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email)
+
 // CIBA passwordless login.
 
 /** Error carrying Leafy Pay's OAuth error code and description so callers can render clean UX. */

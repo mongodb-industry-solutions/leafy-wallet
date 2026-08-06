@@ -1,5 +1,5 @@
 """End-to-end tests for the actual ObjectBox <-> Atlas sync bridge, run against
-a real running stack (docker compose up -d ollama objectbox-sync-server
+a real running stack (docker compose up -d leafy-embed objectbox-sync-server
 leafy-local-store) with a reachable Atlas cluster. Local-only, not part of CI
  -  same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
 deploying the whole ObjectBox Sync Server + Atlas combo in CI isn't worth it
@@ -24,27 +24,21 @@ surface.
 """
 
 import time
-import uuid
 from datetime import datetime, timezone
 
 import httpx
 import pytest
 
 from db.client import get_db
+from tests.conftest import LOCAL_STORE_BASE as LOCAL_BASE, unique as _unique
 
-LOCAL_BASE = "http://localhost:8090"
 SYNC_TIMEOUT_S = 45  # generous: propagation is normally sub-second, but the full suite loads Atlas
 SYNC_POLL_INTERVAL_S = 0.5
 
 
+# The local-store half of the guard is conftest's; these tests need Atlas reachable too.
 @pytest.fixture(scope="module", autouse=True)
-def _require_local_store_and_atlas():
-    try:
-        response = httpx.get(f"{LOCAL_BASE}/local/v1/health", timeout=2.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        pytest.skip(f"leafy-local-store not reachable at {LOCAL_BASE}: {exc}")
-
+def _require_local_store_and_atlas(require_leafy_local_store):
     db = get_db()
     try:
         db.client.admin.command("ping")
@@ -57,8 +51,6 @@ def db():
     return get_db()
 
 
-def _unique(prefix):
-    return f"{prefix}-{uuid.uuid4()}"
 
 
 def _wait_until(predicate, description):
@@ -165,7 +157,7 @@ def test_transaction_created_via_objectbox_syncs_to_atlas(db):
             "currency": "EUR",
             "direction": "sent",
             # No `note` on purpose: this test is about the sync bridge, not
-            # the Ollama embedding path (covered elsewhere).
+            # the embedding path (covered elsewhere).
         },
     )
     assert created.status_code == 201

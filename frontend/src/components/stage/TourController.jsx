@@ -3,10 +3,8 @@
 import { Pause, Play, X } from 'lucide-react'
 
 /**
- * On-stage controls for the self-driving tour: one continuous progress bar that fills as the tour
- * advances through its actions, plus pause/resume and exit. There is deliberately no skip - the
- * cursor performs each real interaction, so jumping ahead would desync the pointer from the UI.
- * The narration lives in the panel.
+ * On-stage controls for the self-driving tour: a progress bar, pause/resume and exit. No skip, by
+ * design: the cursor performs each real interaction, so jumping ahead would desync it from the UI.
  * @param {object} props
  * @param {number} props.index - Zero-based index of the active action.
  * @param {number} props.total - Total actions.

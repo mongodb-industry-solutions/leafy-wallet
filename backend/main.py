@@ -14,17 +14,11 @@ from routers.wallet_transactions import router as wallet_transactions_router
 
 load_dotenv()
 
-# FastMCP's streamable_http_app() registers its own internal route at
-# "/mcp" by default - mounting that whole app at app.mount("/mcp", ...) would
-# double up into /mcp/mcp. Point its internal path at "/" so the mount below
-# lands on exactly /mcp.
+# FastMCP already serves at "/mcp", so point it at "/" to avoid mounting into /mcp/mcp.
 mcp.settings.streamable_http_path = "/"
 
-# Mounting FastMCP's ASGI app doesn't automatically run its own `lifespan`
-# (uvicorn only sends lifespan events to the outermost app, not to mounted
-# sub-apps) - without this, the MCP session manager never starts and every
-# request to /mcp would fail. Calling streamable_http_app() also lazily
-# creates `mcp.session_manager`, so it must happen before referencing it here.
+# Mounted sub-apps never receive lifespan events, hence the explicit run() below. This call
+# also lazily creates mcp.session_manager, so it has to happen first.
 mcp_app = mcp.streamable_http_app()
 
 

@@ -44,14 +44,10 @@ export async function listLocalTransactions() {
 
 /**
  * Semantic search over the device's transaction notes - ObjectBox's own HNSW index, no network.
- * @param {{q: string, ownerPartyRef?: string, limit?: number}} params
+ * @param {{q: string, ownerPartyRef: string, limit?: number}} params
  */
 export async function searchLocalTransactions({ q, ownerPartyRef, limit = 10 }) {
-  const query = new URLSearchParams({
-    q,
-    ...(ownerPartyRef ? { ownerPartyRef } : {}),
-    limit: String(limit),
-  }).toString()
+  const query = new URLSearchParams({ q, ownerPartyRef, limit: String(limit) }).toString()
   return call('GET', `/transactions/search?${query}`)
 }
 

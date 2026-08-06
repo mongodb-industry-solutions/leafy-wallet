@@ -1,5 +1,5 @@
 """Integration tests for leafy-local-store's chat/chat-message HTTP API, run
-against a real running instance (docker compose up -d ollama
+against a real running instance (docker compose up -d leafy-embed
 objectbox-sync-server leafy-local-store). Not part of CI - these are for
 local regression-checking only, and skip cleanly if the service isn't
 reachable.
@@ -10,7 +10,6 @@ collections, so each test cleans up via DELETE
 propagating the deletion through ObjectBox Sync back to Atlas too.
 """
 
-import uuid
 
 import httpx
 import pytest

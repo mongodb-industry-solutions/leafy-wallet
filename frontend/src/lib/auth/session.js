@@ -38,8 +38,8 @@ const sessionCookieOpts = () => ({ httpOnly: true, secure: secureCookie(), sameS
 const loginCookieOpts = () => ({ httpOnly: true, secure: secureCookie(), sameSite: 'lax', path: '/', maxAge: 600 })
 
 /**
- * The decrypted session, or null. Shape: { accessToken, refreshToken, idToken, expiresAt,
- * grantedScopes, sub, name, email }.
+ * The decrypted session, or null. Shape: { accessToken, refreshToken, idToken, grantedScopes,
+ * sub, name, email }.
  * @returns {Promise<object|null>}
  */
 export async function getSession() {

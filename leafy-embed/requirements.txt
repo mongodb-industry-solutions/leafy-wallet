@@ -1,0 +1,6 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+sentence-transformers>=5.0.0,<6
+transformers>=4.51.3,<5
+numpy>=1.26,<3
+huggingface-hub>=0.26,<1

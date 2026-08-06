@@ -18,16 +18,13 @@ import { RequestComposeVisual } from '@/components/stage/walkthrough/RequestComp
 import { RequestDeliverVisual } from '@/components/stage/walkthrough/RequestDeliverVisual'
 import { RequestDownstreamVisual } from '@/components/stage/walkthrough/RequestDownstreamVisual'
 
-// Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet
-// screen. Written for a non-engineer presenter: plain language, with a tech term
-// only where it is the point of the step. Each step carries an icon; a step may
-// instead carry a `visual` component that fills the illustration tile.
+// Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet screen. Written for a
+// non-engineer presenter. Each step carries an icon, or a `visual` filling the illustration tile.
 export const WALKTHROUGH = {
   login: {
     label: 'Sign in',
-    // One step on purpose: splitting "how to sign in" from "which credentials" left a presenter
-    // waiting out the first slide before the password appeared. The password is still shown even
-    // though profile cards prefill it, because Continue with SSO leaves the form empty.
+    // One step on purpose: splitting it left the presenter waiting out a slide for the password,
+    // which is still shown because Continue with SSO leaves the form empty.
     steps: [
       {
         visual: SsoLoginVisual,

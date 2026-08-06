@@ -1,15 +1,11 @@
 /**
  * The demo identities the whole demo revolves around, shown on the sign-in walkthrough.
  *
- * This is the single place to edit when pointing the app at your own Leafy Pay instance:
- * replace these entries with users that exist in YOUR Leafy Pay (email login only), and the
- * walkthrough will display whatever is listed here. The values below match MongoDB's shared
- * demo environment.
+ * The single place to edit when pointing the app at your own Leafy Pay: replace these with users that
+ * exist there (email login only). The values below match MongoDB's shared demo environment.
  */
-// `seed`/`bg` pin each user's Peep avatar (dicebear open-peeps) so the login card and the in-app
-// profile picture always render the same illustration. `bg` is a hex color without the leading `#`.
-// `phone` is what the same user is registered under in Leafy Pay, so a contact's masked hint can be
-// matched back to pin their avatar whether they were added by email or by phone.
+// `seed`/`bg` pin each user's Peep avatar; `bg` is a hex color with no leading `#`. `phone` is their
+// Leafy Pay registration, so a contact's masked hint can be matched back to the same avatar.
 export const DEMO_USERS = [
   { name: 'Amara Okafor', email: 'amara.okafor@back.es', phone: '+234 806 543 2109', password: 'demo-password', seed: 'amara', bg: 'dcfce7' },
   { name: 'Luis Fernandez', email: 'luis.fernandez@back.es', phone: '+34 612 345 678', password: 'demo-password', seed: 'luis-fernandez', bg: 'dbeafe' },
@@ -17,9 +13,8 @@ export const DEMO_USERS = [
 ]
 
 /**
- * The demo profile a contact or transaction row is about, i.e. an identity the presenter can actually
- * sign in as, or undefined. Matches on the pinned avatar seed first: a row's `name` is whatever the user
- * saved the contact as ("Luis (work)"), while the seed is only ever set by matching a demo identity.
+ * The demo profile a row is about, or undefined. Matches on the pinned avatar seed first, since a row's
+ * `name` is whatever the user saved ("Luis (work)") while the seed only comes from a demo identity.
  * @param {{name?: string, seed?: string}} row
  * @returns {{name: string, email: string, seed: string} | undefined}
  */
