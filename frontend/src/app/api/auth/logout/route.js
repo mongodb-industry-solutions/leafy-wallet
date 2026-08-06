@@ -1,7 +1,6 @@
-// GET /api/auth/logout. Single sign-out: bumps the Leafy Pay session epoch (invalidating the user's
-// outstanding session tokens) and revokes our tokens server-side, then clears our session cookie and
-// returns to the app. We don't front-channel through Leafy Pay's logout page: it doesn't honour a
-// post-logout redirect back to localhost, so it would strand the user on the PSP frontend.
+// GET /api/auth/logout. Single sign-out: bumps the Leafy Pay session epoch, revokes our tokens, then
+// clears the cookie. No front-channel through Leafy Pay's logout page, which ignores a post-logout
+// redirect to localhost and would strand the user on the PSP frontend.
 import { NextResponse } from 'next/server'
 import { getSession, clearSessionOn } from '@/lib/auth/session'
 import { revoke } from '@/lib/auth/oauth'

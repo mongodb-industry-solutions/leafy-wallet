@@ -31,8 +31,7 @@ async def create_transaction(
     doc = {
         **payload.model_dump(),
         "noteEmbedding": note_embedding,
-        # Keep the payment's own time when the caller knows it (an adopted Leafy Pay transfer),
-        # so the device sorts it where the online list does.
+        # Keep the payment's own time so the device sorts it where the online list does.
         "createdAt": payload.createdAt or datetime.now(timezone.utc),
         "settledAt": None,
     }
@@ -88,8 +87,7 @@ async def update_transaction(
 
     object_id = parse_object_id(transaction_id)
 
-    # Stamp settledAt automatically when the caller doesn't provide one but
-    # flips the status to "settled" (e.g. Leafy Pay sent no settlement time).
+    # Leafy Pay doesn't always send a settlement time, so stamp one when it settles without.
     if updates.get("leafyPayStatus") == "settled" and "settledAt" not in updates:
         updates["settledAt"] = datetime.now(timezone.utc)
 

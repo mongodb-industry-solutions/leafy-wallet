@@ -58,8 +58,7 @@ import { isAwaitingPayer, toRequestPaymentRows, toRequestStatus } from './reques
 import { avatarFor, byNewestFirst, formatDate, formatMoney } from './format'
 import { DEMO_USERS } from '@/lib/demo-users'
 
-// Contacts keep only a masked hint of the address they were found by, so a demo user is recognized
-// by matching it back. Only when exactly one fits, so it never guesses between similar entries.
+// Contacts keep only a masked hint, so match it back, and only on an unambiguous single fit.
 function demoAvatarByHint(hint) {
   const value = hint?.trim().toLowerCase()
   if (!value) return undefined
@@ -77,8 +76,7 @@ function demoAvatarByHint(hint) {
   return matches.length === 1 ? { seed: matches[0].seed, bg: matches[0].bg } : undefined
 }
 
-// An incoming request carries no hint, but Leafy Pay returns the requester's real profile name,
-// which is not a user-editable alias and so is a reliable key.
+// Incoming requests carry no hint, but Leafy Pay's profile name is not user-editable.
 function demoAvatarByName(name) {
   const key = name?.trim().toLowerCase()
   const user = key ? DEMO_USERS.find((u) => u.name.toLowerCase() === key) : undefined
@@ -264,8 +262,7 @@ export async function addContact({ lookupValue, label = '' } = {}) {
   return { ok: true, contact: toContactView(beneficiary) }
 }
 
-// Removing a contact is Leafy Pay's own screen: it owns the beneficiary, and `reconcileWithLeafyPay`
-// prunes the Atlas replica on the next login. The wallet only ever adds.
+// Leafy Pay owns beneficiaries: the wallet only adds, and reconcile prunes the replica at login.
 
 // Leafy Pay stamps this on a P2P transfer that was sent without a note; treated here as "no note".
 const DEFAULT_REMITTANCE = 'P2P transfer via beneficiary portal'
@@ -331,10 +328,8 @@ async function localTransactions(owner) {
 }
 
 /**
- * The user's transactions: Leafy Pay (base transfer, source of truth) read in parallel with the Atlas
- * enrichment (note) and the resolved contacts (Atlas aliases), merged by `leafyPayTransferReference`.
- * Payments that settled a request are folded in too, since Leafy Pay's history leaves them out.
- * Every row gets a non-empty name and note. Sorted newest first.
+ * The user's transactions, newest first: Leafy Pay transfers merged with Atlas enrichment and contact
+ * aliases by `leafyPayTransferReference`. Request settlements are folded in, since Leafy Pay omits them.
  * @param {boolean} [isOnline]
  */
 export async function getTransactions(isOnline = true) {
@@ -349,8 +344,7 @@ export async function getTransactions(isOnline = true) {
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
   const enrichByRef = new Map(enrichment.map((e) => [e.leafyPayTransferReference, e]))
 
-  // Leafy Pay owns settlement, so any enrichment still marked pending against a completed transfer
-  // is stale - settling can outlast the send flow's watcher.
+  // Settling can outlast the send flow's watcher, leaving pending enrichment stale.
   await Promise.all(
     transactions
       .filter((t) => {
@@ -401,10 +395,8 @@ export async function getTransactions(isOnline = true) {
 }
 
 /**
- * Send a P2P transfer: Leafy Pay moves the money (base), then the note is written to Atlas in parallel
- * so it gets embedded for search. The Atlas write is best-effort (money already moved). `fromAccountReference`
- * picks the source account; omit it to let Leafy Pay use the default. Offline the send is buffered on
- * the device and replayed on reconnect (see `replayPendingSends`).
+ * Send a P2P transfer. Leafy Pay moves the money, then the note goes to Atlas best-effort, since the
+ * money has already moved. Offline sends are buffered on the device and replayed on reconnect.
  * @param {{counterpartyArrangementReference: string, fromAccountReference?: string, amount: number, note?: string, isOnline?: boolean}} input
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
@@ -513,9 +505,8 @@ export async function markTransferSettled(reference, status) {
 }
 
 /**
- * Send each `local_pending` transaction for real, then drop the local record - its deletion
- * propagates through Sync, clearing the placeholder from Atlas too. A failed replay keeps its
- * record for the next reconnect. Returns the new references, which the caller watches to settlement.
+ * Send each `local_pending` transaction for real, then drop the local record, whose deletion
+ * propagates through Sync. A failed replay keeps its record for the next reconnect.
  * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
  */
 export async function replayPendingSends() {
@@ -557,10 +548,8 @@ const toEnrichmentStatus = (status) => {
 }
 
 /**
- * Converge the enrichment stores to Leafy Pay for the signed-in user. Leafy Pay is the source
- * of truth for money, beneficiaries and requests: Atlas rows with nothing behind them there are
- * pruned, and transfers the app never saw are adopted so they exist offline too. Both directions
- * sync down to the device. Sends and requests still queued on the device are never touched.
+ * Converge the enrichment stores to Leafy Pay, the source of truth: orphaned Atlas rows are pruned and
+ * unseen transfers adopted, both syncing down to the device. Device-queued writes are never touched.
  * @returns {Promise<{ok: boolean, prunedTransactions?: number, prunedContacts?: number, prunedRequests?: number, adoptedTransactions?: number}>}
  */
 export async function reconcileWithLeafyPay() {
@@ -582,8 +571,7 @@ export async function reconcileWithLeafyPay() {
     const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
     const requestRefs = new Set(requests.map((r) => r.reference))
     const enrichedRefs = new Set(txDocs.map((d) => d.leafyPayTransferReference))
-    // A request's settlement is a real payment Leafy Pay's history leaves out, so its enrichment
-    // has no transfer to match and must not be mistaken for an orphan.
+    // Request settlements are absent from Leafy Pay's history, so don't mistake them for orphans.
     const requestPaymentRefs = new Set(requests.map((r) => r.executionReference).filter(Boolean))
 
     const orphanTransactions = txDocs.filter(
@@ -598,12 +586,9 @@ export async function reconcileWithLeafyPay() {
     const orphanRequests = requestDocs.filter(
       (d) => d.localSyncStatus !== LOCAL_PENDING && !requestRefs.has(d.requestReference),
     )
-    // Note stays empty on adoption: the transfer wasn't composed in this app, and Leafy Pay's
-    // own note is portal boilerplate, not something worth embedding.
+    // Note stays empty on adoption: Leafy Pay's own note is portal boilerplate, not worth embedding.
     const foreignTransfers = transfers.filter((t) => !enrichedRefs.has(t.reference))
-    // Money arriving from a request the user raised. Only the payer writes an enrichment doc for a
-    // request payment (in `payRequest`), and Leafy Pay's history leaves the settlement out, so the
-    // payee would see it online and have nothing at all on the device.
+    // Only the payer writes enrichment for a request payment, so the payee has nothing on-device.
     const requestPayments = requests.filter(
       (r) => !r.isIncoming && r.executionReference && !enrichedRefs.has(r.executionReference),
     )
@@ -874,8 +859,7 @@ export async function createRequest({ counterpartyArrangementReference, amount, 
       note,
       idempotencyKey: randomUUID(),
     })
-    // Leafy Pay accepts a contact it cannot resolve and leaves the request with no payer, where it
-    // would sit undeliverable. Reachable when a queued request is replayed after the contact is gone.
+    // Leafy Pay accepts an unresolvable contact, leaving the request undeliverable with no payer.
     if (!created.payerPartyRef) {
       await cancelRtpRequest(created.reference).catch(() => {})
       return { ok: false, error: 'That contact is no longer saved, so the request was not sent.' }
@@ -1095,9 +1079,7 @@ export async function createChat(title, isOnline = true) {
   }
 }
 
-// Inline cards (spending charts) are kept in the text-only message store by JSON-encoding them behind
-// this marker (a record-separator char the user can't type), so chat history round-trips them without
-// a schema or on-device store change, online and offline alike.
+// Cards are JSON-encoded behind this record-separator char so the text-only store round-trips them.
 const CARD_PREFIX = '␞'
 const encodeCard = (card) => `${CARD_PREFIX}${JSON.stringify(card)}`
 

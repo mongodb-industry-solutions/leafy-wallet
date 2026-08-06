@@ -1,5 +1,5 @@
 """End-to-end tests for the actual ObjectBox <-> Atlas sync bridge, run against
-a real running stack (docker compose up -d ollama objectbox-sync-server
+a real running stack (docker compose up -d leafy-embed objectbox-sync-server
 leafy-local-store) with a reachable Atlas cluster. Local-only, not part of CI
  -  same reasoning as test_leafy_local_store.py/test_leafy_local_store_chats.py:
 deploying the whole ObjectBox Sync Server + Atlas combo in CI isn't worth it
@@ -165,7 +165,7 @@ def test_transaction_created_via_objectbox_syncs_to_atlas(db):
             "currency": "EUR",
             "direction": "sent",
             # No `note` on purpose: this test is about the sync bridge, not
-            # the Ollama embedding path (covered elsewhere).
+            # the embedding path (covered elsewhere).
         },
     )
     assert created.status_code == 201

@@ -16,27 +16,64 @@ class FakeResponse:
         return self._payload
 
 
-def test_get_embedding_returns_vector_on_success(monkeypatch):
-    captured = {}
-
+def _capturing_post(captured, payload=None):
     async def fake_post(self, url, json=None, headers=None):
         captured["url"] = url
         captured["json"] = json
-        return FakeResponse({"embeddings": [[0.1, 0.2, 0.3]]})
+        captured["headers"] = headers
+        return FakeResponse(payload or {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]})
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    return fake_post
+
+
+def test_get_embedding_returns_vector_on_success(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
 
     result = asyncio.run(embeddings.get_embedding("Dinner split"))
 
     assert result == [0.1, 0.2, 0.3]
-    assert captured["url"] == f"{embeddings.OLLAMA_BASE_URL}/api/embed"
+    assert captured["url"] == f"{embeddings.EMBEDDINGS_URL}/v1/embeddings"
     assert captured["json"] == {
-        "model": embeddings.OLLAMA_EMBEDDING_MODEL,
-        "input": "Dinner split",
+        "model": embeddings.EMBEDDING_MODEL,
+        "input": ["Dinner split"],
+        "input_type": "document",
+        "output_dimension": embeddings.EMBEDDING_DIMENSIONS,
     }
 
 
-def test_get_embedding_returns_none_when_ollama_unreachable(monkeypatch):
+# Voyage embeds queries and stored text asymmetrically, so the search path has to say which it is.
+def test_input_type_reaches_the_provider(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
+
+    asyncio.run(embeddings.get_embedding("coffee", input_type="query"))
+
+    assert captured["json"]["input_type"] == "query"
+
+
+# The local leafy-embed container serves the same contract without authentication.
+def test_no_authorization_header_when_no_key_is_configured(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
+    monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+
+    asyncio.run(embeddings.get_embedding("Dinner split"))
+
+    assert captured["headers"] is None
+
+
+def test_bearer_key_is_sent_when_configured(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
+    monkeypatch.setenv("VOYAGE_API_KEY", "unit-test-value")
+
+    asyncio.run(embeddings.get_embedding("Dinner split"))
+
+    assert captured["headers"] == {"Authorization": "Bearer unit-test-value"}
+
+
+def test_get_embedding_returns_none_when_provider_unreachable(monkeypatch):
     async def fake_post(self, url, json=None, headers=None):
         raise httpx.ConnectError("connection refused", request=httpx.Request("POST", url))
 
@@ -54,42 +91,19 @@ def test_get_embedding_returns_none_on_http_status_error(monkeypatch):
     assert asyncio.run(embeddings.get_embedding("Dinner split")) is None
 
 
-# Deployed pods run no Ollama container, so anything but APP_ENV=local has to reach Voyage instead.
-def test_deployed_calls_voyage_with_the_bearer_key_and_matching_width(monkeypatch):
+def test_get_embedding_returns_none_on_unexpected_payload(monkeypatch):
     captured = {}
-
-    async def fake_post(self, url, json=None, headers=None):
-        captured["url"] = url
-        captured["json"] = json
-        captured["headers"] = headers
-        return FakeResponse({"data": [{"index": 0, "embedding": [0.4, 0.5]}]})
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-    monkeypatch.setenv("APP_ENV", "staging")
-    monkeypatch.setenv("VOYAGE_API_KEY", "unit-test-value")
-
-    result = asyncio.run(embeddings.get_embedding("Dinner split"))
-
-    assert result == [0.4, 0.5]
-    assert captured["url"] == embeddings.VOYAGE_URL
-    assert captured["headers"] == {"Authorization": "Bearer unit-test-value"}
-    assert captured["json"]["input"] == ["Dinner split"]
-    assert captured["json"]["output_dimension"] == embeddings.VOYAGE_DIMENSIONS
-
-
-def test_deployed_without_a_key_degrades_instead_of_raising(monkeypatch):
-    async def fake_post(self, url, json=None, headers=None):
-        raise AssertionError("must not call out with no key configured")
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-    monkeypatch.setenv("APP_ENV", "prod")
-    monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured, payload={"data": []}))
 
     assert asyncio.run(embeddings.get_embedding("Dinner split")) is None
 
 
-def test_dimensions_follow_the_environment(monkeypatch):
-    # The ObjectBox HNSW index and the Atlas index are both built from this.
-    assert embeddings.embedding_dimensions() == embeddings.LOCAL_DIMENSIONS
-    monkeypatch.setenv("APP_ENV", "staging")
-    assert embeddings.embedding_dimensions() == embeddings.VOYAGE_DIMENSIONS
+# The ObjectBox HNSW index and the Atlas index are both built from this width.
+def test_requests_the_indexed_vector_width(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
+
+    asyncio.run(embeddings.get_embedding("Dinner split"))
+
+    assert embeddings.EMBEDDING_DIMENSIONS == 1024
+    assert captured["json"]["output_dimension"] == 1024

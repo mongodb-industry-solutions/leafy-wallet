@@ -3,8 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Leafy Pay's request lifecycle, stored verbatim: this is a replica, so a status it does not
-# recognize would mean the wallet invented one. `lib/wallet/requests.js` collapses these for the UI.
+# Leafy Pay's lifecycle, stored verbatim: this is a replica, so it invents no statuses of its own.
 RequestStatus = Literal[
     "draft",
     "created",
@@ -24,8 +23,7 @@ RequestStatus = Literal[
     "disputed",
 ]
 
-# `local_pending` marks a request composed with no connection: it exists here and on the phone but
-# not yet in Leafy Pay, and the app replays it on reconnect.
+# `local_pending` means composed offline, not yet in Leafy Pay; the app replays it on reconnect.
 LocalSyncStatus = Literal["synced", "local_pending"]
 
 

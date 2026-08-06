@@ -19,10 +19,8 @@ const SETTLE_MAX_POLLS = 8
 // Leafy Pay pushes nothing, so anything arriving from someone else has to be looked for.
 const ARRIVAL_POLL_MS = 15000
 
-// Each wallet dataset maps to the Server Action that loads it. The read itself runs on the server
-// (session + Bearer never leave it); this provider caches the result on the client and shares it
-// across tabs so switching screens never re-hits Leafy Pay. Each loader takes the connection state,
-// which picks the source: Leafy Pay + Atlas online, the on-device store offline.
+// Each dataset maps to the Server Action that loads it, so the session and Bearer never leave the
+// server. Each loader takes the connection state, which picks Leafy Pay + Atlas or the device store.
 const LOADERS = {
   accounts: getAccounts,
   contacts: getContacts,
@@ -126,16 +124,14 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   // Seeded from localStorage on mount: the provider mounts once per login, so ownerKey is stable under it.
   const [lastSeen, setLastSeen] = useState(() => readSeenMarker(ownerKey))
   const [dismissedIds, setDismissedIds] = useState(() => readDismissedIds(ownerKey))
-  // Carries only the reference and outcome; the banner reads the row itself, so it never renders a
-  // stale amount from before the refresh that settled it.
+  // Carries only reference and outcome, so the banner can't render a pre-refresh amount.
   const [settlement, setSettlement] = useState(null)
   const [arrival, setArrival] = useState(null)
   // What has already been announced, so each row banners once. Null until the first load.
   const announcedRequestsRef = useRef(null)
   const announcedReceivedRef = useRef(null)
 
-  // In a ref so `load`/`refresh` keep a stable identity: a dependency would rebuild every
-  // consumer's callbacks on each toggle.
+  // In a ref so `load`/`refresh` keep a stable identity across connection toggles.
   const isOnlineRef = useRef(isOnline)
   // Declared first so it lands before the effects below, which refresh through `load`.
   useEffect(() => {
@@ -196,8 +192,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     [refresh],
   )
 
-  // Initial load, once per mount (i.e. once per login). When online, also converge the
-  // enrichment stores to Leafy Pay and re-read whatever the reconcile pruned.
+  // Initial load, once per mount. Online, also converge to Leafy Pay and re-read what was pruned.
   const hasLoaded = useRef(false)
   useEffect(() => {
     if (hasLoaded.current) return
@@ -214,8 +209,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     })
   }, [refresh])
 
-  // Both directions re-read, since the source changes. Reconnecting also replays whatever was
-  // composed offline: Sync moves records, but only Leafy Pay reaches the other wallet.
+  // Reconnecting replays offline writes: Sync moves records, but only Leafy Pay reaches the peer.
   const wasOnline = useRef(isOnline)
   useEffect(() => {
     if (isOnline === wasOnline.current) return
@@ -236,8 +230,7 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
     resync()
   }, [isOnline, refresh, watchTransfer])
 
-  // Poll for what someone else can send: requests addressed to the user and inbound transfers.
-  // Offline there is nothing new to find, since the local store only changes through this device.
+  // Poll for inbound requests and transfers; offline, only this device can change the local store.
   useEffect(() => {
     if (!isOnline) return undefined
     const id = setInterval(() => refresh(['requests', 'transactions']), ARRIVAL_POLL_MS)

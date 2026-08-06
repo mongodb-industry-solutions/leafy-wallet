@@ -50,7 +50,7 @@ Wallet records written on the device (chats, requests, queued sends) stream up t
 Transfers and their enrichment records stay consistent even when several offline writes land at once on reconnect. No double-spends, no drift.
 
 ### 3. **Atlas Vector Search, online and on-device**
-Transaction notes are embedded (via a local embedding model) and searchable by meaning: Atlas `$vectorSearch` when online, ObjectBox's HNSW index on the device when offline. The same natural query works in either mode.
+Transaction notes are embedded with [Voyage AI](https://www.mongodb.com/products/platform/ai-search-and-retrieval/models) and searchable by meaning: Atlas `$vectorSearch` when online, ObjectBox's HNSW index on the device when offline. The same natural query works in either mode. Embedding runs on the open-weight `voyage-4-nano`, so it needs no API key and works with no network at all.
 
 ### 4. **A LangGraph agent over local AI, through MCP**
 The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
@@ -68,7 +68,8 @@ The assistant routes each question to the right tool (balances, contacts, spendi
   - [FastAPI](https://fastapi.tiangolo.com/) on [uv](https://docs.astral.sh/uv/)
 
 - **AI**:
-  - [Ollama](https://ollama.com/) (qwen2.5:7b chat model, nomic-embed-text embeddings)
+  - [Ollama](https://ollama.com/) (qwen2.5:7b chat model)
+  - [voyage-4-nano](https://huggingface.co/voyageai/voyage-4-nano) embeddings (in the `leafy-embed` container)
   - [LangGraph](https://www.langchain.com/langgraph)
 
 - **Styling**:
@@ -157,7 +158,8 @@ The services and their ports:
 | backend | 8000 | Atlas enrichment API (FastAPI) |
 | leafy-local-store | 8090 | On-device ObjectBox store (C++ service) |
 | objectbox-sync-server | 9980, 9999 | Sync admin UI and sync protocol |
-| ollama | 11434 | Local chat + embedding models |
+| ollama | 11434 | Local chat model |
+| leafy-embed | 8091 | Local embedding model (voyage-4-nano) |
 
 ## Repository Layout
 

@@ -38,7 +38,7 @@ struct LocalTransaction {
     double amount = 0;
     std::string currency;
     std::string note;                    // empty = absent
-    std::vector<float> noteEmbedding;     // HNSW cosine; width is EMBEDDING_DIMENSIONS, which follows the provider.
+    std::vector<float> noteEmbedding;     // HNSW cosine; width is EMBEDDING_DIMENSIONS.
     std::string direction;
     std::string leafyPayStatus;
     std::string localSyncStatus;
@@ -539,20 +539,16 @@ struct LocalAccountBalance_ {
 const obx::Property<LocalAccountBalance, OBXPropertyType_String> LocalAccountBalance_::accountReference(3);
 
 // ─── Embedding provider ─────────────────────────────────────────────────
-// Ollama on a developer machine, Voyage once deployed, since no Ollama container is
-// deployed. The two models have different vector widths, so each environment keeps
-// its own Atlas database and its own on-device store.
 
 std::string env_or(const char* name, const std::string& fallback) {
     const char* value = std::getenv(name);
     return value ? std::string(value) : fallback;
 }
 
-const bool IS_LOCAL = env_or("APP_ENV", "local") == "local";
+// ─── Model - entities and properties mirror objectbox-sync-server/objectbox-model.json ─
+// That file carries no HNSW parameters: the vector index is on-device only.
 
-// ─── Model - must match objectbox-sync-server/objectbox-model.json exactly ─
-
-const int EMBEDDING_DIMENSIONS = IS_LOCAL ? 768 : 1024;
+const int EMBEDDING_DIMENSIONS = 1024;
 
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
@@ -683,58 +679,30 @@ OBX_model* create_obx_model() {
 }
 
 // ─── Embedding client ───────────────────────────────────────────────────
-// Re-implements backend/services/embeddings.py's get_embedding() contract in
-// C++, since this service can't import the Python module. Same graceful
-// degradation: returns an empty vector (not a thrown error) on failure, so an
-// unreachable provider doesn't block writing the underlying transaction.
+// Mirrors backend/services/embeddings.py's get_embedding(), which this service can't import.
+// Returns an empty vector rather than throwing, so an unreachable provider doesn't block the write.
 
-std::vector<float> embed_with_ollama(const std::string& text) {
-    static const std::string base_url = env_or("OLLAMA_BASE_URL", "http://ollama:11434");
-    static const std::string model_name = env_or("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text");
+std::vector<float> get_embedding(const std::string& text, const std::string& input_type = "document") {
+    static const std::string base_url = env_or("EMBEDDINGS_URL", "http://leafy-embed:8091");
+    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-4-large");
+    static const std::string api_key = env_or("VOYAGE_API_KEY", "");
 
     httplib::Client client(base_url);
     client.set_connection_timeout(30);
     client.set_read_timeout(30);
 
-    json body = {{"model", model_name}, {"input", text}};
-    auto response = client.Post("/api/embed", body.dump(), "application/json");
-
-    if (!response || response->status != 200) {
-        std::cerr << "Ollama embedding request failed; continuing without noteEmbedding" << std::endl;
-        return {};
-    }
-
-    try {
-        auto parsed = json::parse(response->body);
-        return parsed.at("embeddings").at(0).get<std::vector<float>>();
-    } catch (const std::exception& e) {
-        std::cerr << "Failed to parse Ollama embedding response: " << e.what() << std::endl;
-        return {};
-    }
-}
-
-std::vector<float> embed_with_voyage(const std::string& text) {
-    static const std::string api_key = env_or("VOYAGE_API_KEY", "");
-    static const std::string model_name = env_or("VOYAGE_EMBEDDING_MODEL", "voyage-3-large");
-
-    if (api_key.empty()) {
-        std::cerr << "VOYAGE_API_KEY is not set; continuing without noteEmbedding" << std::endl;
-        return {};
-    }
-
-    httplib::Client client("https://ai.mongodb.com");
-    client.set_connection_timeout(30);
-    client.set_read_timeout(30);
-
     json body = {{"model", model_name},
                  {"input", json::array({text})},
-                 {"input_type", "document"},
+                 {"input_type", input_type},
                  {"output_dimension", EMBEDDING_DIMENSIONS}};
-    httplib::Headers headers = {{"Authorization", "Bearer " + api_key}};
+
+    httplib::Headers headers;
+    if (!api_key.empty()) headers.emplace("Authorization", "Bearer " + api_key);
+
     auto response = client.Post("/v1/embeddings", headers, body.dump(), "application/json");
 
     if (!response || response->status != 200) {
-        std::cerr << "Voyage embedding request failed; continuing without noteEmbedding" << std::endl;
+        std::cerr << "Embedding request failed; continuing without noteEmbedding" << std::endl;
         return {};
     }
 
@@ -742,13 +710,9 @@ std::vector<float> embed_with_voyage(const std::string& text) {
         auto parsed = json::parse(response->body);
         return parsed.at("data").at(0).at("embedding").get<std::vector<float>>();
     } catch (const std::exception& e) {
-        std::cerr << "Failed to parse Voyage embedding response: " << e.what() << std::endl;
+        std::cerr << "Failed to parse embedding response: " << e.what() << std::endl;
         return {};
     }
-}
-
-std::vector<float> get_embedding(const std::string& text) {
-    return IS_LOCAL ? embed_with_ollama(text) : embed_with_voyage(text);
 }
 
 // ─── ObjectBox store + sync ─────────────────────────────────────────────
@@ -1069,7 +1033,7 @@ int main(int argc, char* argv[]) {
             ? req.get_param_value("ownerPartyRef")
             : "";
 
-        std::vector<float> queryVector = get_embedding(q);
+        std::vector<float> queryVector = get_embedding(q, "query");
         if (queryVector.empty()) {
             res.status = 503;
             res.set_content(

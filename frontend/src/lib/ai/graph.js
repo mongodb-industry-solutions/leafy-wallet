@@ -6,18 +6,15 @@ import { SystemMessage, AIMessage } from '@langchain/core/messages'
 import { SYSTEM_PROMPT, OFFLINE_NOTE } from './prompt'
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-// 7b over 3b: a weaker tool-caller narrates its intent instead of emitting the call, which shows up
-// as spending questions that never draw their chart. The extra latency buys reliable routing.
+// 7b over 3b: weaker tool-callers narrate the call instead of emitting it, so charts never render.
 const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2.5:7b'
 
-// The model sizes context from VRAM, and the container reports none - without this it defaults to
-// 4096, which the system prompt and a couple of tool results exhaust.
+// The container reports no VRAM, so the model would default to 4096 and exhaust it on tool results.
 const NUM_CTX = 8192
 // Fixed seed so a turn is as reproducible as the runtime allows.
 const SEED = 42
 
-// "local" on a developer machine, "staging"/"prod" once deployed (see environment/*.yaml). Not
-// NODE_ENV: Next pins that to `production` in any built image, including the local Docker one.
+// Not NODE_ENV: Next pins that to `production` in any built image, including the local Docker one.
 const APP_ENV = process.env.APP_ENV ?? 'local'
 
 // Grove is MongoDB's gateway to hosted Claude, used where no Ollama chat model runs.
@@ -38,8 +35,7 @@ function chatModel() {
       numCtx: NUM_CTX,
       temperature: 0,
       seed: SEED,
-      // qwen3 reasons in a <think> block by default, which adds latency and can leak into the reply;
-      // turn it off so it answers directly. Non-thinking models (qwen2.5) ignore this.
+      // qwen3 reasons in a <think> block by default, which adds latency and can leak into the reply.
       ...(CHAT_MODEL.startsWith('qwen3') ? { think: false } : {}),
     })
   }

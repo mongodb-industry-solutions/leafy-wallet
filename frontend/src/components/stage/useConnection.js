@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
-// The boot value is read once from the URL and never changes afterwards, so there is nothing to
-// subscribe to. useSyncExternalStore is still the right tool: it is how React reads a browser-only
-// value during render without a hydration mismatch, since the server gets its own snapshot.
+// Nothing to subscribe to: the boot value is read once from the URL. useSyncExternalStore is still
+// right, since it reads a browser-only value during render without a hydration mismatch.
 const subscribeToNothing = () => () => {}
 const getBootOffline = () => new URLSearchParams(window.location.search).get('offline') === '1'
 const getServerBootOffline = () => false

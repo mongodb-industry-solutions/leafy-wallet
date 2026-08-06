@@ -8,13 +8,12 @@ import {
   cibaTokenPoll,
   fetchUserinfo,
   verifyIdToken,
+  displayNameFrom,
   OAuthUpstreamError,
 } from './oauth'
 
 // Leafy Pay mints auth_req_ids from this alphabet; anything else never reaches the upstream.
 const AUTH_REQ_ID_PATTERN = /^[A-Za-z0-9._-]+$/
-
-const localPart = (v) => (v && v.includes('@') ? v.split('@')[0] : v)
 
 /** Relay a request to Leafy Pay and return { res, data } with the body parsed as JSON. */
 async function pspFetch(path, init = {}) {
@@ -130,13 +129,12 @@ export async function cibaPoll({ auth_req_id: authReqId } = {}) {
   if (!sub) return { status: 'error', error: 'missing subject' }
 
   const info = await fetchUserinfo(tokens.access_token)
-  const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email)
+  const name = displayNameFrom(info, idName, email)
 
   await setSession({
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     idToken: tokens.id_token,
-    expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
     grantedScopes,
     sub,
     name,

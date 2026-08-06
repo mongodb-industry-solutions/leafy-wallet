@@ -1,5 +1,5 @@
 """Integration tests for leafy-local-store's account-balance-cache HTTP API,
-run against a real running instance (docker compose up -d ollama
+run against a real running instance (docker compose up -d leafy-embed
 objectbox-sync-server leafy-local-store). Not part of CI - these are for
 local regression-checking only, and skip cleanly if the service isn't
 reachable.

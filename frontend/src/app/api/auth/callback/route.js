@@ -1,10 +1,8 @@
 // GET /api/auth/callback. Validates state, exchanges the code for tokens, verifies the id_token, sets the session.
 import { NextResponse } from 'next/server'
-import { exchangeCode, verifyIdToken, fetchUserinfo } from '@/lib/auth/oauth'
+import { exchangeCode, verifyIdToken, fetchUserinfo, displayNameFrom } from '@/lib/auth/oauth'
 import { attachSession, clearLoginStateOn, readLoginState } from '@/lib/auth/session'
 import { ENV } from '@/lib/auth/env'
-
-const localPart = (v) => (v && v.includes('@') ? v.split('@')[0] : v)
 
 /** Redirect home with an auth_error, expiring the transient login cookie. */
 function fail(reason) {
@@ -44,14 +42,13 @@ export async function GET(req) {
     if (!sub) return fail('token_exchange_failed')
 
     const info = await fetchUserinfo(tokens.access_token)
-    const name = info?.name ?? idName ?? localPart(info?.preferred_username) ?? localPart(email)
+    const name = displayNameFrom(info, idName, email)
 
     const res = NextResponse.redirect(new URL('/', ENV.appBaseUrl()))
     attachSession(res, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       idToken: tokens.id_token,
-      expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       grantedScopes,
       sub,
       name,

@@ -22,9 +22,16 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull nomic-embed-text && ollama pull qwen2.5:7b"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen2.5:7b"]
     restart: "no"
-  # Falls back to the public trial image; point OBJECTBOX_SYNC_IMAGE at a licensed one in .env.
+  leafy-embed:
+    build:
+      context: ./leafy-embed
+    container_name: leafy-wallet-embed
+    ports:
+      - "8091:8091"
+    restart: always
+  # Falls back to the public trial image
   objectbox-sync-server:
     image: ${OBJECTBOX_SYNC_IMAGE:-objectboxio/sync:sync-server-2026-07-14}
     container_name: leafy-wallet-objectbox-sync
@@ -59,10 +66,10 @@ services:
     depends_on:
       objectbox-sync-server:
         condition: service_started
-      ollama:
+      leafy-embed:
         condition: service_healthy
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDINGS_URL=http://leafy-embed:8091
       - SYNC_SERVER_URL=ws://objectbox-sync-server:9999
     restart: always
   backend:
@@ -75,9 +82,10 @@ services:
     env_file:
       - backend/.env
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDINGS_URL=http://leafy-embed:8091
     depends_on:
-      - ollama
+      leafy-embed:
+        condition: service_healthy
     restart: always
     container_name: leafy-wallet-backend
   frontend:
@@ -93,10 +101,16 @@ services:
       - BACKEND_URL=http://backend:8000
       - LOCAL_STORE_URL=http://leafy-local-store:8090
       - OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDINGS_URL=http://leafy-embed:8091
     depends_on:
-      - backend
-      - leafy-local-store
-      - ollama
+      backend:
+        condition: service_started
+      leafy-local-store:
+        condition: service_started
+      ollama:
+        condition: service_started
+      leafy-embed:
+        condition: service_healthy
     restart: always
     container_name: leafy-wallet-frontend
 

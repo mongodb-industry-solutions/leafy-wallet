@@ -1,15 +1,6 @@
-// The self-driving demo script (PLAN.md Phase 2/3). The tour is cursor-driven: every step is an
-// action the simulated cursor performs on a real element - it moves there and actually clicks, types,
-// or scrolls, so nothing happens by an invisible trigger. The director (useTourDirector) walks these
-// and the cursor (TourCursor) executes them against `data-tour-target` anchors in the live UI.
-//
-// Each action:
-//   type: 'click' | 'type' | 'scroll'
-//   target: the data-tour-target to act on (a real button, input, tab, the connection toggle, ...)
-//   text: for 'type', what to typewrite into the input
-//   by: for 'scroll', pixels to scroll the target container
-//   walkthroughStep: which "Under the hood" narration step pairs with this action
-//   readMs: how long to hold after the action so the narration can be read
+// The self-driving demo script. Every step is a real action the simulated cursor performs on a real
+// element, so nothing happens by an invisible trigger. useTourDirector walks these and TourCursor
+// executes them against `data-tour-target` anchors in the live UI.
 
 const AI_PROMPT = 'How much did I spend this month?'
 const NOTE_TEXT = 'Thanks for lunch!'
@@ -32,9 +23,7 @@ const NOTE_TEXT = 'Thanks for lunch!'
 
 /** @type {TourAction[]} */
 export const TOUR = [
-  // The tour may be started from anywhere, and the send flow replaces the tab bar - so `tab-home`
-  // would not exist. These optional steps back out of it first; they are skipped instantly (no resolve
-  // wait) when their target is absent, which is the usual case.
+  // The tour can start anywhere, and the send flow replaces the tab bar, so back out of it first.
   { type: 'click', target: 'flow-exit', optional: true, walkthroughStep: 0, readMs: 300 },
   { type: 'click', target: 'flow-exit', optional: true, walkthroughStep: 0, readMs: 300 },
 

@@ -38,7 +38,6 @@ async function pspRequest(method, path, body, token, refreshToken, extraHeaders,
         ...session,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token ?? refreshToken,
-        expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
       }).catch(() => {})
     }
     return pspRequest(
@@ -104,10 +103,9 @@ function normalizeTransaction(t) {
 }
 
 /**
- * Shape a Leafy Pay request into the flat form the wallet stores and renders. `status` stays raw:
- * Leafy Pay owns the lifecycle, so collapsing it for display happens in `lib/wallet/requests.js`.
- * `payeePartyRef`/`payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one
- * as an owner key, or the offline read filters on an id that matches nothing.
+ * Shape a Leafy Pay request into the flat form the wallet stores and renders. `status` stays raw.
+ * `payeePartyRef`/`payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one as
+ * an owner key, or the offline read filters on an id that matches nothing.
  */
 function normalizeRtpRequest(r) {
   return {
@@ -188,8 +186,7 @@ export async function sendToBeneficiary(reference, { amount, currency = 'EUR', n
 }
 
 // ── Request to Pay (scopes `read:rtp` / `write:rtp`) ──────────────────────────
-// A request is its own record, separate from the transfer that settles it: only once the payer
-// approves does Leafy Pay create the linked payment. The payer is addressed by a saved beneficiary.
+// A request is its own record: Leafy Pay only creates the linked payment once the payer approves.
 
 const RTP_BASE = '/api/v1/gateway/rtp/requests'
 

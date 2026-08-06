@@ -1,5 +1,5 @@
 """Integration tests for leafy-local-store's HTTP API, run against a real
-running instance (docker compose up -d ollama objectbox-sync-server
+running instance (docker compose up -d leafy-embed objectbox-sync-server
 leafy-local-store). Not part of CI - deploying ObjectBox there isn't worth
 it (see backend/README.md's "ObjectBox Offline Sync (PoC)" section) - these
 are for local regression-checking only, and skip cleanly if the service

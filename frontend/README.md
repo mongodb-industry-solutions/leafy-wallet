@@ -83,7 +83,9 @@ The UI depends on the backend services, which must be running to enable full fun
 - Backend enrichment API (Port **8000**)
 - leafy-local-store (Port **8090**)
 - Ollama (Port **11434**)
-  - *Needed for the Leafy assistant and semantic search embeddings.*
+  - *Needed for the Leafy assistant.*
+- leafy-embed (Port **8091**)
+  - *Needed for semantic search embeddings.*
 
 ## Running
 
