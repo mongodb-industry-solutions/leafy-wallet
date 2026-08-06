@@ -874,7 +874,6 @@ struct SpendingRow {
     double total = 0;
     int64_t count = 0;
     std::string currency;
-    int64_t lastAt = 0;
 };
 
 // Totals per counterparty, largest first. Mirrors
@@ -892,7 +891,6 @@ json spending_by_contact(const std::string& ownerPartyRef, const std::string& di
         if (row.currency.empty()) {
             row.currency = t->currency;
         }
-        row.lastAt = std::max(row.lastAt, t->createdAt);
     }
 
     std::vector<std::pair<std::string, SpendingRow>> rows(grouped.begin(), grouped.end());
@@ -907,7 +905,6 @@ json spending_by_contact(const std::string& ownerPartyRef, const std::string& di
             {"total", std::round(row.total * 100.0) / 100.0},
             {"count", row.count},
             {"currency", row.currency},
-            {"lastAt", row.lastAt == 0 ? json(nullptr) : json(row.lastAt)},
         });
     }
     return results;
@@ -1043,24 +1040,20 @@ int main(int argc, char* argv[]) {
         }
 
         auto box = store->box<LocalTransaction>();
-        // nearestNeighbors alone can't also filter by ownerPartyRef, so
-        // over-fetch and filter client-side when a filter is requested  - 
-        // fine at this PoC's local scale (a handful of records).
-        int fetchLimit = ownerPartyRef.empty() ? limit : limit * 5;
+        // nearestNeighbors can't filter by ownerPartyRef, so over-fetch and filter client-side.
+        const int fetchLimit = limit * 5;
         auto query = box.query(LocalTransaction_::noteEmbedding.nearestNeighbors(queryVector, fetchLimit)).build();
-        // findWithScores() returns `score` as a *distance* (lower = more
-        // similar), already sorted nearest-first - the opposite
-        // convention from Atlas's $vectorSearch score (higher = better),
-        // which backend/routers/wallet_transactions.py's /search uses.
         auto foundWithScores = query.findWithScores();
 
         json results = json::array();
-        for (const auto& [t, score] : foundWithScores) {
+        for (const auto& [t, distance] : foundWithScores) {
             if (!ownerPartyRef.empty() && t.ownerPartyRef != ownerPartyRef) {
                 continue;
             }
             json item = transaction_to_json(t);
-            item["score"] = score;
+            // ObjectBox reports cosine distance (1 - similarity); Atlas reports (1 + similarity) / 2.
+            // Convert so `score` means the same number in both search paths.
+            item["score"] = 1.0 - distance / 2.0;
             results.push_back(item);
             if (static_cast<int>(results.size()) >= limit) {
                 break;

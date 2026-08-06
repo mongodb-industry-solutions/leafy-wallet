@@ -24,27 +24,21 @@ surface.
 """
 
 import time
-import uuid
 from datetime import datetime, timezone
 
 import httpx
 import pytest
 
 from db.client import get_db
+from tests.conftest import LOCAL_STORE_BASE as LOCAL_BASE, unique as _unique
 
-LOCAL_BASE = "http://localhost:8090"
 SYNC_TIMEOUT_S = 45  # generous: propagation is normally sub-second, but the full suite loads Atlas
 SYNC_POLL_INTERVAL_S = 0.5
 
 
+# The local-store half of the guard is conftest's; these tests need Atlas reachable too.
 @pytest.fixture(scope="module", autouse=True)
-def _require_local_store_and_atlas():
-    try:
-        response = httpx.get(f"{LOCAL_BASE}/local/v1/health", timeout=2.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        pytest.skip(f"leafy-local-store not reachable at {LOCAL_BASE}: {exc}")
-
+def _require_local_store_and_atlas(require_leafy_local_store):
     db = get_db()
     try:
         db.client.admin.command("ping")
@@ -57,8 +51,6 @@ def db():
     return get_db()
 
 
-def _unique(prefix):
-    return f"{prefix}-{uuid.uuid4()}"
 
 
 def _wait_until(predicate, description):

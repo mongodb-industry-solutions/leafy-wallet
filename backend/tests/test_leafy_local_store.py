@@ -10,7 +10,6 @@ Atlas collections, so each test cleans up via DELETE /local/v1/.../{id},
 which propagates the deletion through ObjectBox Sync back to Atlas too.
 """
 
-import uuid
 
 import httpx
 import pytest
@@ -94,9 +93,8 @@ def test_transaction_send_and_search_ranks_semantically():
         scores_by_note = {r["note"]: r["score"] for r in response.json()}
         assert "Dinner with the team" in scores_by_note
         assert "Monthly rent payment" in scores_by_note
-        # score is a *distance* here (lower = more similar) - opposite of
-        # Atlas's $vectorSearch convention, see backend/README.md.
-        assert scores_by_note["Dinner with the team"] < scores_by_note["Monthly rent payment"]
+        # Higher is more similar, matching Atlas's $vectorSearch score.
+        assert scores_by_note["Dinner with the team"] > scores_by_note["Monthly rent payment"]
     finally:
         httpx.delete(f"{BASE}/local/v1/transactions/{food.json()['id']}")
         httpx.delete(f"{BASE}/local/v1/transactions/{rent.json()['id']}")

@@ -52,7 +52,6 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
                 "total": {"$sum": "$amount"},
                 "count": {"$sum": 1},
                 "currency": {"$first": "$currency"},
-                "lastAt": {"$max": "$createdAt"},
             }
         },
         {"$sort": {"total": -1}},
@@ -63,7 +62,6 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
             "total": round(row["total"], 2),
             "count": row["count"],
             "currency": row["currency"],
-            "lastAt": row["lastAt"],
         }
         for row in db.aggregate(COLLECTION, pipeline)
     ]

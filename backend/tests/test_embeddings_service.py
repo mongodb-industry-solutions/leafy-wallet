@@ -98,12 +98,7 @@ def test_get_embedding_returns_none_on_unexpected_payload(monkeypatch):
     assert asyncio.run(embeddings.get_embedding("Dinner split")) is None
 
 
-# The ObjectBox HNSW index and the Atlas index are both built from this width.
-def test_requests_the_indexed_vector_width(monkeypatch):
-    captured = {}
-    monkeypatch.setattr(httpx.AsyncClient, "post", _capturing_post(captured))
-
-    asyncio.run(embeddings.get_embedding("Dinner split"))
-
+# Pins the literal, since the ObjectBox HNSW index and the Atlas index are built from it. The
+# request carrying it is already covered above.
+def test_indexed_vector_width_is_1024():
     assert embeddings.EMBEDDING_DIMENSIONS == 1024
-    assert captured["json"]["output_dimension"] == 1024

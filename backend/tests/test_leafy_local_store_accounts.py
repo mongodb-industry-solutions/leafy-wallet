@@ -9,7 +9,6 @@ OBXEntityFlags_SYNC_ENABLED, no Atlas collection) - nothing here ever syncs,
 so cleanup only needs the local DELETE, not an Atlas check.
 """
 
-import uuid
 
 import httpx
 import pytest

@@ -10,7 +10,6 @@ call dispatch), not just the underlying service functions directly.
 import asyncio
 import json
 import time
-import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -21,6 +20,7 @@ from db.client import get_db
 from mcp_server.server import mcp
 from services.embeddings import get_embedding
 from services.transactions import NOTE_EMBEDDING_INDEX
+from tests.conftest import unique as _unique
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -56,10 +56,6 @@ def _require_vector_index_and_embeddings():
         embedding = None
     if embedding is None:
         pytest.skip("Embedding provider unreachable; skipping semantic search tests")
-
-
-def _unique(prefix):
-    return f"{prefix}-{uuid.uuid4()}"
 
 
 def _run(coro):

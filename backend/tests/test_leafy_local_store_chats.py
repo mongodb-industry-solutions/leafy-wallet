@@ -10,7 +10,6 @@ collections, so each test cleans up via DELETE
 propagating the deletion through ObjectBox Sync back to Atlas too.
 """
 
-import uuid
 
 import httpx
 import pytest
