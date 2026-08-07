@@ -4,9 +4,9 @@ import { exchangeCode, verifyIdToken, fetchUserinfo, displayNameFrom } from '@/l
 import { attachSession, clearLoginStateOn, readLoginState } from '@/lib/auth/session'
 import { ENV } from '@/lib/auth/env'
 
-/** Redirect home with an auth_error, expiring the transient login cookie. */
-function fail(reason) {
-  const home = new URL('/', ENV.appBaseUrl())
+/** Redirect back with an auth_error, expiring the transient login cookie. */
+function fail(reason, returnTo = '/') {
+  const home = new URL(returnTo, ENV.appBaseUrl())
   home.searchParams.set('auth_error', reason)
   const res = NextResponse.redirect(home)
   clearLoginStateOn(res)
@@ -17,11 +17,12 @@ export async function GET(req) {
   const { searchParams } = req.nextUrl
 
   const error = searchParams.get('error')
-  if (error) return fail(error)
+  if (error) return fail(error, readLoginState(req)?.returnTo || '/')
 
   const code = searchParams.get('code')
   const state = searchParams.get('state')
   const login = readLoginState(req)
+  const returnTo = login?.returnTo || '/'
 
   if (!code || !login || !state || state !== login.state) return fail('invalid_state')
 
@@ -39,12 +40,12 @@ export async function GET(req) {
       // Only keep email if the email scope was actually granted (data minimization).
       email = grantedScopes.includes('email') ? claims.email : undefined
     }
-    if (!sub) return fail('token_exchange_failed')
+    if (!sub) return fail('token_exchange_failed', returnTo)
 
     const info = await fetchUserinfo(tokens.access_token)
     const name = displayNameFrom(info, idName, email)
 
-    const res = NextResponse.redirect(new URL('/', ENV.appBaseUrl()))
+    const res = NextResponse.redirect(new URL(returnTo, ENV.appBaseUrl()))
     attachSession(res, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
@@ -57,6 +58,6 @@ export async function GET(req) {
     clearLoginStateOn(res)
     return res
   } catch {
-    return fail('token_exchange_failed')
+    return fail('token_exchange_failed', returnTo)
   }
 }

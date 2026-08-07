@@ -80,7 +80,7 @@ export function useAuthGate(onAuthenticated) {
   // At a booth, sign-out means the next visitor is arriving, so re-arm the welcome for them.
   const handleSignOut = useCallback(() => {
     window.sessionStorage.removeItem(WELCOME_SEEN_KEY)
-    window.location.href = LOGOUT_URL
+    window.location.href = `${LOGOUT_URL}?return=${encodeURIComponent(window.location.pathname)}`
   }, [])
 
   // Credential revoked at Leafy Pay, so drop back to SSO.
