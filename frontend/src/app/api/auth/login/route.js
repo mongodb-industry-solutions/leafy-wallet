@@ -4,6 +4,7 @@ import { buildAuthorizeUrl, generatePkce, randomToken } from '@/lib/auth/oauth'
 import { attachLoginState } from '@/lib/auth/session'
 import { REQUESTED_SCOPES } from '@/lib/auth/env'
 import { DEMO_USERS } from '@/lib/demo-users'
+import { safeReturnPath } from '@/lib/auth/return-path'
 
 export async function GET(request) {
   const { verifier, challenge } = generatePkce()
@@ -13,7 +14,10 @@ export async function GET(request) {
   // Optional ?user=<email>: prefill that demo user's credentials on Leafy Pay's login form. Only the
   // email travels from the browser, and it is matched against DEMO_USERS rather than passed straight
   // through - so the password comes from this repo's demo config, never from the request.
-  const email = new URL(request.url).searchParams.get('user')
+  const { searchParams } = new URL(request.url)
+  const email = searchParams.get('user')
+  // Where to land after the callback, so the /mobile route doesn't bounce back to the desktop stage.
+  const returnTo = safeReturnPath(searchParams.get('return'))
   const demoUser = email ? DEMO_USERS.find((u) => u.email === email) : undefined
 
   const url = buildAuthorizeUrl({
@@ -27,6 +31,6 @@ export async function GET(request) {
 
   // Set the short-lived encrypted PKCE/CSRF cookie directly on the redirect response.
   const res = NextResponse.redirect(url)
-  attachLoginState(res, { state, nonce, codeVerifier: verifier })
+  attachLoginState(res, { state, nonce, codeVerifier: verifier, returnTo })
   return res
 }

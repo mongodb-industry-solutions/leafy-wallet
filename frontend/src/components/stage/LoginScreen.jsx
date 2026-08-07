@@ -6,9 +6,14 @@ import { DEMO_USERS } from '@/lib/demo-users'
 const SSO_PROVIDER = 'Continue with SSO'
 const SSO_LOGIN_URL = '/api/auth/login'
 
-/** Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app. */
+/**
+ * Full-page navigation: hands off to Leafy Pay's hosted login, which redirects back to the app. The
+ * current path rides along so the /mobile route comes back to itself rather than the desktop stage.
+ */
 function handleLogin(email) {
-  window.location.assign(email ? `${SSO_LOGIN_URL}?user=${encodeURIComponent(email)}` : SSO_LOGIN_URL)
+  const params = new URLSearchParams({ return: window.location.pathname })
+  if (email) params.set('user', email)
+  window.location.assign(`${SSO_LOGIN_URL}?${params}`)
 }
 
 /**
