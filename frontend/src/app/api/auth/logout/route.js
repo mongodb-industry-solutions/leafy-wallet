@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { getSession, clearSessionOn } from '@/lib/auth/session'
 import { revoke } from '@/lib/auth/oauth'
 import { ENV } from '@/lib/auth/env'
+import { safeReturnPath } from '@/lib/auth/return-path'
 
 async function pspSessionLogout(accessToken) {
   try {
@@ -18,7 +19,8 @@ async function pspSessionLogout(accessToken) {
   }
 }
 
-async function handle() {
+async function handle(request) {
+  const returnTo = safeReturnPath(new URL(request.url).searchParams.get('return'))
   const session = await getSession()
   if (session) {
     await pspSessionLogout(session.accessToken)
@@ -30,7 +32,7 @@ async function handle() {
     }
   }
 
-  const res = NextResponse.redirect(new URL('/', ENV.appBaseUrl()))
+  const res = NextResponse.redirect(new URL(returnTo, ENV.appBaseUrl()))
   clearSessionOn(res)
   return res
 }
