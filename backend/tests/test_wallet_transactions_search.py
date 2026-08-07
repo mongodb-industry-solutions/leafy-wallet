@@ -40,7 +40,7 @@ def _search_until(client, params, predicate, attempts=30, delay=2.0):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _require_vector_index_and_ollama(client):
+def _require_vector_index_and_embeddings(client):
     db = get_db()
     try:
         indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
@@ -53,17 +53,15 @@ def _require_vector_index_and_ollama(client):
             "run scripts/create_vector_index.py"
         )
 
-    # Search embeds the query text via Ollama; skip cleanly (rather than
-    # asserting 503s) when Ollama isn't reachable, e.g. in CI where no
-    # Ollama service is configured. A short explicit timeout keeps this
-    # fast locally instead of blocking on get_embedding()'s full 30s
-    # HTTP timeout when Ollama simply isn't running.
+    # Search embeds the query text, so skip cleanly (rather than asserting 503s) when the
+    # embedding provider isn't reachable, e.g. in CI where none is configured. A short
+    # explicit timeout keeps this fast instead of blocking on get_embedding()'s full 30s.
     try:
-        embedding = asyncio.run(asyncio.wait_for(get_embedding("ollama reachability check"), timeout=5.0))
+        embedding = asyncio.run(asyncio.wait_for(get_embedding("embedding reachability check"), timeout=5.0))
     except asyncio.TimeoutError:
         embedding = None
     if embedding is None:
-        pytest.skip("Ollama unreachable; skipping semantic search tests")
+        pytest.skip("Embedding provider unreachable; skipping semantic search tests")
 
 
 def test_search_ranks_semantically_similar_note_first(client):

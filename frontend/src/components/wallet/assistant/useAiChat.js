@@ -35,9 +35,8 @@ function deriveTitle(text) {
 }
 
 /**
- * Runs one assistant turn and returns the whole result at once: `{ reply, drafts, charts }`. The
- * route waits for the full turn rather than streaming tokens - on a slow local model the token
- * trickle stutters the typewriter, so the client reveals the finished reply at a steady rate.
+ * Runs one assistant turn and returns it whole. Streaming tokens would stutter the typewriter on a
+ * slow local model, so the client reveals a finished reply at a steady rate instead.
  * @param {object} body - `{ message, history, isOnline }`.
  * @returns {Promise<{reply: string, drafts: object[], charts: object[]}>}
  */

@@ -1,11 +1,8 @@
 export const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 export const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2.5:7b'
 
-// The evals drive whichever model the app itself would use, so APP_ENV selects the provider here
-// exactly as it does in `lib/ai/graph.js`. Set it to run the same assertions against what ships.
 const APP_ENV = process.env.APP_ENV ?? 'local'
-
-const EMBED_MODEL = process.env.OLLAMA_EMBEDDING_MODEL ?? 'nomic-embed-text'
+const EMBEDDINGS_URL = process.env.EMBEDDINGS_URL ?? 'http://localhost:8091'
 
 /** Fail with the pull command rather than a timeout when Ollama is down or a model is missing. */
 async function assertOllamaHas(model) {
@@ -33,19 +30,30 @@ async function assertOllamaHas(model) {
 }
 
 /**
- * Preflight for the category evals: Ollama locally, Voyage once APP_ENV says the code is deployed.
+ * Preflight for the category evals: the hosted Voyage API needs a key, the local leafy-embed
+ * container needs to be up. Fail with the fix rather than a timeout.
  */
 export async function assertEmbeddingsReady() {
-  if (APP_ENV !== 'local') {
+  const isHosted = EMBEDDINGS_URL.includes('ai.mongodb.com')
+  if (isHosted) {
     if (!process.env.VOYAGE_API_KEY) {
       throw new Error(
-        `\n\n  APP_ENV is "${APP_ENV}" so embeddings run on Voyage, but VOYAGE_API_KEY is unset.\n` +
-          `  Set it, or unset APP_ENV to embed with the local model instead.\n`,
+        `\n\n  EMBEDDINGS_URL points at the hosted Voyage API, but VOYAGE_API_KEY is unset.\n` +
+          `  Set it, or point EMBEDDINGS_URL at a local leafy-embed instead.\n`,
       )
     }
     return
   }
-  await assertOllamaHas(EMBED_MODEL)
+  try {
+    const res = await fetch(`${EMBEDDINGS_URL}/health`, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  } catch {
+    throw new Error(
+      `\n\n  leafy-embed is not reachable at ${EMBEDDINGS_URL}.\n` +
+        `  Start it:\n` +
+        `      docker compose up -d --build leafy-embed\n`,
+    )
+  }
 }
 
 /**

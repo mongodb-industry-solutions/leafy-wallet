@@ -5,10 +5,8 @@ from db.client import get_db
 from services import contacts as contacts_service
 from services import transactions as transactions_service
 
-# Read-only over Atlas. Balances and transfers live in Leafy Pay, which this service holds no
-# credentials for - a tool that "sends money" here could only write a record, not move any.
-# DNS-rebinding protection is off: the default allows only localhost hosts, and inside the
-# compose network this service is reached as backend:8000.
+# Read-only over Atlas: money lives in Leafy Pay, which this service has no credentials for.
+# DNS-rebinding protection is off because the default rejects non-localhost hosts like backend:8000.
 mcp = FastMCP(
     "leafy-wallet",
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),

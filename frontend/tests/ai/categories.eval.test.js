@@ -6,9 +6,9 @@ beforeAll(async () => {
   await assertEmbeddingsReady()
 })
 
-// nomic-embed embeddings and the nearest-category match are deterministic, so these mappings are
-// stable and can be asserted exactly. This is the real check that spending categorization works,
-// online or offline, since both paths run this same classifier.
+// Embeddings and the nearest-category match are deterministic, so these mappings are stable and can
+// be asserted exactly. This is the real check that spending categorization works, online or
+// offline, since both paths run this same classifier.
 describe('spending category classification', () => {
   it('maps payment notes to sensible categories via embeddings', async () => {
     const cats = await classifyNotes([

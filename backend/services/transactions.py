@@ -29,8 +29,7 @@ def list_transactions(
     pipeline = [{"$match": query}, {"$sort": {"createdAt": -1}}]
     if limit is not None:
         pipeline.append({"$limit": limit})
-    # No caller consumes the raw vector, and it dwarfs the rest of the row - but its width is
-    # what the sync inspector shows, so keep the count.
+    # Drop the vector itself but keep its width, which is what the sync inspector shows.
     pipeline.append(
         {"$addFields": {"noteEmbeddingDims": {"$size": {"$ifNull": ["$noteEmbedding", []]}}}}
     )
@@ -53,7 +52,6 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
                 "total": {"$sum": "$amount"},
                 "count": {"$sum": 1},
                 "currency": {"$first": "$currency"},
-                "lastAt": {"$max": "$createdAt"},
             }
         },
         {"$sort": {"total": -1}},
@@ -64,7 +62,6 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
             "total": round(row["total"], 2),
             "count": row["count"],
             "currency": row["currency"],
-            "lastAt": row["lastAt"],
         }
         for row in db.aggregate(COLLECTION, pipeline)
     ]
@@ -87,7 +84,7 @@ async def search_transactions(db, q: str, owner_party_ref: str | None = None, li
     Shared by `routers/wallet_transactions.py`'s `GET /search` route and the
     `search_transactions` MCP tool - one query, two callers.
     """
-    query_vector = await get_embedding(q)
+    query_vector = await get_embedding(q, input_type="query")
     if query_vector is None:
         raise SemanticSearchUnavailable("Semantic search is temporarily unavailable")
 

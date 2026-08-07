@@ -11,7 +11,7 @@ import time
 from pymongo.operations import SearchIndexModel
 
 from db.mdb import MongoDBConnector
-from services.embeddings import embedding_dimensions
+from services.embeddings import EMBEDDING_DIMENSIONS
 
 # The index filters on `ownerPartyRef` so a search can be scoped to a single user.
 COLLECTION = "walletTransactions"
@@ -63,10 +63,9 @@ def _wait_until_queryable(db, collection_name: str, index_name: str):
 
 def main():
     db = MongoDBConnector()
-    dimensions = embedding_dimensions()
-    print(f"Indexing at {dimensions} dimensions.")
+    print(f"Indexing at {EMBEDDING_DIMENSIONS} dimensions.")
 
-    _ensure_index(db, COLLECTION, INDEX_NAME, EMBEDDED_FIELD, dimensions)
+    _ensure_index(db, COLLECTION, INDEX_NAME, EMBEDDED_FIELD, EMBEDDING_DIMENSIONS)
     _wait_until_queryable(db, COLLECTION, INDEX_NAME)
 
 

@@ -35,8 +35,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# 4. OpenSSL, so httplib can reach Voyage over HTTPS when deployed. Ollama is plain
-# HTTP, but the deployed provider is not, so the client needs TLS either way.
+# 4. OpenSSL, so httplib can reach the hosted Voyage API over HTTPS when deployed. The
+# local leafy-embed container is plain HTTP, but the deployed provider is not, so the
+# client needs TLS either way.
 find_package(OpenSSL REQUIRED)
 
 add_executable(local_store_service

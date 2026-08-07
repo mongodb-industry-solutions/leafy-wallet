@@ -2,10 +2,8 @@
 
 import { useCallback, useState } from 'react'
 
-// Key-naming shape follows WalletDataProvider's `leafy:<domain>:<detail>`. Deliberately sessionStorage,
-// not localStorage: a booth kiosk is one browser profile with many first-time visitors, so a permanent
-// "seen" flag would mean only the first person of the day ever sees the welcome. The flag is cleared on
-// sign-out (useAuthGate) - at a booth, sign-out is the signal that the next visitor has arrived.
+// sessionStorage, not localStorage: a booth kiosk is one browser profile with many first-time
+// visitors, so a permanent "seen" flag would show the welcome to only the first person of the day.
 export const WELCOME_SEEN_KEY = 'leafy:welcome-seen'
 // "Watch the tour" intent has to survive the SSO round-trip (a full-page navigation), so it cannot live
 // in React state. DesktopShell consumes it once the session reports `authed` (Phase 2).

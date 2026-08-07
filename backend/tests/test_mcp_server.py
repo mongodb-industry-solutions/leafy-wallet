@@ -10,7 +10,6 @@ call dispatch), not just the underlying service functions directly.
 import asyncio
 import json
 import time
-import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -21,6 +20,7 @@ from db.client import get_db
 from mcp_server.server import mcp
 from services.embeddings import get_embedding
 from services.transactions import NOTE_EMBEDDING_INDEX
+from tests.conftest import unique as _unique
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -35,7 +35,7 @@ def _require_atlas():
 
 
 @pytest.fixture
-def _require_vector_index_and_ollama():
+def _require_vector_index_and_embeddings():
     """Same skip conditions as test_wallet_transactions_search.py - only
     needed for the search_transactions test, not the contacts ones."""
     db = get_db()
@@ -51,15 +51,11 @@ def _require_vector_index_and_ollama():
         )
 
     try:
-        embedding = asyncio.run(asyncio.wait_for(get_embedding("ollama reachability check"), timeout=5.0))
+        embedding = asyncio.run(asyncio.wait_for(get_embedding("embedding reachability check"), timeout=5.0))
     except asyncio.TimeoutError:
         embedding = None
     if embedding is None:
-        pytest.skip("Ollama unreachable; skipping semantic search tests")
-
-
-def _unique(prefix):
-    return f"{prefix}-{uuid.uuid4()}"
+        pytest.skip("Embedding provider unreachable; skipping semantic search tests")
 
 
 def _run(coro):
@@ -163,7 +159,7 @@ def test_search_transactions_missing_required_arg_is_error():
     assert result.isError is True
 
 
-def test_search_transactions_finds_semantically_similar_note(_require_vector_index_and_ollama):
+def test_search_transactions_finds_semantically_similar_note(_require_vector_index_and_embeddings):
     db = get_db()
     owner = _unique("mcp-search-owner")
     ref = _unique("mcp-search-ref")

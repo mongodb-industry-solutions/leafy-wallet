@@ -13,8 +13,8 @@ which removes the need for container-to-container networking configuration:
 | PSP frontend (login / consent) | `http://localhost:8083` |
 | PSP merchant demo | `http://localhost:8082` |
 
-Leafy Wallet remains in Docker (ObjectBox, Ollama, and the sync server stay containerized) and reaches
-the native PSP through the Docker host gateway.
+Leafy Wallet remains in Docker (ObjectBox, Ollama, leafy-embed, and the sync server stay
+containerized) and reaches the native PSP through the Docker host gateway.
 
 ---
 
@@ -42,7 +42,8 @@ The recommended local topology runs the PSP natively in development mode and Lea
 | Leafy Wallet | frontend (UI + BFF/OAuth client) | `http://localhost:8080` | Docker |
 | Leafy Wallet | backend (Atlas enrichment / chat / MCP) | `http://localhost:8000` | Docker |
 | Leafy Wallet | local store (ObjectBox) | `http://localhost:8090` | Docker |
-| Leafy Wallet | Ollama | `http://localhost:11434` | Docker |
+| Leafy Wallet | Ollama (chat model) | `http://localhost:11434` | Docker |
+| Leafy Wallet | leafy-embed (embeddings) | `http://localhost:8091` | Docker |
 | Leafy Wallet | ObjectBox sync | `9980` / `9999` | Docker |
 
 The PSP seeds two OAuth clients in `backend/data/merchants.json`:
