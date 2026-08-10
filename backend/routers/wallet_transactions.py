@@ -4,7 +4,7 @@ from db.client import get_db
 from db.mdb import MongoDBConnector
 from services.transactions import SemanticSearchUnavailable
 from services.transactions import list_transactions as list_transactions_service
-from services.transactions import search_transactions as search_transactions_service
+from services.transactions import hybrid_search_transactions
 from services.transactions import spending_by_contact as spending_by_contact_service
 from schemas.wallet_transactions import (
     SpendingByContact,
@@ -32,13 +32,10 @@ async def search_transactions(
     limit: int = Query(default=10, ge=1, le=50),
     db: MongoDBConnector = Depends(get_db),
 ):
-    """Semantic search over transaction notes via Atlas Vector Search.
-
-    Requires the `noteEmbedding_vector_index` index (see
-    scripts/create_vector_index.py) to already exist on `walletTransactions`.
-    """
+    """Hybrid search over the full transaction history: meaning and wording, fused by rank.
+    Needs both history indexes from scripts/create_vector_index.py."""
     try:
-        return await search_transactions_service(db, q, ownerPartyRef, limit)
+        return await hybrid_search_transactions(db, q, ownerPartyRef, limit)
     except SemanticSearchUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 

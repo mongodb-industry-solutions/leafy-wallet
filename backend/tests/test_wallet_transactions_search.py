@@ -1,15 +1,19 @@
 import asyncio
 import time
+import uuid
 from datetime import datetime, timezone
 
 import pytest
 from pymongo.errors import OperationFailure
 
 from db.client import get_db
-from services.transactions import NOTE_EMBEDDING_INDEX
+from services.transactions import HISTORY_COLLECTION, HISTORY_EMBEDDING_INDEX
 from services.embeddings import get_embedding
 
-COLLECTION = "walletTransactions"
+COLLECTION = HISTORY_COLLECTION
+
+# A unique (reference, owner) index means a fixed reference collides with any aborted run's leftovers.
+_unique = lambda prefix: f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 BASE = "/api/v1/wallet-transactions"
 
@@ -24,12 +28,8 @@ TRANSACTION_PAYLOAD = {
 
 
 def _seed(reference, note, owner=TRANSACTION_PAYLOAD["ownerPartyRef"]):
-    """Insert a searchable transaction straight into Atlas.
-
-    Writes reach this collection through ObjectBox Sync now, so there is no
-    HTTP write route to seed through; the embedding is generated here the way
-    the device generates it before syncing up.
-    """
+    """Seed history directly: there is no HTTP write route any more, so the embedding is generated
+    here the way the device generates it before syncing up."""
     db = get_db()
     doc = {
         **TRANSACTION_PAYLOAD,
@@ -39,6 +39,9 @@ def _seed(reference, note, owner=TRANSACTION_PAYLOAD["ownerPartyRef"]):
         "noteEmbedding": asyncio.run(get_embedding(note)),
         "createdAt": datetime.now(timezone.utc),
         "settledAt": None,
+        # Required by the response model; the Trigger always copies them across.
+        "leafyPayStatus": "settled",
+        "localSyncStatus": "synced",
     }
     doc["_id"] = db.insert_one(COLLECTION, doc)
     return doc
@@ -73,13 +76,13 @@ def _search_until(client, params, predicate, attempts=30, delay=2.0):
 def _require_vector_index_and_embeddings(client):
     db = get_db()
     try:
-        indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
+        indexes = list(db.get_collection(HISTORY_COLLECTION).list_search_indexes(HISTORY_EMBEDDING_INDEX))
     except OperationFailure as exc:
         pytest.skip(f"Atlas Vector Search not available on this cluster: {exc}")
 
     if not indexes or not indexes[0].get("queryable"):
         pytest.skip(
-            f"Vector search index '{NOTE_EMBEDDING_INDEX}' not provisioned/queryable; "
+            f"Vector search index '{HISTORY_EMBEDDING_INDEX}' not provisioned/queryable; "
             "run scripts/create_vector_index.py"
         )
 
@@ -95,8 +98,8 @@ def _require_vector_index_and_embeddings(client):
 
 
 def test_search_ranks_semantically_similar_note_first(client):
-    food = _seed("search-food", "Dinner with the team")
-    bill = _seed("search-bill", "Monthly rent payment")
+    food = _seed(_unique("search-food"), "Dinner with the team")
+    bill = _seed(_unique("search-bill"), "Monthly rent payment")
 
     try:
         results = _search_until(
@@ -113,8 +116,8 @@ def test_search_ranks_semantically_similar_note_first(client):
 
 
 def test_search_respects_owner_party_ref_filter(client):
-    mine = _seed("search-mine", "Dinner with the team")
-    other_owner = _seed("search-other-owner", "Dinner with the team", owner="someone-elses-party-ref")
+    mine = _seed(_unique("search-mine"), "Dinner with the team")
+    other_owner = _seed(_unique("search-other"), "Dinner with the team", owner=_unique("other-owner"))
 
     try:
         results = _search_until(
@@ -126,3 +129,36 @@ def test_search_respects_owner_party_ref_filter(client):
         assert all(r["ownerPartyRef"] == "search-test-owner" for r in results)
     finally:
         _drop(mine, other_owner)
+
+
+def test_search_matches_an_exact_term_a_paraphrase_would_miss(client):
+    """The lexical half: a distinctive token no other note shares, which ranking by meaning alone has
+    no signal for. The device has no lexical index, so this is answerable online only."""
+    token = _unique("zbrq").split("-")[1]
+    tagged = _seed(_unique("search-token"), f"Payment ref {token}")
+    decoy = _seed(_unique("search-decoy"), "Dinner with the team")
+
+    try:
+        results = _search_until(
+            client,
+            {"q": token, "ownerPartyRef": TRANSACTION_PAYLOAD["ownerPartyRef"]},
+            lambda results: any(r["note"] == tagged["note"] for r in results),
+        )
+        assert results[0]["note"] == tagged["note"]
+    finally:
+        _drop(tagged, decoy)
+
+
+def test_search_tolerates_a_misspelling(client):
+    """Fuzzy matching on the lexical branch, which an embedded typo does not reliably give."""
+    seeded = _seed(_unique("search-fuzzy"), "Monthly rent payment")
+
+    try:
+        results = _search_until(
+            client,
+            {"q": "rnet", "ownerPartyRef": TRANSACTION_PAYLOAD["ownerPartyRef"]},
+            lambda results: any(r["note"] == "Monthly rent payment" for r in results),
+        )
+        assert any(r["note"] == "Monthly rent payment" for r in results)
+    finally:
+        _drop(seeded)

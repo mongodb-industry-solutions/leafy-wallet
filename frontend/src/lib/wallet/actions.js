@@ -289,10 +289,7 @@ function toTransactionRow({ reference, counterpartyRef, contact, fallbackName, i
 }
 
 /** Transactions held on the device: synced down from Atlas, plus any send queued while offline. */
-/**
- * Rows for sends still waiting on Leafy Pay. They live in a device-only queue rather than
- * `walletTransactions`, so both read paths have to fold them in or a just-made payment is invisible.
- */
+/** Sends still waiting on Leafy Pay. Folded into both read paths, or a just-made payment is invisible. */
 async function pendingSendRows(owner, contactByRef) {
   const queued = await listPendingSends(owner ?? undefined).catch(() => [])
   return queued.map((p) =>
@@ -407,16 +404,15 @@ export async function getTransactions(isOnline = true) {
     )
   }
 
-  // A queue row surviving online means its replay failed, so it still has to be visible.
+  // A queue row surviving online means its replay failed; still show it.
   rows.push(...(await pendingSendRows(owner, contactByRef)))
   rows.sort(byNewestFirst)
   return rows
 }
 
 /**
- * Ask Leafy Pay to move the money, then write the resulting transaction to the device, where Sync
- * carries it to Atlas. Writing the row and retiring `queuedId` is one device transaction, so a
- * queued send can never survive its own settlement and replay twice.
+ * Move the money, then write the transaction to the device for Sync to carry up. Writing the row and
+ * retiring `queuedId` is one device transaction, so a queued send cannot replay twice.
  * @param {{ownerPartyRef?: string, counterpartyArrangementReference: string, amount: number, note?: string}} send
  * @param {{fromAccountReference?: string, queuedId?: number}} [options]
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
@@ -455,9 +451,8 @@ async function settleSend(send, { fromAccountReference, queuedId } = {}) {
 }
 
 /**
- * Send a P2P transfer. Online, Leafy Pay is asked first and the device is written with the real
- * reference, which Sync then carries up. Offline, the send waits in a device-only queue that Atlas
- * never sees, so `walletTransactions` only ever holds transfers Leafy Pay has actually accepted.
+ * Send a P2P transfer. Online, Leafy Pay first, then the device. Offline it waits in a device-only
+ * queue Atlas never sees, so `walletTransactions` only holds transfers Leafy Pay accepted.
  * @param {{counterpartyArrangementReference: string, fromAccountReference?: string, amount: number, note?: string, isOnline?: boolean}} input
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
@@ -514,8 +509,7 @@ export async function getTransferStatus(reference) {
 }
 
 /**
- * Record a transfer's settlement on the device, which Sync carries to Atlas. Leafy Pay is the only
- * source of settlement status; this just persists what it reported.
+ * Persist a transfer's settlement on the device. Leafy Pay is the only source of this status.
  * @param {string} reference - The `leafyPayTransferReference`.
  * @param {'completed'|'failed'} status
  */
@@ -819,11 +813,11 @@ async function bothRequestBoxes() {
 }
 
 /**
- * Write Leafy Pay's view of a request to the device, which Sync carries to Atlas. Updates the row in
- * place when one already exists so the other side's party ref is left as they wrote it.
+ * Write Leafy Pay's view of a request to the device, updating in place so the other side's party ref
+ * survives. `known` lets a caller pass rows it already read.
  * @param {object} request - A normalized request, tagged `isIncoming`.
  * @param {string|null} owner - The signed-in user's `sub`.
- * @param {object[]} [known] - Device rows already read by the caller, to avoid re-reading per request.
+ * @param {object[]} [known]
  */
 async function mirrorRequest(request, owner, known) {
   const doc = toRequestDoc(request, owner)
@@ -1106,8 +1100,7 @@ export async function getChats() {
 }
 
 /**
- * Start a chat. The reference is minted here because it is what messages are keyed by, on the device
- * and in Atlas alike.
+ * Start a chat. The reference is minted here because messages are keyed by it in both stores.
  * @param {string} title
  * @returns {Promise<{ok: boolean, chat?: object, error?: string}>}
  */
@@ -1149,8 +1142,7 @@ export async function getChatMessages(reference) {
 }
 
 /**
- * Delete a chat and its messages. The store cascades to the messages, and the deletion propagates to
- * Atlas through Sync.
+ * Delete a chat; the store cascades to its messages and the deletion propagates through Sync.
  * @param {string} reference - The `chatReference`.
  * @returns {Promise<{ok: boolean, error?: string}>}
  */

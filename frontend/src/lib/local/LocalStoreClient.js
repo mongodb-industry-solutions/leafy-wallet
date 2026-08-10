@@ -38,7 +38,7 @@ export async function listLocalContacts() {
 }
 
 /**
- * Save a contact on the device, which Sync then carries to Atlas.
+ * Save a contact on the device for Sync to carry up.
  * @param {object} contact - `{ ownerPartyRef, counterpartyArrangementReference, counterpartyLabel, counterpartyLookupType, counterpartyLookupHint }`.
  */
 export async function createLocalContact(contact) {
@@ -72,27 +72,23 @@ export async function localSpendingByContact({ ownerPartyRef, direction = 'sent'
 }
 
 /**
- * Write a transaction to the device, which Sync then carries to Atlas. Called once Leafy Pay has
- * accepted the transfer, so `leafyPayTransferReference` is the real one. The store embeds the note.
- * Pass `retirePendingSendId` to drop the queue row it came from in the same device transaction.
+ * Write a transaction to the device for Sync to carry up, once Leafy Pay has accepted it. Pass
+ * `retirePendingSendId` to drop its queue row in the same device transaction.
  * @param {object} tx - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note, leafyPayStatus, localSyncStatus, settledAt, retirePendingSendId }`.
  */
 export async function createLocalTransaction(tx) {
   return call('POST', '/transactions/send', tx)
 }
 
-/**
- * Sends composed on this device that Leafy Pay hasn't accepted yet. Local-only, so these never
- * reach Atlas.
- */
+/** Sends Leafy Pay hasn't accepted yet. Local-only, so these never reach Atlas. */
 export async function listPendingSends(ownerPartyRef) {
   const query = ownerPartyRef ? `?${new URLSearchParams({ ownerPartyRef })}` : ''
   return call('GET', `/pending-sends${query}`)
 }
 
 /**
- * Queue a send the device can't complete yet. No `leafyPayTransferReference`: there isn't one until
- * Leafy Pay accepts it, which is the whole reason this row is kept out of the synced collection.
+ * Queue a send with no `leafyPayTransferReference` - there isn't one until Leafy Pay accepts it,
+ * which is why this row is kept out of the synced collection.
  * @param {object} send - `{ ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
  */
 export async function createPendingSend(send) {
@@ -100,8 +96,7 @@ export async function createPendingSend(send) {
 }
 
 /**
- * Confirm a queued send in place once Leafy Pay has accepted it, so the real reference and status
- * sync up on the row that already exists.
+ * Update a transaction in place, so the change syncs up on the row that already exists.
  * @param {number} id
  * @param {{leafyPayTransferReference?: string, leafyPayStatus?: string, localSyncStatus?: string, settledAt?: number}} fields
  */
@@ -163,7 +158,7 @@ export async function createLocalRequest(request) {
 }
 
 /**
- * Record what Leafy Pay reports about a request. It owns the lifecycle; this only persists it.
+ * Record what Leafy Pay reports about a request; it owns the lifecycle.
  * @param {number} id
  * @param {{status?: string, localSyncStatus?: string, payerPartyRef?: string, requesterPartyRef?: string, leafyPayTransferReference?: string, resolvedAt?: number}} fields
  */

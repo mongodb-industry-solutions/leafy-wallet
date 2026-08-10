@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Reconcile is the only code that deletes wallet data, and a wrong filter deletes it silently. These
-// cover which rows it considers orphaned, which it must leave alone, and what it adopts.
+// Reconcile is the only code that deletes wallet data, and a wrong filter deletes it silently.
 vi.mock('@/lib/auth/session', () => ({ getSession: vi.fn(async () => ({ sub: 'owner-1' })) }))
 vi.mock('@/lib/psp/PspClient', () => ({
   sendToBeneficiary: vi.fn(),

@@ -514,11 +514,8 @@ struct LocalRequest {
     };
 };
 
-// A send composed on this device that Leafy Pay has not accepted yet. Purely local, like
-// LocalAccountBalance: deliberately no SYNC_ENABLED and no entry in
-// objectbox-sync-server/objectbox-model.json, so an unaccepted payment never reaches Atlas and
-// walletTransactions only ever receives rows carrying a real Leafy Pay reference. Retired by the
-// settlement step, which writes the real transaction and deletes the queue row.
+// A send Leafy Pay has not accepted yet. Local-only like LocalAccountBalance - no SYNC_ENABLED, no
+// entry in objectbox-model.json - so an unaccepted payment can never reach Atlas.
 struct LocalPendingSend {
     int64_t id = 0;
     std::string ownerPartyRef;
@@ -736,8 +733,7 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "payerCounterpartyRef", OBXPropertyType_String, 15, 7006000000000015ULL);
     obx_model_entity_last_property_id(model, 15, 7006000000000015ULL);
 
-    // Local-only, same as entity 5: no SYNC_ENABLED, so a send Leafy Pay has not accepted yet never
-    // reaches Atlas.
+    // Local-only, same as entity 5.
     obx_model_entity(model, "LocalPendingSend", 7, 7007000000000000ULL);
 
     obx_model_property(model, "id", OBXPropertyType_Long, 1, 7007000000000001ULL);
@@ -1190,15 +1186,13 @@ int main(int argc, char* argv[]) {
         if (!t.note.empty()) {
             t.noteEmbedding = get_embedding(t.note);
         }
-        // Defaults describe a send this device originated and Leafy Pay has not confirmed. The
-        // settlement step overrides both, since by then the row carries a real reference.
+        // Defaults describe an unconfirmed send; settlement overrides them with a real reference.
         t.leafyPayStatus = body.value("leafyPayStatus", "pending");
         t.localSyncStatus = body.value("localSyncStatus", "local_pending");
         t.createdAt = now_epoch_millis();
         t.settledAt = body.value("settledAt", (int64_t)0);
 
-        // One transaction, so a settled send can never exist alongside the queue row it came from:
-        // a crash between the two writes would otherwise replay the payment a second time.
+        // One transaction, so a crash cannot leave a settled send beside its own queue row.
         const int64_t retireId = body.value("retirePendingSendId", (int64_t)0);
         auto tx = store->txWrite();
         store->box<LocalTransaction>().put(t);
@@ -1209,8 +1203,7 @@ int main(int argc, char* argv[]) {
         res.set_content(transaction_to_json(t).dump(), "application/json");
     });
 
-    // The offline queue. Local-only, so nothing here is visible to Atlas until settlement promotes
-    // it into walletTransactions with a real Leafy Pay reference.
+    // The offline queue, invisible to Atlas until settlement promotes it to walletTransactions.
     svr.Get("/local/v1/pending-sends", [](const httplib::Request& req, httplib::Response& res) {
         const std::string owner = req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
         json results = json::array();
@@ -1267,8 +1260,7 @@ int main(int argc, char* argv[]) {
         res.status = 204;
     });
 
-    // Confirms a queued send once Leafy Pay has accepted it. The row keeps its identity and syncs
-    // the real reference up, rather than being deleted and rewritten.
+    // Records what Leafy Pay reports; the row keeps its identity rather than being rewritten.
     svr.Patch(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         json body;
         try {
@@ -1604,7 +1596,7 @@ int main(int argc, char* argv[]) {
         res.set_content(request_to_json(r).dump(), "application/json");
     });
 
-    // Leafy Pay owns a request's lifecycle, so this only ever records what it reports.
+    // Leafy Pay owns the lifecycle; this only records it.
     svr.Patch(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         json body;
         try {

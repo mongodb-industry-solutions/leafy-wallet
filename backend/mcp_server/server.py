@@ -15,13 +15,11 @@ mcp = FastMCP(
 
 @mcp.tool(name="search_transactions")
 async def _search_transactions_tool(q: str, owner_party_ref: str, limit: int = 10) -> list[dict]:
-    """Semantically search the user's past transactions by meaning, not exact text match.
-
-    Use for spending questions like "how much did I spend on restaurants" or
-    "find the coffee shop payment" - this searches transaction notes by meaning,
-    so it doesn't need the exact words used in the note.
-    """
-    return await transactions_service.search_transactions(get_db(), q, owner_party_ref, limit)
+    """Search the user's full transaction history. Matches notes by meaning, so the exact words are
+    not needed, and also matches exact terms and near-misspellings like a reference or merchant."""
+    return await transactions_service.hybrid_search_transactions(
+        get_db(), q, owner_party_ref, limit
+    )
 
 
 @mcp.tool(name="get_contacts")

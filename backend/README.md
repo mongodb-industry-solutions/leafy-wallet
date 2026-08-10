@@ -1,14 +1,14 @@
 # Leafy Wallet Backend
 
-**Leafy Wallet Backend is the enrichment API for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It is a [FastAPI](https://fastapi.tiangolo.com/) service, managed with [uv](https://docs.astral.sh/uv/), that owns the wallet data living in [MongoDB Atlas](https://www.mongodb.com/atlas): contacts, payment requests, chats, and the metadata plus semantic-search index for transactions. Balances and real transfers live in the Payment Platform (PSP), not here; this service holds no money-moving credentials.
+**Leafy Wallet Backend is the enrichment API for our offline-first wallet demo**, showcasing MongoDB features tailored for [Financial Services](https://www.mongodb.com/solutions/industries/financial-services). It is a [FastAPI](https://fastapi.tiangolo.com/) service, managed with [uv](https://docs.astral.sh/uv/), that owns the wallet data living in [MongoDB Atlas](https://www.mongodb.com/atlas): contacts, payment requests, chats, and transaction history with its search indexes. Balances and real transfers live in the Payment Platform (PSP), not here; this service holds no money-moving credentials.
 
 ## Components and Features:
 
 1. **Wallet collections API**
-   - CRUD routers for contacts, requests, transactions enrichment, chats, and chat messages.
+   - Read-only routers for contacts, requests, and transactions. Writes reach Atlas through ObjectBox Sync, not through here.
 
-2. **Semantic search**
-   - Transaction notes are embedded with Voyage AI (`voyage-4-nano`) and searched with Atlas `$vectorSearch`.
+2. **Hybrid search**
+   - Transaction notes are embedded with Voyage AI (`voyage-4-nano`) and searched with `$rankFusion`, fusing Atlas Vector Search and Atlas Search.
 
 3. **Spending summaries**
    - Per-contact totals computed by the aggregation framework, so clients (and the AI assistant) never sum rows themselves.
@@ -18,10 +18,10 @@
 
 ## Where Does MongoDB Shine?
 
-Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts`, `/wallet-requests`, `/wallet-transactions`, `/chats`, and `/chat-messages`. The `/wallet-transactions/search` endpoint queries the vector index directly, and `/wallet-transactions/summary` runs the spending aggregation.
+Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts`, `/wallet-requests`, and `/wallet-transactions`. All are GET-only. `/wallet-transactions/search` runs hybrid search over `walletTransactionsHistory`, and `/wallet-transactions/summary` runs the spending aggregation.
 
 - **Flexible schema** lets enrichment documents evolve (notes, embeddings, settlement metadata) without migrations.
-- **Atlas Vector Search** powers meaning-based transaction search from a single index definition.
+- **Hybrid search** fuses Atlas Vector Search and Atlas Search over `walletTransactionsHistory`, so meaning, exact terms and typos all resolve. The device has vector search only.
 - **Aggregation pipelines** compute spending-by-contact server-side, keeping arithmetic out of the LLM.
 - **The document model** mirrors the on-device ObjectBox entities one-to-one, which is what makes the sync story clean.
 

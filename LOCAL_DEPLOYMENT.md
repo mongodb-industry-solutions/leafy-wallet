@@ -60,10 +60,10 @@ The PSP seeds two OAuth clients in `backend/data/merchants.json`:
 
 - **Docker Desktop**, which provides the `host.docker.internal` gateway used by the wallet container.
 - **Node.js**, to run the native PSP.
-- **`uv`**, to run the Leafy Wallet backend tooling (for example, the vector search index script).
+- **`uv`**, to run the Leafy Wallet backend tooling (for example, the search index script).
 - A **MongoDB Atlas cluster** with **two separate databases** — one per project:
   - A **PSP** database (including Queryable Encryption).
-  - A **Leafy Wallet** database, used by the Leafy Wallet backend for data enrichment and vector search.
+  - A **Leafy Wallet** database, used by the Leafy Wallet backend for data enrichment and search.
 
   Each project references its own database through its own environment file; the connection strings are
   not shared between projects. A single Atlas cluster may host both databases.
@@ -167,7 +167,7 @@ npm run setup:seed  # seed demo data (users, OAuth clients, providers)
 npm run dev         # backend:8081, frontend:8083, merchant:8082
 ```
 
-Create the Leafy Wallet vector search indexes (first run only):
+Create the Leafy Wallet search indexes (first run only):
 
 ```bash
 cd leafy-wallet/backend

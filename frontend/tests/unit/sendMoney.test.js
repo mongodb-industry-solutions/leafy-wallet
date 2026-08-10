@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// The orchestration these cover is where money moves, so every collaborator is mocked and the
-// assertions are about ordering and arguments rather than any store's contents.
+// Every collaborator is mocked; the assertions are about ordering and arguments, not stored data.
 vi.mock('@/lib/auth/session', () => ({ getSession: vi.fn(async () => ({ sub: 'owner-1' })) }))
 vi.mock('@/lib/psp/PspClient', () => ({
   sendToBeneficiary: vi.fn(),
@@ -153,8 +152,7 @@ describe('replayPendingSends', () => {
 
     const result = await replayPendingSends()
 
-    // retirePendingSendId is what makes create-and-retire atomic; without it a crash between the
-    // two writes would replay the payment again.
+    // retirePendingSendId is what makes create-and-retire atomic.
     expect(local.createLocalTransaction.mock.calls[0][0]).toMatchObject({
       leafyPayTransferReference: 'lp-replayed',
       retirePendingSendId: 7,

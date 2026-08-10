@@ -19,7 +19,7 @@ from pymongo.errors import OperationFailure
 from db.client import get_db
 from mcp_server.server import mcp
 from services.embeddings import get_embedding
-from services.transactions import NOTE_EMBEDDING_INDEX
+from services.transactions import HISTORY_COLLECTION, HISTORY_EMBEDDING_INDEX
 from tests.conftest import unique as _unique
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -40,13 +40,13 @@ def _require_vector_index_and_embeddings():
     needed for the search_transactions test, not the contacts ones."""
     db = get_db()
     try:
-        indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
+        indexes = list(db.get_collection(HISTORY_COLLECTION).list_search_indexes(HISTORY_EMBEDDING_INDEX))
     except OperationFailure as exc:
         pytest.skip(f"Atlas Vector Search not available on this cluster: {exc}")
 
     if not indexes or not indexes[0].get("queryable"):
         pytest.skip(
-            f"Vector search index '{NOTE_EMBEDDING_INDEX}' not provisioned/queryable; "
+            f"Vector search index '{HISTORY_EMBEDDING_INDEX}' not provisioned/queryable; "
             "run scripts/create_vector_index.py"
         )
 
@@ -164,7 +164,7 @@ def test_search_transactions_finds_semantically_similar_note(_require_vector_ind
     owner = _unique("mcp-search-owner")
     ref = _unique("mcp-search-ref")
     db.insert_one(
-        "walletTransactions",
+        HISTORY_COLLECTION,
         {
             "leafyPayTransferReference": ref,
             "ownerPartyRef": owner,
@@ -201,4 +201,4 @@ def test_search_transactions_finds_semantically_similar_note(_require_vector_ind
             time.sleep(2.0)
         assert found, "transaction never appeared in semantic search results"
     finally:
-        db.delete_many("walletTransactions", {"leafyPayTransferReference": ref})
+        db.delete_many(HISTORY_COLLECTION, {"leafyPayTransferReference": ref})
