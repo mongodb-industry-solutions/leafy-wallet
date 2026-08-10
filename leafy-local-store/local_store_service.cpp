@@ -551,8 +551,8 @@ const int EMBEDDING_DIMENSIONS = 1024;
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
-    // Every entity name below doubles as the target MongoDB collection name in the Sync Server's
-    // bridge (confirmed empirically), which is why they match the FastAPI backend's collections.
+    // A SYNC_ENABLED entity's name doubles as its target MongoDB collection name in the Sync
+    // Server's bridge (confirmed empirically), hence the match with the backend's collections.
     obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 

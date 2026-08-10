@@ -31,7 +31,7 @@ export function useConnection() {
       })
       if (!res.ok) throw new Error(`sync toggle failed: ${res.status}`)
     } catch {
-      setOverride(isOnline)
+      setOverride((current) => (current === nextIsOnline ? !nextIsOnline : current))
     }
   }, [isOnline])
 
