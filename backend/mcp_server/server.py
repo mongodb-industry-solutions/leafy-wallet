@@ -3,6 +3,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from db.client import get_db
 from services import contacts as contacts_service
+from services import fraud as fraud_service
 from services import transactions as transactions_service
 
 # Read-only over Atlas: money lives in Leafy Pay, which this service has no credentials for.
@@ -61,3 +62,13 @@ def _list_transactions_tool(
     "show my payments"). For questions about what a payment was *for*, use search_transactions.
     """
     return transactions_service.list_transactions(get_db(), owner_party_ref, direction, limit=limit)
+
+
+@mcp.tool(name="get_transaction_velocity")
+def _transaction_velocity_tool(owner_party_ref: str) -> list[dict]:
+    """Find bursts of payments sent in quick succession, a common sign of a compromised account.
+
+    Use for questions about unusual, suspicious or unexpected activity. Returns the payments involved
+    with how many were sent in the surrounding window; an empty list means nothing unusual was found.
+    """
+    return fraud_service.transaction_velocity(get_db(), owner_party_ref)

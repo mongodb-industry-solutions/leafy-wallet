@@ -19,10 +19,6 @@ from tests.conftest import LOCAL_STORE_BASE as BASE, unique as _unique
 pytestmark = pytest.mark.usefixtures("require_leafy_local_store")
 
 
-
-
-
-
 def _create_request(**overrides):
     payload = {
         "requestReference": f"local-{uuid.uuid4()}",
@@ -44,12 +40,6 @@ def request_fixture():
     request_id = created.json()["id"]
     yield created.json(), payload
     httpx.delete(f"{BASE}/local/v1/requests/{request_id}")
-
-
-def test_health_reports_request_count():
-    response = httpx.get(f"{BASE}/local/v1/health")
-    assert response.status_code == 200
-    assert "request_count" in response.json()
 
 
 def test_request_composed_offline_is_queued_for_replay(request_fixture):

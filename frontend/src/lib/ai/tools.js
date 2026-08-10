@@ -145,7 +145,16 @@ function buildMcpReadTools(mcp, owner, charts) {
     return rows.map(toMcpRow).join('\n')
   }, CONTRACTS.recent)
 
-  return [listContacts, spendingByContact, searchTx, recentTx]
+  // No offline twin: the window aggregation behind it has no ObjectBox equivalent.
+  const velocity = tool(async () => {
+    const rows = await call('get_transaction_velocity', {})
+    if (rows.length === 0) return 'No unusual payment bursts found.'
+    return rows
+      .map((t) => `${dayOf(t.createdAt)}: ${money(t.amount)} sent, ${t.sendsInWindow} payments in the surrounding window`)
+      .join('\n')
+  }, CONTRACTS.velocity)
+
+  return [listContacts, spendingByContact, searchTx, recentTx, velocity]
 }
 
 /**

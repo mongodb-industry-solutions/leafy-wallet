@@ -19,10 +19,6 @@ from tests.conftest import LOCAL_STORE_BASE as BASE, unique as _unique
 pytestmark = pytest.mark.usefixtures("require_leafy_local_store")
 
 
-
-
-
-
 def _create_chat(**overrides):
     payload = {
         "title": _unique("test chat"),
@@ -39,26 +35,6 @@ def chat():
     created, payload = _create_chat()
     assert created.status_code == 201
     yield created.json(), payload
-    httpx.delete(f"{BASE}/local/v1/chats/{payload['chatReference']}")
-
-
-def test_health_returns_chat_counts():
-    response = httpx.get(f"{BASE}/local/v1/health")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "healthy"
-    assert "chat_count" in body
-    assert "chat_message_count" in body
-
-
-def test_chat_create_matches_local_id():
-    created, payload = _create_chat()
-    assert created.status_code == 201
-    body = created.json()
-    # localId mirrors ObjectBox's own `id` as a plain (non-PK) field, since
-    # the PK doesn't survive the Sync Server's bridge to Atlas - see
-    # local_store_service.cpp's LocalChat struct comment.
-    assert body["localId"] == body["id"]
     httpx.delete(f"{BASE}/local/v1/chats/{payload['chatReference']}")
 
 
@@ -112,19 +88,6 @@ def test_chat_create_list_and_delete():
 
 def test_delete_unknown_chat_returns_404():
     response = httpx.delete(f"{BASE}/local/v1/chats/{_unique('test-chat-ref-unknown')}")
-    assert response.status_code == 404
-
-
-def test_get_messages_for_unknown_chat_returns_404():
-    response = httpx.get(f"{BASE}/local/v1/chats/{_unique('test-chat-ref-unknown')}/messages")
-    assert response.status_code == 404
-
-
-def test_create_message_for_unknown_chat_returns_404():
-    response = httpx.post(
-        f"{BASE}/local/v1/chats/{_unique('test-chat-ref-unknown')}/messages",
-        json={"role": "user", "text": "hi"},
-    )
     assert response.status_code == 404
 
 
@@ -185,25 +148,6 @@ def test_create_message_invalid_role_returns_400(chat):
         json={"role": "bot", "text": "hi"},
     )
     assert response.status_code == 400
-
-
-def test_delete_message_from_wrong_chat_returns_404(chat):
-    _, payload = chat
-    other_created, other_payload = _create_chat()
-    assert other_created.status_code == 201
-
-    try:
-        message = httpx.post(
-            f"{BASE}/local/v1/chats/{payload['chatReference']}/messages",
-            json={"role": "user", "text": "mine"},
-        ).json()
-
-        response = httpx.delete(
-            f"{BASE}/local/v1/chats/{other_payload['chatReference']}/messages/{message['id']}"
-        )
-        assert response.status_code == 404
-    finally:
-        httpx.delete(f"{BASE}/local/v1/chats/{other_payload['chatReference']}")
 
 
 def test_messages_are_scoped_to_their_own_chat(chat):

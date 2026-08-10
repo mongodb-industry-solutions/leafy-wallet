@@ -1,6 +1,5 @@
 import asyncio
 import time
-import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -9,12 +8,9 @@ from pymongo.errors import OperationFailure
 from db.client import get_db
 from services.transactions import HISTORY_COLLECTION, HISTORY_EMBEDDING_INDEX
 from services.embeddings import get_embedding
+from tests.conftest import unique as _unique
 
 COLLECTION = HISTORY_COLLECTION
-
-# A unique (reference, owner) index means a fixed reference collides with any aborted run's leftovers.
-_unique = lambda prefix: f"{prefix}-{uuid.uuid4().hex[:8]}"
-
 BASE = "/api/v1/wallet-transactions"
 
 TRANSACTION_PAYLOAD = {
