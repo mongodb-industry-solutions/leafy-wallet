@@ -15,10 +15,12 @@ import {
   cleanNote,
   formatCategory,
   formatSpending,
+  formatVelocity,
   money,
   noteGuardMessage,
   pushCategoryChart,
   pushSpendingChart,
+  pushVelocityChart,
   resolveDraft,
 } from './toolkit'
 
@@ -145,7 +147,15 @@ function buildMcpReadTools(mcp, owner, charts) {
     return rows.map(toMcpRow).join('\n')
   }, CONTRACTS.recent)
 
-  return [listContacts, spendingByContact, searchTx, recentTx]
+  // No offline twin: the window aggregation behind it has no ObjectBox equivalent.
+  const velocity = tool(async () => {
+    const rows = await call('get_transaction_velocity', {})
+    if (rows.length === 0) return 'No unusual payment bursts found.'
+    pushVelocityChart(charts, rows)
+    return formatVelocity(rows)
+  }, CONTRACTS.velocity)
+
+  return [listContacts, spendingByContact, searchTx, recentTx, velocity]
 }
 
 /**

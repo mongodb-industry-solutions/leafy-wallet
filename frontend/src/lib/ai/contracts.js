@@ -10,6 +10,14 @@ export const CONTRACTS = {
     description: "The user's account balances. Use for 'how much do I have', 'what's my balance'.",
     schema: z.object({}),
   },
+  velocity: {
+    name: 'get_transaction_velocity',
+    description:
+      "Bursts of payments sent in quick succession, which can mean a compromised account. Use for " +
+      "'anything unusual', 'suspicious activity', 'did anyone use my account'. Online only: the " +
+      'device cannot compute this. An empty result means nothing unusual was found.',
+    schema: z.object({}),
+  },
   contacts: {
     name: 'list_contacts',
     description:

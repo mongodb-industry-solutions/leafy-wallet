@@ -14,10 +14,10 @@ const totalOf = (rows) => rows.reduce((sum, r) => sum + r.total, 0)
 const currencyOf = (rows) => rows[0].currency ?? 'EUR'
 
 // One breakdown as a chart card: the bars are capped, and `toLabel` names each row.
-function pushChart(charts, title, rows, toLabel) {
+function pushChart(charts, title, rows, toLabel, toValue = (r) => r.total) {
   charts.push({
     title,
-    rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: toLabel(r), value: r.total })),
+    rows: rows.slice(0, CHART_MAX_ROWS).map((r) => ({ label: toLabel(r), value: toValue(r) })),
   })
 }
 
@@ -49,6 +49,27 @@ export function formatCategory(rows) {
   const currency = currencyOf(rows)
   const lines = rows.map((r) => `${r.emoji} ${r.category}: ${money(r.total, currency)} across ${r.count} payment(s)`)
   const header = `Total spent: ${money(totalOf(rows), currency)} across ${rows.length} categories.`
+  return [header, ...lines].join('\n')
+}
+
+/** Record a flagged burst for the inline card: one bar per payment, so the cluster is visible. */
+export function pushVelocityChart(charts, rows) {
+  pushChart(
+    charts,
+    'Payments in a short burst',
+    rows,
+    (r) => new Date(r.createdAt).toISOString().slice(11, 16),
+    (r) => r.amount,
+  )
+}
+
+/** Text form of a flagged burst, leading with the worst window the model should quote. */
+export function formatVelocity(rows) {
+  const busiest = Math.max(...rows.map((r) => r.sendsInWindow))
+  const lines = rows.map(
+    (r) => `${new Date(r.createdAt).toISOString().slice(0, 16).replace('T', ' ')}: ${money(r.amount, r.currency)}`,
+  )
+  const header = `${rows.length} payment(s) flagged, up to ${busiest} sent inside one short window.`
   return [header, ...lines].join('\n')
 }
 

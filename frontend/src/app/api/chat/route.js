@@ -40,9 +40,8 @@ export async function POST(request) {
     const reply = typeof last?.content === 'string' ? last.content : ''
     // The tools pushed any drafts/charts into these arrays while the graph ran.
     return Response.json({ reply, drafts, charts }, { headers: { 'Cache-Control': 'no-store' } })
-  } catch (error) {
+  } catch {
     // Keep transport details (upstream URLs, driver errors) out of the chat bubble.
-    console.error('[chat] turn failed', error)
     return Response.json({ error: 'The assistant could not complete that turn.' }, { status: 500 })
   }
 }
