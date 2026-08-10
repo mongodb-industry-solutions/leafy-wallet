@@ -27,28 +27,6 @@ RequestStatus = Literal[
 LocalSyncStatus = Literal["synced", "local_pending"]
 
 
-class WalletRequestUpsert(BaseModel):
-    """Inbound payload for POST /wallet-requests.
-
-    Leafy Pay owns requests; this is the offline replica. Writes are upserts keyed by
-    `requestReference` so re-reading a request converges instead of duplicating it.
-    """
-
-    requestReference: str
-    requesterPartyRef: str
-    requesterName: str
-    payerPartyRef: str = ""
-    payerCounterpartyRef: str = ""
-    amount: float = Field(gt=0)
-    currency: str = "EUR"
-    note: str | None = None
-    status: RequestStatus
-    localSyncStatus: LocalSyncStatus = "synced"
-    leafyPayTransferReference: str | None = None
-    createdAt: datetime | None = None
-    resolvedAt: datetime | None = None
-
-
 class WalletRequestOut(BaseModel):
     """Outbound shape: the full stored replica document."""
 

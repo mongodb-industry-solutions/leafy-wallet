@@ -17,30 +17,19 @@ import {
 } from '@/lib/psp/PspClient'
 import { classifyNotes, emojiForCategory } from '@/lib/wallet/categories'
 import {
-  createContactEnrichment,
-  createTransactionEnrichment,
-  deleteContactEnrichment,
-  deleteRequestDoc,
-  deleteTransactionEnrichment,
   listContactEnrichment,
-  listRequestDocs,
-  createChatDoc,
-  createChatMessageDoc,
-  deleteChatDoc,
-  listChatDocs,
-  listChatMessageDocs,
   listTransactionEnrichment,
   searchTransactionEnrichment,
   spendingByContactEnrichment,
-  updateTransactionEnrichment,
-  upsertRequestDoc,
 } from '@/lib/backend/enrichment'
 import {
   cacheAccount,
   createLocalChat,
   createLocalChatMessage,
+  createLocalContact,
   createLocalRequest,
   deleteLocalChat,
+  deleteLocalContact,
   deleteLocalRequest,
   deleteLocalTransaction,
   listLocalAccounts,
@@ -50,8 +39,12 @@ import {
   listLocalRequests,
   listLocalTransactions,
   localSpendingByContact,
-  queueLocalSend,
+  createLocalTransaction,
+  createPendingSend,
+  listPendingSends,
   searchLocalTransactions,
+  updateLocalRequest,
+  updateLocalTransaction,
 } from '@/lib/local/LocalStoreClient'
 import { detectLookupType } from './contacts'
 import { isAwaitingPayer, toRequestPaymentRows, toRequestStatus } from './requests'
@@ -146,6 +139,15 @@ export async function getAccounts(isOnline = true) {
   return accounts.map(toAccountView)
 }
 
+/** The device row for a Leafy Pay beneficiary, which Sync carries to `walletContacts`. */
+const toContactRow = (owner, b) => ({
+  ownerPartyRef: owner,
+  counterpartyArrangementReference: b.reference,
+  counterpartyLabel: b.label,
+  counterpartyLookupType: b.lookupType,
+  counterpartyLookupHint: b.lookupHint,
+})
+
 /** Shape a Leafy Pay beneficiary into the UI contact used across the app. */
 function toContactView(b) {
   return {
@@ -172,13 +174,7 @@ async function resolveContacts(owner, { backfill = false } = {}) {
     const missing = beneficiaries.filter((b) => !atlasByRef.has(b.reference))
     await Promise.all(
       missing.map((b) =>
-        createContactEnrichment({
-          ownerPartyRef: owner,
-          counterpartyArrangementReference: b.reference,
-          counterpartyLabel: b.label,
-          counterpartyLookupType: b.lookupType,
-          counterpartyLookupHint: b.lookupHint,
-        })
+        createLocalContact(toContactRow(owner, b))
           .then((doc) => atlasByRef.set(b.reference, doc))
           .catch(() => {}),
       ),
@@ -247,15 +243,9 @@ export async function addContact({ lookupValue, label = '' } = {}) {
   const owner = await ownerRef()
   if (owner) {
     try {
-      await createContactEnrichment({
-        ownerPartyRef: owner,
-        counterpartyArrangementReference: beneficiary.reference,
-        counterpartyLabel: beneficiary.label,
-        counterpartyLookupType: beneficiary.lookupType,
-        counterpartyLookupHint: beneficiary.lookupHint,
-      })
+      await createLocalContact(toContactRow(owner, beneficiary))
     } catch {
-      return { ok: false, error: 'Could not save the contact - is the backend running?' }
+      return { ok: false, error: 'Could not save the contact on this device.' }
     }
   }
 
@@ -267,8 +257,9 @@ export async function addContact({ lookupValue, label = '' } = {}) {
 // Leafy Pay stamps this on a P2P transfer that was sent without a note; treated here as "no note".
 const DEFAULT_REMITTANCE = 'P2P transfer via beneficiary portal'
 
-// A send buffered on the device, carrying a stand-in reference until the replay swaps in the real one.
+// A send buffered on the device, carrying a stand-in reference until settlement swaps in the real one.
 const LOCAL_PENDING = 'local_pending'
+const LOCAL_SYNCED = 'synced'
 const LOCAL_REFERENCE_PREFIX = 'local-'
 
 // `walletTransactions.leafyPayStatus` for a transfer Leafy Pay reports as `completed`.
@@ -298,6 +289,28 @@ function toTransactionRow({ reference, counterpartyRef, contact, fallbackName, i
 }
 
 /** Transactions held on the device: synced down from Atlas, plus any send queued while offline. */
+/**
+ * Rows for sends still waiting on Leafy Pay. They live in a device-only queue rather than
+ * `walletTransactions`, so both read paths have to fold them in or a just-made payment is invisible.
+ */
+async function pendingSendRows(owner, contactByRef) {
+  const queued = await listPendingSends(owner ?? undefined).catch(() => [])
+  return queued.map((p) =>
+    toTransactionRow({
+      reference: `${LOCAL_REFERENCE_PREFIX}${p.id}`,
+      counterpartyRef: p.counterpartyArrangementReference,
+      contact: contactByRef.get(p.counterpartyArrangementReference),
+      isReceived: p.direction === 'received',
+      magnitude: Math.abs(p.amount),
+      currency: p.currency,
+      note: p.note,
+      createdAt: p.createdAt ? new Date(p.createdAt).toISOString() : null,
+      status: LOCAL_PENDING,
+      isPending: true,
+    }),
+  )
+}
+
 async function localTransactions(owner) {
   const [transactions, contacts] = await Promise.all([
     listLocalTransactions().catch(() => []),
@@ -323,6 +336,7 @@ async function localTransactions(owner) {
         isPending: status !== 'completed',
       })
     })
+  rows.push(...(await pendingSendRows(owner, contactByRef)))
   rows.sort(byNewestFirst)
   return rows
 }
@@ -344,17 +358,20 @@ export async function getTransactions(isOnline = true) {
   const contactByRef = new Map(contacts.map((c) => [c.reference, c]))
   const enrichByRef = new Map(enrichment.map((e) => [e.leafyPayTransferReference, e]))
 
-  // Settling can outlast the send flow's watcher, leaving pending enrichment stale.
+  // Settling can outlast the send flow's watcher, leaving a stale pending row behind.
+  const localByRef = new Map(
+    (await listLocalTransactions().catch(() => [])).map((t) => [t.leafyPayTransferReference, t]),
+  )
   await Promise.all(
     transactions
       .filter((t) => {
-        const enrich = enrichByRef.get(t.reference)
-        return t.status === 'completed' && enrich?.id && enrich.leafyPayStatus !== SETTLED_STATUS
+        const local = localByRef.get(t.reference)
+        return t.status === 'completed' && local?.id && local.leafyPayStatus !== SETTLED_STATUS
       })
       .map((t) =>
-        updateTransactionEnrichment(enrichByRef.get(t.reference).id, {
+        updateLocalTransaction(localByRef.get(t.reference).id, {
           leafyPayStatus: SETTLED_STATUS,
-          settledAt: t.createdAt ?? new Date().toISOString(),
+          settledAt: t.createdAt ? new Date(t.createdAt).getTime() : Date.now(),
         }).catch(() => {}),
       ),
   )
@@ -390,13 +407,57 @@ export async function getTransactions(isOnline = true) {
     )
   }
 
+  // A queue row surviving online means its replay failed, so it still has to be visible.
+  rows.push(...(await pendingSendRows(owner, contactByRef)))
   rows.sort(byNewestFirst)
   return rows
 }
 
 /**
- * Send a P2P transfer. Leafy Pay moves the money, then the note goes to Atlas best-effort, since the
- * money has already moved. Offline sends are buffered on the device and replayed on reconnect.
+ * Ask Leafy Pay to move the money, then write the resulting transaction to the device, where Sync
+ * carries it to Atlas. Writing the row and retiring `queuedId` is one device transaction, so a
+ * queued send can never survive its own settlement and replay twice.
+ * @param {{ownerPartyRef?: string, counterpartyArrangementReference: string, amount: number, note?: string}} send
+ * @param {{fromAccountReference?: string, queuedId?: number}} [options]
+ * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
+ */
+async function settleSend(send, { fromAccountReference, queuedId } = {}) {
+  let transfer
+  try {
+    transfer = await sendToBeneficiary(send.counterpartyArrangementReference, {
+      amount: send.amount,
+      note: send.note || '',
+      fromAccountRef: fromAccountReference,
+    })
+  } catch (e) {
+    return { ok: false, error: e?.body || 'Transfer failed. Please try again.' }
+  }
+
+  try {
+    await createLocalTransaction({
+      leafyPayTransferReference: transfer.reference,
+      ownerPartyRef: send.ownerPartyRef ?? '',
+      counterpartyArrangementReference: send.counterpartyArrangementReference,
+      amount: send.amount,
+      currency: 'EUR',
+      direction: 'sent',
+      note: send.note || '',
+      leafyPayStatus: toEnrichmentStatus(transfer.status),
+      localSyncStatus: LOCAL_SYNCED,
+      settledAt: transfer.status === 'completed' ? Date.now() : 0,
+      retirePendingSendId: queuedId,
+    })
+  } catch {
+    return { ok: false, error: 'Payment sent, but saving it on this device failed.' }
+  }
+
+  return { ok: true, reference: transfer.reference, status: transfer.status }
+}
+
+/**
+ * Send a P2P transfer. Online, Leafy Pay is asked first and the device is written with the real
+ * reference, which Sync then carries up. Offline, the send waits in a device-only queue that Atlas
+ * never sees, so `walletTransactions` only ever holds transfers Leafy Pay has actually accepted.
  * @param {{counterpartyArrangementReference: string, fromAccountReference?: string, amount: number, note?: string, isOnline?: boolean}} input
  * @returns {Promise<{ok: boolean, reference?: string, status?: string, error?: string}>}
  */
@@ -411,55 +472,24 @@ export async function sendMoney({
     return { ok: false, error: 'A recipient and an amount are required' }
   }
 
+  const owner = await ownerRef()
+  const send = {
+    ownerPartyRef: owner ?? '',
+    counterpartyArrangementReference,
+    amount,
+    note: note || '',
+  }
+
   if (!isOnline) {
-    const owner = await ownerRef()
-    const reference = `${LOCAL_REFERENCE_PREFIX}${randomUUID()}`
     try {
-      await queueLocalSend({
-        leafyPayTransferReference: reference,
-        ownerPartyRef: owner ?? '',
-        counterpartyArrangementReference,
-        amount,
-        currency: 'EUR',
-        direction: 'sent',
-        note: note || '',
-      })
-      return { ok: true, reference, status: LOCAL_PENDING }
+      const queued = await createPendingSend({ ...send, currency: 'EUR', direction: 'sent' })
+      return { ok: true, reference: `${LOCAL_REFERENCE_PREFIX}${queued.id}`, status: LOCAL_PENDING }
     } catch {
       return { ok: false, error: 'Could not queue the payment on this device.' }
     }
   }
 
-  let transfer
-  try {
-    transfer = await sendToBeneficiary(counterpartyArrangementReference, {
-      amount,
-      note,
-      fromAccountRef: fromAccountReference,
-    })
-  } catch (e) {
-    return { ok: false, error: e?.body || 'Transfer failed. Please try again.' }
-  }
-
-  const owner = await ownerRef()
-  if (transfer.reference && owner) {
-    try {
-      await createTransactionEnrichment({
-        leafyPayTransferReference: transfer.reference,
-        ownerPartyRef: owner,
-        counterpartyArrangementReference,
-        amount,
-        currency: 'EUR',
-        note: note || null,
-        direction: 'sent',
-        leafyPayStatus: transfer.status === 'completed' ? SETTLED_STATUS : 'pending',
-      })
-    } catch {
-      return { ok: false, error: 'Payment sent, but saving it failed - is the backend running?' }
-    }
-  }
-
-  return { ok: true, reference: transfer.reference, status: transfer.status }
+  return settleSend(send, { fromAccountReference })
 }
 
 /**
@@ -484,7 +514,8 @@ export async function getTransferStatus(reference) {
 }
 
 /**
- * Record a transfer's settlement in Atlas; Leafy Pay is the only source of settlement status.
+ * Record a transfer's settlement on the device, which Sync carries to Atlas. Leafy Pay is the only
+ * source of settlement status; this just persists what it reported.
  * @param {string} reference - The `leafyPayTransferReference`.
  * @param {'completed'|'failed'} status
  */
@@ -492,12 +523,14 @@ export async function markTransferSettled(reference, status) {
   const owner = await ownerRef()
   if (!owner || !reference) return
   try {
-    const docs = await listTransactionEnrichment(owner)
-    const match = (docs ?? []).find((d) => d.leafyPayTransferReference === reference)
+    const rows = await listLocalTransactions()
+    const match = (rows ?? []).find(
+      (t) => t.leafyPayTransferReference === reference && (!owner || t.ownerPartyRef === owner),
+    )
     if (!match?.id) return
-    await updateTransactionEnrichment(match.id, {
+    await updateLocalTransaction(match.id, {
       leafyPayStatus: status === 'completed' ? SETTLED_STATUS : 'failed',
-      settledAt: new Date().toISOString(),
+      settledAt: Date.now(),
     })
   } catch {
     // Non-fatal: Leafy Pay still has the status, and a later poll retries.
@@ -505,38 +538,33 @@ export async function markTransferSettled(reference, status) {
 }
 
 /**
- * Send each `local_pending` transaction for real, then drop the local record, whose deletion
- * propagates through Sync. A failed replay keeps its record for the next reconnect.
+ * Send each queued payment for real, writing the confirmed transaction and retiring the queue row. A
+ * failed replay leaves its row queued for the next reconnect.
  * @returns {Promise<{replayed: number, failed: number, references: string[]}>}
  */
 export async function replayPendingSends() {
   const owner = await ownerRef()
-  const transactions = await listLocalTransactions().catch(() => [])
-  const pending = transactions.filter(
-    (t) => t.localSyncStatus === LOCAL_PENDING && (!owner || t.ownerPartyRef === owner),
-  )
+  const queued = await listPendingSends(owner ?? undefined).catch(() => [])
 
   let replayed = 0
   let failed = 0
   const references = []
-  for (const t of pending) {
-    const sent = await sendMoney({
-      counterpartyArrangementReference: t.counterpartyArrangementReference,
-      amount: t.amount,
-      note: t.note || '',
-    })
-    if (!sent.ok) {
+  for (const p of queued) {
+    const settled = await settleSend(
+      {
+        ownerPartyRef: p.ownerPartyRef,
+        counterpartyArrangementReference: p.counterpartyArrangementReference,
+        amount: p.amount,
+        note: p.note || '',
+      },
+      { queuedId: p.id },
+    )
+    if (!settled.ok) {
       failed += 1
       continue
     }
-    if (sent.reference) references.push(sent.reference)
-    try {
-      await deleteLocalTransaction(t.id)
-      replayed += 1
-    } catch {
-      // The transfer went through; a stale local copy beats risking a double send, so leave it.
-      failed += 1
-    }
+    if (settled.reference) references.push(settled.reference)
+    replayed += 1
   }
   return { replayed, failed, references }
 }
@@ -556,17 +584,18 @@ export async function reconcileWithLeafyPay() {
   const owner = await ownerRef()
   if (!owner) return { ok: false }
   try {
-    const [transfers, beneficiaries, requests, txDocs, contactDocs, raised, received] =
+    const [transfers, beneficiaries, requests, allTxRows, allContactRows, requestDocs] =
       await Promise.all([
         listTransactions(),
         listBeneficiaries(),
         bothRequestBoxes(),
-        listTransactionEnrichment(owner).catch(() => []),
-        listContactEnrichment(owner).catch(() => []),
-        listRequestDocs({ requesterPartyRef: owner }).catch(() => []),
-        listRequestDocs({ payerPartyRef: owner }).catch(() => []),
+        listLocalTransactions().catch(() => []),
+        listLocalContacts().catch(() => []),
+        listLocalRequests().catch(() => []),
       ])
-    const requestDocs = [...raised, ...received]
+    const ownedBy = (rows) => rows.filter((r) => !owner || r.ownerPartyRef === owner)
+    const txDocs = ownedBy(allTxRows)
+    const contactDocs = ownedBy(allContactRows)
     const transferRefs = new Set(transfers.map((t) => t.reference))
     const beneficiaryRefs = new Set(beneficiaries.map((b) => b.reference))
     const requestRefs = new Set(requests.map((r) => r.reference))
@@ -593,38 +622,36 @@ export async function reconcileWithLeafyPay() {
       (r) => !r.isIncoming && r.executionReference && !enrichedRefs.has(r.executionReference),
     )
 
+    const adopt = (row) => createLocalTransaction({ ownerPartyRef: owner, ...row }).catch(() => {})
+
     await Promise.all([
-      ...orphanTransactions.map((d) => deleteTransactionEnrichment(d.id).catch(() => {})),
-      ...orphanContacts.map((d) => deleteContactEnrichment(d.id).catch(() => {})),
-      ...orphanRequests.map((d) => deleteRequestDoc(d.id).catch(() => {})),
-      ...requests.map((r) => mirrorRequest(r, owner)),
+      ...orphanTransactions.map((d) => deleteLocalTransaction(d.id).catch(() => {})),
+      ...orphanContacts.map((d) => deleteLocalContact(d.id).catch(() => {})),
+      ...orphanRequests.map((d) => deleteLocalRequest(d.id).catch(() => {})),
+      ...requests.map((r) => mirrorRequest(r, owner, requestDocs)),
       ...foreignTransfers.map((t) =>
-        createTransactionEnrichment({
+        adopt({
           leafyPayTransferReference: t.reference,
-          ownerPartyRef: owner,
           counterpartyArrangementReference: t.counterpartyReference ?? '',
           amount: Math.abs(t.value),
           currency: t.currency,
-          note: null,
+          note: '',
           direction: t.direction,
           leafyPayStatus: toEnrichmentStatus(t.status),
-          // Its own time, not now: the device sorts on this, the online list sorts on Leafy Pay's.
-          createdAt: t.createdAt ?? undefined,
-        }).catch(() => {}),
+          localSyncStatus: LOCAL_SYNCED,
+        }),
       ),
       ...requestPayments.map((r) =>
-        createTransactionEnrichment({
+        adopt({
           leafyPayTransferReference: r.executionReference,
-          ownerPartyRef: owner,
           counterpartyArrangementReference: r.payerCounterpartyRef || '',
           amount: Math.abs(r.amount),
           currency: r.currency,
-          note: r.note || null,
+          note: r.note || '',
           direction: 'received',
           leafyPayStatus: r.status === 'payment_settled' ? SETTLED_STATUS : 'pending',
-          // Dated from the approval, matching the row `toRequestPaymentRows` builds online.
-          createdAt: r.updatedAt ?? r.createdAt ?? undefined,
-        }).catch(() => {}),
+          localSyncStatus: LOCAL_SYNCED,
+        }),
       ),
     ])
     return {
@@ -792,13 +819,33 @@ async function bothRequestBoxes() {
 }
 
 /**
- * Write Leafy Pay's view of a request into Atlas, so the device has it with no connection. The
- * other side's party ref stays blank; the backend leaves what that side already wrote alone.
+ * Write Leafy Pay's view of a request to the device, which Sync carries to Atlas. Updates the row in
+ * place when one already exists so the other side's party ref is left as they wrote it.
  * @param {object} request - A normalized request, tagged `isIncoming`.
  * @param {string|null} owner - The signed-in user's `sub`.
+ * @param {object[]} [known] - Device rows already read by the caller, to avoid re-reading per request.
  */
-async function mirrorRequest(request, owner) {
-  return upsertRequestDoc(toRequestDoc(request, owner)).catch(() => {})
+async function mirrorRequest(request, owner, known) {
+  const doc = toRequestDoc(request, owner)
+  const rows = known ?? (await listLocalRequests().catch(() => []))
+  const existing = rows.find((r) => r.requestReference === doc.requestReference)
+  const write = existing
+    ? updateLocalRequest(existing.id, {
+        status: doc.status,
+        localSyncStatus: doc.localSyncStatus,
+        ...(doc.requesterPartyRef ? { requesterPartyRef: doc.requesterPartyRef } : {}),
+        ...(doc.payerPartyRef ? { payerPartyRef: doc.payerPartyRef } : {}),
+        leafyPayTransferReference: doc.leafyPayTransferReference ?? '',
+        resolvedAt: doc.resolvedAt ? new Date(doc.resolvedAt).getTime() : 0,
+      })
+    : createLocalRequest({
+        ...doc,
+        note: doc.note ?? '',
+        leafyPayTransferReference: doc.leafyPayTransferReference ?? '',
+        createdAt: doc.createdAt ? new Date(doc.createdAt).getTime() : undefined,
+        resolvedAt: doc.resolvedAt ? new Date(doc.resolvedAt).getTime() : 0,
+      })
+  return write.catch(() => {})
 }
 
 // Leafy Pay's RTP error codes that mean something a person can act on; anything else is a retry.
@@ -995,16 +1042,17 @@ export async function payRequest(reference, fromAccountReference, noteOverride) 
 
   // The money has moved: never report failure past this point, or the caller retries and pays twice.
   if (result.executionReference) {
-    await createTransactionEnrichment({
+    await createLocalTransaction({
       leafyPayTransferReference: result.executionReference,
       ownerPartyRef: owner,
       // The payer holds no saved contact for the requester, and approving does not create one.
       counterpartyArrangementReference: '',
       amount: request.amount,
       currency: request.currency,
-      note: noteOverride || null,
+      note: noteOverride || '',
       direction: 'sent',
       leafyPayStatus: 'pending',
+      localSyncStatus: LOCAL_SYNCED,
     }).catch(() => {})
   }
   return { ok: true, reference: result.executionReference, status: 'pending' }
@@ -1039,15 +1087,13 @@ export async function resolveRequest(reference, status) {
 const MAX_CHATS = 8
 
 /**
- * The user's chats, newest first, capped at the most recent {@link MAX_CHATS}. Capped here rather
- * than in the UI so both stores are trimmed the same way.
- * @param {boolean} [isOnline]
+ * The user's chats, newest first, capped at the most recent {@link MAX_CHATS}.
  * @returns {Promise<{id: string, reference: string, title: string, updatedAt: string}[]>}
  */
-export async function getChats(isOnline = true) {
+export async function getChats() {
   const owner = await ownerRef()
   if (!owner) return []
-  const chats = await (isOnline ? listChatDocs(owner) : listLocalChats(owner)).catch(() => [])
+  const chats = await listLocalChats(owner).catch(() => [])
   return chats
     .map((c) => ({
       id: c.chatReference,
@@ -1060,19 +1106,16 @@ export async function getChats(isOnline = true) {
 }
 
 /**
- * Start a chat. Offline the reference is minted here - there's no server to mint one, and both
- * stores key messages by it.
+ * Start a chat. The reference is minted here because it is what messages are keyed by, on the device
+ * and in Atlas alike.
  * @param {string} title
- * @param {boolean} [isOnline]
  * @returns {Promise<{ok: boolean, chat?: object, error?: string}>}
  */
-export async function createChat(title, isOnline = true) {
+export async function createChat(title) {
   const owner = await ownerRef()
   if (!owner) return { ok: false, error: 'You need to be signed in' }
   try {
-    const chat = isOnline
-      ? await createChatDoc({ owner, title })
-      : await createLocalChat({ ownerPartyRef: owner, chatReference: randomUUID(), title })
+    const chat = await createLocalChat({ ownerPartyRef: owner, chatReference: randomUUID(), title })
     return { ok: true, chat: { id: chat.chatReference, reference: chat.chatReference, title: chat.title } }
   } catch {
     return { ok: false, error: 'Could not start the chat.' }
@@ -1095,45 +1138,26 @@ function decodeChatMessage(m) {
   return { id: String(m.id), role: m.role, type: 'text', text: m.text }
 }
 
-/** The Atlas id of an owner's chat, or null when it is not theirs / does not exist. */
-async function chatIdFor(reference, owner) {
-  if (!owner) return null
-  const chats = await listChatDocs(owner)
-  return (chats ?? []).find((c) => c.chatReference === reference)?.id ?? null
-}
-
 /**
  * A chat's messages, oldest first. Text and any inline cards (e.g. a spending chart) both round-trip.
  * @param {string} reference - The `chatReference`.
- * @param {boolean} [isOnline]
  */
-export async function getChatMessages(reference, isOnline = true) {
+export async function getChatMessages(reference) {
   if (!reference) return []
-  const rows = await (isOnline ? listChatMessageDocs(reference) : listLocalChatMessages(reference)).catch(
-    () => [],
-  )
+  const rows = await listLocalChatMessages(reference).catch(() => [])
   return (rows ?? []).map(decodeChatMessage)
 }
 
 /**
- * Delete a chat and its messages from whichever store holds it: Atlas when online (the sync
- * layer propagates to the device), the on-device store when offline (and up to Atlas on sync).
+ * Delete a chat and its messages. The store cascades to the messages, and the deletion propagates to
+ * Atlas through Sync.
  * @param {string} reference - The `chatReference`.
- * @param {boolean} [isOnline]
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
-export async function deleteChat(reference, isOnline = true) {
+export async function deleteChat(reference) {
   if (!reference) return { ok: false, error: 'No chat given.' }
   try {
-    if (isOnline) {
-      const owner = await ownerRef()
-      if (!owner) return { ok: false, error: 'You need to be signed in' }
-      const chatId = await chatIdFor(reference, owner)
-      if (!chatId) return { ok: false, error: 'Chat not found.' }
-      await deleteChatDoc(chatId)
-    } else {
-      await deleteLocalChat(reference)
-    }
+    await deleteLocalChat(reference)
     return { ok: true }
   } catch {
     return { ok: false, error: 'Could not delete the chat.' }
@@ -1144,18 +1168,11 @@ export async function deleteChat(reference, isOnline = true) {
  * Append a message to a chat.
  * @param {string} reference - The `chatReference`.
  * @param {{role: 'user'|'assistant', text: string}} message
- * @param {boolean} [isOnline]
  */
-export async function appendChatMessage(reference, { role, text }, isOnline = true) {
+export async function appendChatMessage(reference, { role, text }) {
   if (!reference || !text?.trim()) return { ok: false }
   try {
-    if (isOnline) {
-      const chatId = await chatIdFor(reference, await ownerRef())
-      if (!chatId) return { ok: false }
-      await createChatMessageDoc({ chatId, chatReference: reference, role, text })
-    } else {
-      await createLocalChatMessage(reference, { role, text })
-    }
+    await createLocalChatMessage(reference, { role, text })
     return { ok: true }
   } catch {
     return { ok: false }
@@ -1167,10 +1184,9 @@ export async function appendChatMessage(reference, { role, text }, isOnline = tr
  * reopening the chat. Stored behind the card marker in the same text field as everything else.
  * @param {string} reference - The `chatReference`.
  * @param {object} card - The rendered card message minus its id, e.g. `{ type: 'chart', chartTitle, chartData }`.
- * @param {boolean} [isOnline]
  */
-export async function appendChatCard(reference, card, isOnline = true) {
-  return appendChatMessage(reference, { role: 'assistant', text: encodeCard(card) }, isOnline)
+export async function appendChatCard(reference, card) {
+  return appendChatMessage(reference, { role: 'assistant', text: encodeCard(card) })
 }
 
 /** The handful of fields the sync inspector shows, from either store's raw document. */

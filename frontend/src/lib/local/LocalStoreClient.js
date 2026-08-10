@@ -32,9 +32,17 @@ export async function cacheAccount({ reference, ownerPartyRef, label, currency, 
   })
 }
 
-/** Contacts held on device, synced down from Atlas. */
+/** Contacts held on device. */
 export async function listLocalContacts() {
   return call('GET', '/contacts')
+}
+
+/**
+ * Save a contact on the device, which Sync then carries to Atlas.
+ * @param {object} contact - `{ ownerPartyRef, counterpartyArrangementReference, counterpartyLabel, counterpartyLookupType, counterpartyLookupHint }`.
+ */
+export async function createLocalContact(contact) {
+  return call('POST', '/contacts', contact)
 }
 
 /** Transactions held on device, including sends queued while offline (`local_pending`). */
@@ -64,12 +72,41 @@ export async function localSpendingByContact({ ownerPartyRef, direction = 'sent'
 }
 
 /**
- * Queue a send while offline. The store stamps it `local_pending` and embeds the note; the caller
- * supplies the stand-in `leafyPayTransferReference`.
- * @param {object} send - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
+ * Write a transaction to the device, which Sync then carries to Atlas. Called once Leafy Pay has
+ * accepted the transfer, so `leafyPayTransferReference` is the real one. The store embeds the note.
+ * Pass `retirePendingSendId` to drop the queue row it came from in the same device transaction.
+ * @param {object} tx - `{ leafyPayTransferReference, ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note, leafyPayStatus, localSyncStatus, settledAt, retirePendingSendId }`.
  */
-export async function queueLocalSend(send) {
-  return call('POST', '/transactions/send', send)
+export async function createLocalTransaction(tx) {
+  return call('POST', '/transactions/send', tx)
+}
+
+/**
+ * Sends composed on this device that Leafy Pay hasn't accepted yet. Local-only, so these never
+ * reach Atlas.
+ */
+export async function listPendingSends(ownerPartyRef) {
+  const query = ownerPartyRef ? `?${new URLSearchParams({ ownerPartyRef })}` : ''
+  return call('GET', `/pending-sends${query}`)
+}
+
+/**
+ * Queue a send the device can't complete yet. No `leafyPayTransferReference`: there isn't one until
+ * Leafy Pay accepts it, which is the whole reason this row is kept out of the synced collection.
+ * @param {object} send - `{ ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
+ */
+export async function createPendingSend(send) {
+  return call('POST', '/pending-sends', send)
+}
+
+/**
+ * Confirm a queued send in place once Leafy Pay has accepted it, so the real reference and status
+ * sync up on the row that already exists.
+ * @param {number} id
+ * @param {{leafyPayTransferReference?: string, leafyPayStatus?: string, localSyncStatus?: string, settledAt?: number}} fields
+ */
+export async function updateLocalTransaction(id, fields) {
+  return call('PATCH', `/transactions/${encodeURIComponent(id)}`, fields)
 }
 
 /** Drop a local transaction. Propagates through Sync. */
@@ -123,6 +160,20 @@ export async function listLocalRequests({ payerPartyRef, requesterPartyRef, loca
  */
 export async function createLocalRequest(request) {
   return call('POST', '/requests', request)
+}
+
+/**
+ * Record what Leafy Pay reports about a request. It owns the lifecycle; this only persists it.
+ * @param {number} id
+ * @param {{status?: string, localSyncStatus?: string, payerPartyRef?: string, requesterPartyRef?: string, leafyPayTransferReference?: string, resolvedAt?: number}} fields
+ */
+export async function updateLocalRequest(id, fields) {
+  return call('PATCH', `/requests/${encodeURIComponent(id)}`, fields)
+}
+
+/** Drop a contact from the device. Propagates through Sync. */
+export async function deleteLocalContact(id) {
+  return call('DELETE', `/contacts/${encodeURIComponent(id)}`)
 }
 
 /** Drop a queued request once Leafy Pay holds the real one. Propagates through Sync. */

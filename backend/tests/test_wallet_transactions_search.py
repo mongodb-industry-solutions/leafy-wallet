@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 
 import pytest
 from pymongo.errors import OperationFailure
@@ -7,6 +8,8 @@ from pymongo.errors import OperationFailure
 from db.client import get_db
 from services.transactions import NOTE_EMBEDDING_INDEX
 from services.embeddings import get_embedding
+
+COLLECTION = "walletTransactions"
 
 BASE = "/api/v1/wallet-transactions"
 
@@ -18,6 +21,33 @@ TRANSACTION_PAYLOAD = {
     "currency": "EUR",
     "direction": "sent",
 }
+
+
+def _seed(reference, note, owner=TRANSACTION_PAYLOAD["ownerPartyRef"]):
+    """Insert a searchable transaction straight into Atlas.
+
+    Writes reach this collection through ObjectBox Sync now, so there is no
+    HTTP write route to seed through; the embedding is generated here the way
+    the device generates it before syncing up.
+    """
+    db = get_db()
+    doc = {
+        **TRANSACTION_PAYLOAD,
+        "leafyPayTransferReference": reference,
+        "ownerPartyRef": owner,
+        "note": note,
+        "noteEmbedding": asyncio.run(get_embedding(note)),
+        "createdAt": datetime.now(timezone.utc),
+        "settledAt": None,
+    }
+    doc["_id"] = db.insert_one(COLLECTION, doc)
+    return doc
+
+
+def _drop(*docs):
+    db = get_db()
+    for doc in docs:
+        db.delete_one(COLLECTION, {"_id": doc["_id"]})
 
 
 def _search_until(client, params, predicate, attempts=30, delay=2.0):
@@ -65,16 +95,8 @@ def _require_vector_index_and_embeddings(client):
 
 
 def test_search_ranks_semantically_similar_note_first(client):
-    food = client.post(
-        BASE,
-        json={**TRANSACTION_PAYLOAD, "leafyPayTransferReference": "search-food", "note": "Dinner with the team"},
-    )
-    bill = client.post(
-        BASE,
-        json={**TRANSACTION_PAYLOAD, "leafyPayTransferReference": "search-bill", "note": "Monthly rent payment"},
-    )
-    assert food.status_code == 201
-    assert bill.status_code == 201
+    food = _seed("search-food", "Dinner with the team")
+    bill = _seed("search-bill", "Monthly rent payment")
 
     try:
         results = _search_until(
@@ -87,26 +109,12 @@ def test_search_ranks_semantically_similar_note_first(client):
         if "Monthly rent payment" in notes:
             assert notes.index("Dinner with the team") < notes.index("Monthly rent payment")
     finally:
-        client.delete(f"{BASE}/{food.json()['_id']}")
-        client.delete(f"{BASE}/{bill.json()['_id']}")
+        _drop(food, bill)
 
 
 def test_search_respects_owner_party_ref_filter(client):
-    mine = client.post(
-        BASE,
-        json={**TRANSACTION_PAYLOAD, "leafyPayTransferReference": "search-mine", "note": "Dinner with the team"},
-    )
-    other_owner = client.post(
-        BASE,
-        json={
-            **TRANSACTION_PAYLOAD,
-            "leafyPayTransferReference": "search-other-owner",
-            "ownerPartyRef": "someone-elses-party-ref",
-            "note": "Dinner with the team",
-        },
-    )
-    assert mine.status_code == 201
-    assert other_owner.status_code == 201
+    mine = _seed("search-mine", "Dinner with the team")
+    other_owner = _seed("search-other-owner", "Dinner with the team", owner="someone-elses-party-ref")
 
     try:
         results = _search_until(
@@ -117,5 +125,4 @@ def test_search_respects_owner_party_ref_filter(client):
         assert len(results) >= 1
         assert all(r["ownerPartyRef"] == "search-test-owner" for r in results)
     finally:
-        client.delete(f"{BASE}/{mine.json()['_id']}")
-        client.delete(f"{BASE}/{other_owner.json()['_id']}")
+        _drop(mine, other_owner)
