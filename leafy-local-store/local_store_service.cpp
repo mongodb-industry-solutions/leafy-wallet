@@ -968,26 +968,6 @@ int main(int argc, char* argv[]) {
         res.set_content(json{{"state", "started"}}.dump(), "application/json");
     });
 
-    svr.Get("/local/v1/sync/status", [](const httplib::Request&, httplib::Response& res) {
-        json response;
-        if (!syncClient) {
-            response["state"] = "unavailable";
-            res.set_content(response.dump(), "application/json");
-            return;
-        }
-        switch (syncClient->state()) {
-            case OBXSyncState_CREATED: response["state"] = "created"; break;
-            case OBXSyncState_STARTED: response["state"] = "started"; break;
-            case OBXSyncState_CONNECTED: response["state"] = "connected"; break;
-            case OBXSyncState_LOGGED_IN: response["state"] = "logged_in"; break;
-            case OBXSyncState_DISCONNECTED: response["state"] = "disconnected"; break;
-            case OBXSyncState_STOPPED: response["state"] = "stopped"; break;
-            case OBXSyncState_DEAD: response["state"] = "dead"; break;
-            default: response["state"] = "unknown"; break;
-        }
-        res.set_content(response.dump(), "application/json");
-    });
-
     svr.Get("/local/v1/transactions", [](const httplib::Request&, httplib::Response& res) {
         auto box = store->box<LocalTransaction>();
         json results = json::array();
