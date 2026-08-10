@@ -98,10 +98,8 @@ struct LocalTransaction {
             out.amount = table->GetField<double>(12, 0);
             readString(14, out.currency);
             readString(16, out.note);
-            {
-                auto* ptr = table->GetPointer<const flatbuffers::Vector<float>*>(18);
-                out.noteEmbedding = ptr ? std::vector<float>(ptr->begin(), ptr->end()) : std::vector<float>();
-            }
+            auto* embedding = table->GetPointer<const flatbuffers::Vector<float>*>(18);
+            out.noteEmbedding = embedding ? std::vector<float>(embedding->begin(), embedding->end()) : std::vector<float>();
             readString(20, out.direction);
             readString(22, out.leafyPayStatus);
             readString(24, out.localSyncStatus);
@@ -553,9 +551,8 @@ const int EMBEDDING_DIMENSIONS = 1024;
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
-    // Entity name doubles as the target MongoDB collection name in the Sync
-    // Server's bridge (confirmed empirically) - this is now pointed at the
-    // real walletTransactions collection the FastAPI backend also uses.
+    // Every entity name below doubles as the target MongoDB collection name in the Sync Server's
+    // bridge (confirmed empirically), which is why they match the FastAPI backend's collections.
     obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -582,8 +579,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
-    // Entity 2: walletContacts - entity name is the target MongoDB collection
-    // name, same rule as entity 1 above.
     obx_model_entity(model, "walletContacts", 2, 7002000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -599,8 +594,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
-    // Entity 3: chats - a conversation. Entity name is the target MongoDB
-    // collection name, same rule as entities 1-2 above.
     obx_model_entity(model, "chats", 3, 7003000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -615,8 +608,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 8, 7003000000000008ULL);
     obx_model_entity_last_property_id(model, 8, 7003000000000008ULL);
 
-    // Entity 4: chatMessages - a single message within a chats conversation,
-    // linked by chatReference (ObjectBox has no nested/array attributes).
     obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -629,11 +620,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 7, 7004000000000007ULL);
     obx_model_entity_last_property_id(model, 7, 7004000000000007ULL);
 
-    // Entity 5: LocalAccountBalance - purely local, deliberately no
-    // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
-    // objectbox-sync-server/objectbox-model.json (see the struct comment
-    // above). The entity name has no MongoDB-collection meaning here since
-    // it's never bridged.
+    // The one entity with no SYNC_ENABLED flag and no entry in
+    // objectbox-sync-server/objectbox-model.json, so its name never reaches MongoDB.
     obx_model_entity(model, "LocalAccountBalance", 5, 7005000000000000ULL);
 
     obx_model_property(model, "id", OBXPropertyType_Long, 1, 7005000000000001ULL);
@@ -649,8 +637,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "lastRefreshedAt", OBXPropertyType_Date, 9, 7005000000000009ULL);
     obx_model_entity_last_property_id(model, 9, 7005000000000009ULL);
 
-    // Entity 6: walletRequests. Id 6 because the local-only entity 5 above still
-    // consumes an id here, even though it never reaches the sync server's model.json.
+    // Id 6, not 5: the local-only entity above still consumes an id here even though it never
+    // reaches the sync server's model.json.
     obx_model_entity(model, "walletRequests", 6, 7006000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -1131,9 +1119,8 @@ int main(int argc, char* argv[]) {
         res.set_content(transaction_to_json(t).dump(), "application/json");
     });
 
-    // Deletes propagate through ObjectBox Sync like any other write, so this
-    // also removes the corresponding document from Atlas once connected  - 
-    // primarily here so integration tests can clean up after themselves.
+    // Deletes propagate through ObjectBox Sync like any other write, so this also removes the
+    // corresponding Atlas document once connected. Primarily here for integration-test cleanup.
     svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         obx_id id = std::stoll(req.matches[1]);
         auto box = store->box<LocalTransaction>();
@@ -1154,8 +1141,7 @@ int main(int argc, char* argv[]) {
         res.set_content(results.dump(), "application/json");
     });
 
-    // Queues a contact add locally; reconciled with Leafy Pay on reconnect
-    // (mirrors the architecture plan's §6.2 description of this endpoint).
+    // Queues a contact add locally; reconciled with Leafy Pay on reconnect.
     svr.Post("/local/v1/contacts", [](const httplib::Request& req, httplib::Response& res) {
         auto bad_request = [&res](const std::string& msg) {
             res.status = 400;
