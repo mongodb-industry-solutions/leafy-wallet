@@ -167,12 +167,19 @@ npm run setup:seed  # seed demo data (users, OAuth clients, providers)
 npm run dev         # backend:8081, frontend:8083, merchant:8082
 ```
 
-Create the Leafy Wallet vector search index (first run only):
+Create the Leafy Wallet vector search indexes (first run only):
 
 ```bash
 cd leafy-wallet/backend
 uv run python scripts/create_vector_index.py
 ```
+
+Create the Atlas Database Trigger that populates `walletTransactionsHistory` (first run only). In the
+Atlas UI, add a Database Trigger on the `walletTransactions` collection watching Insert, Update and
+Replace with **Full Document enabled**, and paste
+[`backend/scripts/atlas_trigger_transaction_history.js`](backend/scripts/atlas_trigger_transaction_history.js)
+as its function. The service name in that file has to match your Atlas cluster, otherwise every
+invocation fails with `cannot access member 'db' of undefined` and the collection stays empty.
 
 Start Leafy Wallet (Docker):
 

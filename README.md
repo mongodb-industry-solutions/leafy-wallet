@@ -120,18 +120,24 @@ DATABASE_NAME="<your-database-name>"
 
 Make sure to run this on the root directory.
 
-1. Create the Atlas vector search index that backs semantic transaction search (first run only). It reads
+1. Create the Atlas vector search indexes that back semantic transaction search (first run only). It reads
    `backend/.env`, so fill that in first:
 ```bash
 cd backend && uv run python scripts/create_vector_index.py
 ```
-2. Build and start every container:
+2. Create the Atlas Database Trigger that copies settled transactions into `walletTransactionsHistory`
+   (first run only). In the Atlas UI, add a Database Trigger on the `walletTransactions` collection
+   watching Insert, Update and Replace with **Full Document enabled**, and paste
+   [`backend/scripts/atlas_trigger_transaction_history.js`](backend/scripts/atlas_trigger_transaction_history.js)
+   as its function. Edit the service name in that file to match your cluster, otherwise every
+   invocation fails and the history collection stays empty.
+3. Build and start every container:
 ```bash
 make build
 ```
-3. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
-4. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
-5. To delete the containers and images run:
+4. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
+5. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
+6. To delete the containers and images run:
 ```bash
 make clean
 ```

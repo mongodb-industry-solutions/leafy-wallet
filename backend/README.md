@@ -67,6 +67,7 @@ cd backend && uv run pytest
 
 - Check that you've created a `.env` file with `MONGODB_URI` and `DATABASE_NAME`, and that your IP is on the Atlas network access list.
 - Vector search endpoints need the index to exist; run `uv run python scripts/create_vector_index.py` if searches return nothing. It's idempotent, so re-running is safe.
+- An empty `walletTransactionsHistory` means the Atlas Database Trigger isn't running. Check its log in the Atlas UI: `cannot access member 'db' of undefined` means the service name in `scripts/atlas_trigger_transaction_history.js` doesn't match your cluster, and invocations that succeed without writing mean Full Document is off. The Trigger only sees changes made after it was created, so existing transactions never appear.
 
 ## 📄 License
 
