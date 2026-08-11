@@ -6,10 +6,8 @@ import { SyncPath } from '@/components/stage/walkthrough/SyncPath'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Request "kept close by" step: a copy of every request rides
- * down through MongoDB Atlas onto the phone, so the list is still there to read offline. A
- * packet flows Atlas to phone and a request row lands in the on-device list. Pure CSS
- * (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Request "kept close by" step: a packet flows from Atlas to the phone
+ * and a row lands in the on-device list, still readable offline. Pure CSS, no images or timers.
  */
 export function RequestDownstreamVisual() {
   return (

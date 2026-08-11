@@ -30,6 +30,7 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 6. **Chat with the Leafy assistant**
    - Natural-language questions over the user's own data, streamed with a typewriter effect.
    - Spending questions render an inline per-contact breakdown chart.
+   - Asking about unusual activity runs a burst check and renders the flagged payments as a card.
    - Payment drafts appear as confirmation cards; nothing moves without the user's tap.
 
 7. **Toggle the connection**
@@ -52,8 +53,14 @@ Transfers and their enrichment records stay consistent even when several offline
 ### 3. **Hybrid search online, vector search on-device**
 Transaction notes are embedded with [Voyage AI](https://www.mongodb.com/products/platform/ai-search-and-retrieval/models) and searchable by meaning in either mode. Online, Atlas fuses vector and full-text search with [`$rankFusion`](https://www.mongodb.com/docs/manual/reference/operator/aggregation/rankFusion/), so a paraphrase, an exact reference and a misspelling all find the right payment. Offline, ObjectBox's own HNSW index answers by meaning alone - the device has no full-text index, which is the one thing the cloud can do that the edge cannot. Embedding runs on the open-weight `voyage-4-nano`, so it needs no API key and works with no network at all.
 
-### 4. **A LangGraph agent over local AI, through MCP**
-The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
+### 4. **Long-term history, populated by an Atlas Trigger**
+A [Database Trigger](https://www.mongodb.com/docs/atlas/atlas-ui/triggers/) on `walletTransactions` copies every settled transfer into `walletTransactionsHistory`, so the searchable long tail accumulates in Atlas with no application code writing it. The device keeps what it needs to work offline; Atlas keeps everything, which is what gives online search more to find than the phone holds.
+
+### 5. **Fraud signals from window functions**
+[`$setWindowFields`](https://www.mongodb.com/docs/manual/reference/operator/aggregation/setWindowFields/) counts sends inside a rolling ten-minute window to flag bursts, the classic account-takeover and card-testing shape. Ask the assistant whether anything looks unusual and the flagged payments come back as a card in the chat. Online only, on purpose: this is the analysis the edge cannot do for itself.
+
+### 6. **A LangGraph agent over local AI, through MCP**
+The assistant routes each question to the right tool (balances, contacts, spending summaries, transaction search, fraud checks, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
 
 ## Tech Stack
 

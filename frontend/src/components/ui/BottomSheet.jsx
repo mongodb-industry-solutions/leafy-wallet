@@ -10,10 +10,8 @@ const FADE_IN = 'overlay-fade-in 320ms ease'
 const FADE_OUT = 'overlay-fade-out 260ms ease forwards'
 
 /**
- * A bottom sheet: dimmed backdrop plus a card that slides up and back down on dismiss. CSS keyframes
- * drive the animation, and the panel's `animationend` drives focus-on-enter and unmount-on-exit.
- * `children` may be a function receiving `{ close }`, so content can dismiss the sheet itself. The
- * panel is height-capped: give a long child `min-h-0 overflow-y-auto` and it scrolls inside it.
+ * A bottom sheet: dimmed backdrop plus a card that slides up and back down on dismiss. `children` may
+ * be a function receiving `{ close }`, and the panel is height-capped, so long content must scroll.
  * @param {object} props
  * @param {() => void} props.onClose - Called once the exit animation finishes.
  * @param {() => void} [props.onEntered] - Called once the enter animation finishes (e.g. to focus a field).

@@ -15,9 +15,8 @@ import { SuccessStep } from '@/components/wallet/send/SuccessStep'
 const EUR_SYMBOL = '€'
 
 /**
- * The multi-step send/request flow: amount entry, recipient picker, confirmation, and success. Send
- * executes a real Leafy Pay transfer (with the note written to Atlas); request writes an Atlas record
- * the target can pay from their notifications. Offline sends are optimistic (queueing is a later phase).
+ * The multi-step send/request flow: amount, recipient, confirmation, success. Send executes a real
+ * Leafy Pay transfer; request writes a record the target can pay from their notifications.
  * @param {object} props
  * @param {object} [props.initialContact] - Pre-fills the recipient (skips the recipient step).
  * @param {'send'|'request'} [props.initialMode]

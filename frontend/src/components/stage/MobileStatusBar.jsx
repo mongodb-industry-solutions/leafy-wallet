@@ -13,15 +13,8 @@ const MUTED_FOREGROUND = 'rgba(0,30,43,0.55)'
 const LABEL_MS = 1800
 
 /**
- * Fake device status bar for the /mobile route: the wifi indicator and the airplane-mode switch,
- * tucked into the right corner. Framed as airplane mode, not as a generic connection toggle, because
- * that is the one control everybody already knows means "cut this device off" - on the desktop stage
- * the equivalent is the labelled off-phone ConnectionControl.
- *
- * Deliberately small and icon-only: on a notch/Dynamic Island handset the middle of this strip is
- * spoken for, and a wide labelled pill up here reads as app chrome rather than device chrome. The
- * label is not gone, just deferred - it expands out of the glyph for a moment after each tap, which
- * is when it is actually worth reading. The wifi glyph is pure indicator; the plane is the control.
+ * Fake device status bar for /mobile: a wifi indicator and an airplane-mode switch. Framed as airplane
+ * mode because that is the control everyone reads as "cut this device off", and kept small and icon-only.
  * @param {object} props
  * @param {boolean} props.isOnline - Whether the simulated connection is up.
  * @param {() => void} props.onToggle

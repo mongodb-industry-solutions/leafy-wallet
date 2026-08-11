@@ -10,14 +10,8 @@ import { WalletApp } from '@/components/wallet/shell/WalletApp'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
 /**
- * The /mobile stage: the same phone content as DesktopShell, but edge to edge and on its own, so
- * opening the demo on a real handset feels like the actual wallet app. No bezel, no "Under the hood"
- * card, no tour - the presenter narration only makes sense next to the phone.
- *
- * The connection toggle lives in the fake status bar, since there is no off-phone room for
- * DesktopShell's ConnectionControl. The bar is a sibling row above the app rather than an overlay,
- * so it sits above the full-screen flows (send, notifications) the way real OS chrome does without
- * any of them having to know about it.
+ * The /mobile stage: the same phone content as DesktopShell but edge to edge, so opening the demo on a
+ * real handset feels like the wallet app. The connection toggle lives in the fake status bar.
  */
 export function MobileShell() {
   const { isOnline, handleToggle } = useConnection()

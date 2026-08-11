@@ -52,9 +52,8 @@ async function fetchTurn(body) {
 }
 
 /**
- * Chat state machine for the AI assistant tab: conversations, greeting state, text input,
- * and the streamed reply. Chats and messages persist per user, from Atlas or the device depending
- * on the connection.
+ * Chat state machine for the AI assistant tab: conversations, greeting state, input and the streamed
+ * reply. Chats and messages persist per user, from Atlas or the device depending on the connection.
  * @returns {object} Chat state and actions for AiTab to render.
  */
 export function useAiChat() {

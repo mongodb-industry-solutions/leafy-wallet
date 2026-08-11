@@ -27,9 +27,8 @@ function MiniRow({ glyph, name, note, amount, inbound }) {
 }
 
 /**
- * Animated mini-render for the Activity "One local source of truth" step: the full history
- * lives on the phone, so the list scrolls with no network wait. The rows loop up and down
- * behind an "on device" badge. Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Activity "One local source of truth" step: the full history lives on
+ * the phone, so rows loop behind an "on device" badge with no network wait. Pure CSS, no timers.
  */
 export function LocalHistoryVisual() {
   return (

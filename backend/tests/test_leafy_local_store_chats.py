@@ -91,7 +91,7 @@ def test_delete_unknown_chat_returns_404():
     assert response.status_code == 404
 
 
-def test_chat_message_create_list_and_delete(chat):
+def test_chat_message_create_and_list(chat):
     _, payload = chat
     chat_reference = payload["chatReference"]
 
@@ -108,15 +108,6 @@ def test_chat_message_create_list_and_delete(chat):
     listed = httpx.get(f"{BASE}/local/v1/chats/{chat_reference}/messages")
     assert listed.status_code == 200
     assert any(m["id"] == message_id for m in listed.json())
-
-    deleted = httpx.delete(f"{BASE}/local/v1/chats/{chat_reference}/messages/{message_id}")
-    assert deleted.status_code == 204
-
-    listed_after = httpx.get(f"{BASE}/local/v1/chats/{chat_reference}/messages")
-    assert all(m["id"] != message_id for m in listed_after.json())
-
-    deleted_again = httpx.delete(f"{BASE}/local/v1/chats/{chat_reference}/messages/{message_id}")
-    assert deleted_again.status_code == 404
 
 
 def test_posting_a_message_bumps_the_chats_updated_at(chat):

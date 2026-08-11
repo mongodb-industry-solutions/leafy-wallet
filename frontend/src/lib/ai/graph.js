@@ -1,8 +1,7 @@
 import { ChatOllama } from '@langchain/ollama'
 import { ChatAnthropic } from '@langchain/anthropic'
-import { StateGraph, MessagesAnnotation } from '@langchain/langgraph'
-import { ToolNode } from '@langchain/langgraph/prebuilt'
-import { SystemMessage, AIMessage } from '@langchain/core/messages'
+import { createReactAgent } from '@langchain/langgraph/prebuilt'
+import { AIMessage, HumanMessage, SystemMessage, isAIMessage } from '@langchain/core/messages'
 import { SYSTEM_PROMPT, OFFLINE_NOTE } from './prompt'
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
@@ -56,97 +55,6 @@ function chatModel() {
   })
 }
 
-/**
- * Pull JSON objects out of a string by scanning for balanced top-level braces. Used to recover a
- * tool call the model wrote into its message text instead of emitting as a structured call.
- */
-function extractJsonObjects(text) {
-  const objects = []
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '{') continue
-    let depth = 0
-    for (let j = i; j < text.length; j++) {
-      if (text[j] === '{') depth++
-      else if (text[j] === '}' && --depth === 0) {
-        try {
-          objects.push({ value: JSON.parse(text.slice(i, j + 1)), start: i })
-        } catch {
-          /* not valid JSON; skip */
-        }
-        i = j
-        break
-      }
-    }
-  }
-  return objects
-}
-
-/** Parse a `key="value", n=50, flag=true` argument list (the kwargs form of a narrated call). */
-function parseKwargs(argString) {
-  const args = {}
-  const re = /([a-z_][a-z0-9_]*)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?\d+(?:\.\d+)?|true|false)/gi
-  let match
-  while ((match = re.exec(argString))) {
-    const [, key, raw] = match
-    if (raw[0] === '"' || raw[0] === "'") args[key] = raw.slice(1, -1)
-    else if (raw === 'true' || raw === 'false') args[key] = raw === 'true'
-    else args[key] = Number(raw)
-  }
-  return args
-}
-
-/**
- * Local models (qwen2.5 here) sometimes write a tool call into their message content instead of
- * emitting it as a structured call, and Ollama passes that text straight through. Recover the shapes
- * it uses - a `{"name":..,"arguments":..}` object (optionally in `<tool_call>` tags), a bare args
- * object after the tool's name, or a `name(key="value", ..)` call - so the turn still reaches the tool.
- * @returns {{name: string, args: object, id: string, type: 'tool_call'}[]}
- */
-export function recoverToolCalls(content, toolNames) {
-  if (typeof content !== 'string') return []
-  const calls = []
-  const seen = new Set()
-  const add = (name, args) => {
-    if (!toolNames.includes(name)) return
-    const key = `${name}:${JSON.stringify(args)}`
-    if (seen.has(key)) return
-    seen.add(key)
-    calls.push({ name, args, id: `rec_${calls.length}`, type: 'tool_call' })
-  }
-
-  // JSON forms: {"name":..,"arguments":..} or a bare args object after the tool's name.
-  for (const { value, start } of extractJsonObjects(content)) {
-    if (typeof value.name === 'string') {
-      add(value.name, value.arguments ?? value.parameters ?? {})
-    } else {
-      const preceding = content.slice(0, start).match(/([a-z_][a-z0-9_]*)\s*\(?\s*$/i)
-      if (preceding) add(preceding[1], value)
-    }
-  }
-
-  // Kwargs form: draft_payment(contact_name="Luis", amount=50, mode="send", note="team dinner").
-  const callRe = /([a-z_][a-z0-9_]*)\s*\(([^)]*)\)/gi
-  let call
-  while ((call = callRe.exec(content))) add(call[1], parseKwargs(call[2]))
-
-  // Natural-language form: draft_payment called with contact_name 'Luis', amount 50, note 'x'.
-  const nlRe = /([a-z_][a-z0-9_]*)\s+(?:called\s+)?with\s+([^.]+)/gi
-  let nl
-  const pairRe = /([a-z_][a-z0-9_]*)\s+(?:'([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?))/gi
-  while ((nl = nlRe.exec(content))) {
-    if (!toolNames.includes(nl[1])) continue
-    const args = {}
-    let pair
-    while ((pair = pairRe.exec(nl[2]))) {
-      const [, key, single, double, num] = pair
-      args[key] = num !== undefined ? Number(num) : (single ?? double)
-    }
-    if (Object.keys(args).length) add(nl[1], args)
-  }
-
-  return calls
-}
-
 // Bullets need whitespace after the marker, so a leading "-€50" survives.
 const MARKDOWN_PATTERNS = [
   [/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2'],
@@ -166,57 +74,53 @@ export function toPlainText(text) {
   return MARKDOWN_PATTERNS.reduce((out, [pattern, replacement]) => out.replace(pattern, replacement), text)
 }
 
+const REASK = 'Emit that as an actual tool call, not as text.'
+
 /**
- * Compile the assistant's graph over an already-built tool set: the model either answers or calls a
- * tool, looping until it answers. Kept separate from tool loading so the eval harness can drive the
- * real graph with stub tools.
+ * Runs after every model turn: re-asks for a tool call the model wrote as prose, since that beats
+ * parsing the several shapes it uses, and strips markdown from the turns that end in an answer.
+ * @param {import('@langchain/core/language_models/chat_models').BaseChatModel} model - Tools bound.
+ * @param {string[]} toolNames - A reply naming one of these is a narrated call, not an answer.
+ * @param {SystemMessage} system - The agent's own prompt, so the re-ask sees the same instructions.
+ */
+function buildRepairHook(model, toolNames, system) {
+  return async ({ messages }) => {
+    const last = messages.at(-1)
+    if (!isAIMessage(last) || last.tool_calls?.length) return {}
+
+    // The reducer replaces by id, so reusing it swaps this message rather than appending to it.
+    const content = typeof last.content === 'string' ? last.content : ''
+    const answer = { messages: [new AIMessage({ id: last.id, content: toPlainText(content) })] }
+    if (!toolNames.some((name) => content.includes(name))) return answer
+
+    const retry = await model.invoke([system, ...messages, new HumanMessage(REASK)])
+    if (!retry.tool_calls?.length) return answer
+    return { messages: [new AIMessage({ id: last.id, content: '', tool_calls: retry.tool_calls })] }
+  }
+}
+
+/**
+ * Compile the assistant's agent over an already-built tool set. Kept separate from tool loading so
+ * the eval harness can drive the real agent with stub tools.
  * @param {import('@langchain/core/tools').StructuredToolInterface[]} tools
  * @param {object} options
  * @param {boolean} options.isOnline - Selects the prompt variant (an offline note is appended offline).
  */
 export function compileGraph(tools, { isOnline }) {
-  const toolNames = tools.map((t) => t.name)
+  const system = new SystemMessage(isOnline ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}\n\n${OFFLINE_NOTE}`)
+  // Bound here so createReactAgent takes the tools as given rather than binding them again.
   const model = chatModel().bindTools(tools)
-
-  async function callModel(state) {
-    const system = new SystemMessage(isOnline ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}\n\n${OFFLINE_NOTE}`)
-    const messages = [system, ...state.messages]
-    let reply
-    try {
-      reply = await model.invoke(messages)
-    } catch (e) {
-      // A local model call can drop mid-flight; the Anthropic SDK already retries its own transport.
-      if (APP_ENV !== 'local') throw e
-      reply = await model.invoke(messages)
-    }
-    // Salvage a tool call written as prose, which is how the local model often emits one.
-    if (!reply.tool_calls?.length) {
-      const recovered = recoverToolCalls(reply.content, toolNames)
-      if (recovered.length) return { messages: [new AIMessage({ content: '', tool_calls: recovered })] }
-      // No tool follows, so this is the answer the user reads.
-      if (typeof reply.content === 'string') reply.content = toPlainText(reply.content)
-    }
-    return { messages: [reply] }
-  }
-
-  const shouldContinue = (state) => {
-    const last = state.messages.at(-1)
-    return last?.tool_calls?.length ? 'tools' : '__end__'
-  }
-
-  return new StateGraph(MessagesAnnotation)
-    .addNode('model', callModel)
-    .addNode('tools', new ToolNode(tools))
-    .addEdge('__start__', 'model')
-    .addConditionalEdges('model', shouldContinue, ['tools', '__end__'])
-    .addEdge('tools', 'model')
-    .compile()
+  return createReactAgent({
+    llm: model,
+    tools,
+    prompt: system,
+    postModelHook: buildRepairHook(model, tools.map((t) => t.name), system),
+  })
 }
 
 /**
- * The assistant's graph, bound to a connection state. Loads the tool set (online: the backend MCP
- * server; offline: the on-device store) and compiles the graph over it. Async, and the tools are
- * imported lazily, so the server-only data layer never loads until a real turn runs.
+ * The assistant's graph, bound to a connection state: online tools read the backend MCP server,
+ * offline ones the device. Tools are imported lazily so the server-only layer loads on demand.
  * @param {boolean} isOnline - Passed to the tools, which pick their own source from it.
  * @param {object[]} drafts - Collects any payment the model drafts for confirmation.
  * @param {object[]} charts - Collects any spending breakdown a tool produces for inline display.

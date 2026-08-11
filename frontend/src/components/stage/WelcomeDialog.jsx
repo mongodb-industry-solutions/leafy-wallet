@@ -15,11 +15,8 @@ import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
 const [SHARED_PROFILE] = DEMO_USERS
 
 /**
- * Pre-auth welcome overlay for an unattended booth visitor. Visitors already know roughly what the
- * demo is, so it skips the pitch. A minimal two-part hero orients the stage (the phone is the wallet,
- * the card beside it narrates each screen), and the body carries the demo password (one tap to copy)
- * and the two actions. Overlays the whole stage and is never a blocking gate - the backdrop, the X,
- * and "Just let me try it" all dismiss it.
+ * Pre-auth welcome overlay for an unattended booth visitor: a two-part hero orienting the stage, the
+ * demo password to copy, and the two actions. Never a blocking gate - anything dismisses it.
  * @param {object} props
  * @param {() => void} props.onStartTour - Primary action; records the tour intent and closes.
  * @param {() => void} props.onDismiss - Close without starting the tour.

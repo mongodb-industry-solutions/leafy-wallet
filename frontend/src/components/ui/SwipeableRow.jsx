@@ -9,10 +9,8 @@ const SWIPE_DEADZONE_PX = 6
 const SWIPE_EASE = 'transform 350ms cubic-bezier(0.32, 0.72, 0, 1)'
 
 /**
- * A list row that swipes left to reveal a full-height action button, iOS-style. The button bleeds
- * to the container's edge - put the row in a wrapper with rounded corners + overflow-hidden and
- * the reveal clips natively. The parent keeps at most one row open via `isOpen`/`onOpenChange`.
- * Tapping the row fires `onTap` - unless it was a swipe, or the row is open (then it closes).
+ * A list row that swipes left to reveal a full-height action button, iOS-style. The parent keeps at
+ * most one row open via `isOpen`/`onOpenChange`; a tap fires `onTap` unless the row is already open.
  * @param {object} props
  * @param {boolean} [props.canSwipe] - Disable to make the row a plain tappable row.
  * @param {boolean} props.isOpen - Whether this row is the revealed one; the parent enforces one.

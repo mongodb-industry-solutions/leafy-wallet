@@ -35,9 +35,8 @@ function GlowFrame({ background, opacity }) {
 }
 
 /**
- * Edge-of-screen glow that ambiently signals online/offline state around the whole presenter stage.
- * The two states differ by chroma rather than lightness - a saturated green rim online, a pale
- * neutral haze offline - so they stay tellable apart at a glance.
+ * Edge-of-screen glow that ambiently signals online/offline around the whole presenter stage. The two
+ * states differ by chroma rather than lightness, so they stay tellable apart at a glance.
  * @param {object} props
  * @param {boolean} props.isOnline - Whether the simulated connection is up.
  */

@@ -1,18 +1,6 @@
 /**
- * Leafy Wallet end-to-end user workflows.
- *
- * Every test here runs against the Next.js frontend alone: `me()` only decrypts a cookie, the
- * passwordless check only reads IndexedDB, and the PSP env vars default to empty instead of throwing,
- * so an unconfigured frontend lands on the sign-in screen with the whole presenter stage reachable.
- * No Leafy Pay, no Atlas, no ObjectBox, no Ollama, which is what lets this run unchanged in CI.
- *
- * That is also the boundary. Anything past sign-in belongs to Leafy Pay in the separate sec-fsi repo,
- * and there is no way to automate that login from here (it is a hosted page on another origin). Where
- * a workflow crosses over, the test asserts our side of the contract and stops: FS-LW-05 and FS-LW-06
- * intercept the handoff instead of following it.
- *
- * The AI assistant is not covered here either. The vitest evals in tests/ai already drive the real
- * LangGraph graph, which is a better place to assert on answers than a browser.
+ * Leafy Wallet end-to-end user workflows, run against the Next.js frontend alone - no Leafy Pay, Atlas,
+ * ObjectBox or Ollama - so anything past sign-in asserts our side of the contract and stops there.
  */
 import { test, expect } from '@playwright/test'
 import { EnvironmentHelper } from './utils/environment-helper.js'

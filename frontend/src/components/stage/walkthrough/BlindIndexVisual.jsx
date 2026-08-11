@@ -4,10 +4,8 @@ import { ArrowRight, KeyRound, Mail } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the People "Blind index" step: an email you type is never
- * stored - it is turned into a keyed HMAC digest so lookups still work without holding any
- * personal data. The email flows through the key and comes out as an opaque digest, on a
- * loop. Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the People "Blind index" step: a typed email is never stored, it flows
+ * through a key and out as an opaque HMAC digest, on a loop. Pure CSS, no images or timers.
  */
 export function BlindIndexVisual() {
   return (

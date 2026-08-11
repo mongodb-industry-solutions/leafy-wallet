@@ -11,9 +11,8 @@ const EUR_SYMBOL = '€'
 const EMPTY_NOTE = 'No note'
 
 /**
- * Paying a payment request, through the same review screen as a normal send: amount and recipient
- * are fixed by the request, the note and source account stay editable. Confirms via `payRequest`,
- * which also marks the request paid.
+ * Paying a payment request through the same review screen as a normal send: amount and recipient are
+ * fixed, note and source account stay editable. Confirms via `payRequest`, which also marks it paid.
  * @param {object} props
  * @param {object} props.notification - The request notification (`kind: 'request'`).
  * @param {boolean} [props.isOnline]

@@ -32,9 +32,8 @@ function Field({ label, value }) {
 }
 
 /**
- * One store's newest transaction document, reduced to the fields that matter for the sync story.
- * A null `doc` renders the "nothing here yet" state, which is what Atlas shows while the newest send is
- * still queued on the device.
+ * One store's newest transaction document, reduced to the fields that matter for the sync story. A
+ * null `doc` renders the "nothing here yet" state Atlas shows while the newest send is still queued.
  */
 function DocPanel({ title, subtitle, icon, doc, accent, emptyLabel = 'no document yet' }) {
   const status = doc?.status ?? 'pending'
@@ -69,9 +68,8 @@ function DocPanel({ title, subtitle, icon, doc, accent, emptyLabel = 'no documen
 }
 
 /**
- * Back face of the info card: the newest document in Atlas and on the device, side by side, polled so
- * the divergence shows up live. Offline the device row appears first (`local_pending`); the Atlas row
- * catches up once the send is replayed and the Sync Server bridges it.
+ * Back face of the info card: the newest document in Atlas and on the device, polled so the divergence
+ * shows live. Offline the device row appears first; Atlas catches up once the send is replayed.
  */
 export function DbSyncCard() {
   const [snapshot, setSnapshot] = useState({ atlas: null, local: null })

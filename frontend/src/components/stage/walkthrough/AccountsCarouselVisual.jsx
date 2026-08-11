@@ -17,9 +17,8 @@ function MiniCard({ name, amount }) {
 }
 
 /**
- * Animated mini-render for the Home "Your accounts, cached locally" step: the account
- * cards slide as they would in the real carousel, all served from the on-device store.
- * Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Home "Your accounts, cached locally" step: the cards slide as they do
+ * in the real carousel, all served from the on-device store. Pure CSS, no images or timers.
  */
 export function AccountsCarouselVisual() {
   return (

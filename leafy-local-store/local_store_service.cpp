@@ -1251,15 +1251,6 @@ int main(int argc, char* argv[]) {
         res.set_content(pending_send_to_json(p).dump(), "application/json");
     });
 
-    svr.Delete(R"(/local/v1/pending-sends/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        if (!store->box<LocalPendingSend>().remove(std::stoll(req.matches[1]))) {
-            res.status = 404;
-            res.set_content(json{{"error", "Pending send not found"}}.dump(), "application/json");
-            return;
-        }
-        res.status = 204;
-    });
-
     // Records what Leafy Pay reports; the row keeps its identity rather than being rewritten.
     svr.Patch(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         json body;
@@ -1496,22 +1487,6 @@ int main(int argc, char* argv[]) {
             messageBox.remove(m.id);
         }
 
-        res.status = 204;
-    });
-
-    svr.Delete(R"(/local/v1/chats/([^/]+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        std::string chatReference = req.matches[1];
-        obx_id messageId = std::stoll(req.matches[2]);
-
-        auto messageBox = store->box<LocalChatMessage>();
-        auto existing = messageBox.get(messageId);
-        if (!existing || existing->chatReference != chatReference) {
-            res.status = 404;
-            res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
-            return;
-        }
-
-        messageBox.remove(messageId);
         res.status = 204;
     });
 

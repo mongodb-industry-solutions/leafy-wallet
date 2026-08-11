@@ -56,9 +56,8 @@ const isNewerThan = (createdAt, seenAt) =>
 const receivedRows = (data) => (data ?? []).filter((t) => t.amount > 0)
 
 /**
- * Banner the first row that turned up since the last load. The first load only records the baseline,
- * so what was already waiting at login is not announced as new. The seen set only ever grows: the
- * offline store can hold fewer rows than Leafy Pay, and a row reappearing is not an arrival.
+ * Banner the first row that turned up since the last load; the first load only records the baseline.
+ * The seen set only ever grows, since the offline store can hold fewer rows than Leafy Pay.
  */
 function announceNew(rows, seenRef, kind, setArrival) {
   const known = seenRef.current
@@ -69,10 +68,8 @@ function announceNew(rows, seenRef, kind, setArrival) {
 }
 
 /**
- * Derive the notifications feed: received transfers (the PSP has no received-money notification, so
- * we surface the inbound transfers themselves) plus pending payment requests addressed to the user.
- * Unread when newer than the last time the bell was opened. Dismissed ids are hidden - the feed is
- * derived, so dismissal is a per-device presentation choice, not a change to the records.
+ * Derive the notifications feed: received transfers plus pending requests addressed to the user, unread
+ * when newer than the last bell open. Dismissal hides an id, since the feed is derived, not stored.
  */
 function deriveNotifications(transactions, requests, lastSeen, dismissedIds) {
   const seenAt = lastSeen ? new Date(lastSeen).getTime() : 0
@@ -109,11 +106,8 @@ function deriveNotifications(transactions, requests, lastSeen, dismissedIds) {
 const WalletDataContext = createContext(null)
 
 /**
- * Client cache for the wallet's read data (accounts, contacts, transactions, requests). Fetches each
- * dataset once per login and shares it across tabs. Revalidation is event-driven, never on tab switch:
- * `refresh(keys)` after a transaction, and an automatic refresh when the connection changes. Also
- * derives the notifications feed (received transfers + incoming requests) with a persisted per-user
- * "seen" marker.
+ * Client cache for the wallet's read data, fetched once per login and shared across tabs. Revalidation
+ * is event-driven, never on tab switch: `refresh(keys)` after a transaction, and on connection change.
  * @param {object} props
  * @param {boolean} [props.isOnline] - Picks the data source; on reconnect, also replays queued sends.
  * @param {string} [props.ownerKey] - Namespaces the persisted notifications-seen marker (the user's sub).
@@ -158,9 +152,8 @@ export function WalletDataProvider({ isOnline = true, ownerKey, children }) {
   const refresh = useCallback((keys = ALL_KEYS) => Promise.all(keys.map(load)), [load])
 
   /**
-   * Watch a just-sent transfer until it settles (`completed`/`failed`) or times out, refreshing after
-   * each poll so the balance and Activity flip Pending → Completed on their own - independent of the
-   * success screen staying open.
+   * Watch a just-sent transfer until it settles or times out, refreshing after each poll so the balance
+   * and Activity flip Pending to Completed on their own, independent of the success screen.
    * @param {string} reference - The Leafy Pay transfer reference.
    * @param {'send'|'request-payment'} [origin] - Which screen initiated it. Carried on the settlement so
    *   listeners can tell a send the user composed from a request someone else asked them to pay.
