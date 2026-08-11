@@ -20,9 +20,8 @@ const firstNameOf = (name) => String(name ?? '').trim().split(' ')[0]
 const SIGN_IN_LEAD = 'Open an incognito window and log in as'
 
 /**
- * The one line to show, phrased as the next thing the presenter can do rather than as the
- * counterparty's notification. The amount and the sender are left out: both are on the screen the nudge
- * fired from. Contacts who are not demo profiles cannot be signed in as, so they get their state instead.
+ * The one line to show, phrased as the presenter's next action rather than the counterparty's
+ * notification. Contacts who are not demo profiles cannot be signed in as, so they get their state.
  */
 function toNudgeLine(event, user) {
   const selfFirst = firstNameOf(user?.name) || 'them'
@@ -38,9 +37,8 @@ function toNudgeLine(event, user) {
 }
 
 /**
- * A thought bubble off the phone's top left bezel corner, holding a mock second device that names the
- * profile to sign in as to see the other half of what just happened. It is a prompt to the presenter,
- * not a window into anyone's account: no data is read from the other user.
+ * A thought bubble off the phone's bezel holding a mock second device, naming the profile to sign in as
+ * to see the other half. A prompt to the presenter, not a window: no data is read from the other user.
  * @param {object} props
  * @param {object|null} props.event - What to prompt about, or null to show nothing. See usePeerEvents.
  * @param {{name: string, seed: string, bg: string}} [props.user] - The signed-in identity.

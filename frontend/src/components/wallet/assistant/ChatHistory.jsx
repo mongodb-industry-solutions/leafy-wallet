@@ -17,8 +17,7 @@ function snippetOf(chat) {
 
 /**
  * Full-screen chat history: the list of conversations, reached from the thread header. The unsaved
- * draft sits pinned at the top, so tapping it is how you get back to a blank chat. Swiping a row
- * left reveals delete (one row at a time).
+ * draft sits pinned at the top, and swiping a row left reveals delete, one row at a time.
  * @param {object} props
  * @param {{id: string, title: string, messages: object[]}[]} props.chats
  * @param {string} props.activeId

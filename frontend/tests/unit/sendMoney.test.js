@@ -41,7 +41,6 @@ vi.mock('@/lib/local/LocalStoreClient', () => ({
 }))
 vi.mock('@/lib/backend/enrichment', () => ({
   listContactEnrichment: vi.fn(async () => []),
-  listRequestDocs: vi.fn(async () => []),
   listTransactionEnrichment: vi.fn(async () => []),
   searchTransactionEnrichment: vi.fn(async () => []),
   spendingByContactEnrichment: vi.fn(async () => []),

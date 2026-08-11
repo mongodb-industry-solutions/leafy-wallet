@@ -4,10 +4,8 @@ import { ArrowUp, Wifi, WifiOff } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Send "queued while offline" step: with no connection the
- * payment waits in an on-device queue, then sends itself the moment signal returns. The
- * badge flips offline to online and the queued chip flies out. Pure CSS (keyframes in
- * globals.css), no images or timers.
+ * Animated mini-render for the Send "queued while offline" step: the payment waits in an on-device
+ * queue, then the badge flips online and the queued chip flies out. Pure CSS, no images or timers.
  */
 export function SendQueueVisual() {
   return (

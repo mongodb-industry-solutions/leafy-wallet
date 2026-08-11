@@ -725,9 +725,8 @@ export async function getSpendingByContact(isOnline = true, direction = 'sent') 
 }
 
 /**
- * Spending grouped into categories (Dining, Bills, ...), largest first. Each outgoing payment's note
- * is matched to its nearest category by embedding similarity - the same vector model as note search,
- * so it works identically online and offline. Notes with no text fall under "Other".
+ * Spending grouped into categories (Dining, Bills, ...), largest first. Each note is matched to its
+ * nearest category by embedding similarity, the same model as note search; blank notes are "Other".
  * @param {boolean} isOnline - Picks the transaction source; classification is the same either way.
  * @returns {Promise<{category: string, total: number, count: number, currency: string}[]>}
  */
@@ -753,8 +752,7 @@ export async function getSpendingByCategory(isOnline = true) {
 
 /**
  * Shape a request into the UI row used by the inbox, the bell and the awaiting-payment list. Keyed
- * by the Leafy Pay reference: the only id that survives the connection dropping mid-action. `name`
- * is whoever the row is about - the requester incoming, the contact asked outgoing.
+ * by the Leafy Pay reference: the only id that survives the connection dropping mid-action.
  */
 function toRequestView({ reference, name, amount, currency, note, status, createdAt, contact }) {
   const iso = typeof createdAt === 'number' ? new Date(createdAt).toISOString() : createdAt
@@ -1198,16 +1196,8 @@ function toSyncDoc(doc) {
 }
 
 /**
- * Newest stored transaction document on each side, for the "sync inspector" face of the info card:
- * Atlas (`walletTransactions`) above, ObjectBox (device) below. Read unconditionally from both,
- * regardless of the simulated connection - the whole point is to show them diverge while offline
- * (the device has the newest write, Atlas doesn't yet) and converge once sync resumes.
- *
- * No status filtering on the Atlas side: going offline in the demo now actually pauses the
- * ObjectBox Sync connection (see leafy-local-store's /local/v1/sync endpoints), so Atlas's own
- * newest row is already the right thing to show - it simply won't have the in-flight write yet.
- *
- * Both are best-effort: a store that can't be reached reads as `null` rather than failing the card.
+ * Newest stored transaction on each side for the sync inspector: Atlas above, ObjectBox below. Read
+ * from both whatever the simulated connection, so the card shows them diverge offline then converge.
  * @returns {Promise<{atlas: object|null, local: object|null}>}
  */
 export async function getDbSyncSnapshot() {

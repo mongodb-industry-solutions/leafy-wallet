@@ -48,10 +48,12 @@ export const CONTRACTS = {
   search: {
     name: 'search_transactions',
     description:
-      "Find transactions by what they were for, matched on meaning rather than exact words. Use " +
-      "for 'what did I spend on food', 'find the rent payment'. For totals, use " +
-      'get_spending_by_contact instead.',
-    schema: z.object({ query: z.string().describe('What to look for, e.g. "coffee" or "rent"') }),
+      'Find transactions by what they were for, matched on meaning, or by an exact term one carries ' +
+      "such as a reference or a merchant name. Use for 'what did I spend on food', 'find the rent " +
+      "payment', 'the payment with reference AB-1234'. For totals, use get_spending_by_contact instead.",
+    schema: z.object({
+      query: z.string().describe('What to look for, e.g. "coffee", "rent", or a reference like "AB-1234"'),
+    }),
   },
   recent: {
     name: 'list_recent_transactions',

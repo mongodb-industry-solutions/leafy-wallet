@@ -10,10 +10,8 @@ import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 const DELIVER_DURATION_S = 2.6
 
 /**
- * Animated mini-render for the Request "delivered by the PSP" step: once online, the request
- * travels through the payment platform (PSP) into the other person's wallet, and the money
- * only moves when they approve. A packet flows you to the PSP to the wallet, then an approval
- * check lands. Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Request "delivered by the PSP" step: a packet flows from you through
+ * the PSP into their wallet, then an approval check lands. Pure CSS, no images or timers.
  */
 export function RequestDeliverVisual() {
   return (

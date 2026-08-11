@@ -65,10 +65,8 @@ function RequestRow({ notification, isBusy, onPay, onDecline }) {
 }
 
 /**
- * Bottom-sheet notifications list: money received (inbound transfers) and payment requests addressed
- * to the user, newest first. Marks everything seen once it has opened, so the bell badge clears.
- * Rows swipe left to clear one; "Clear all" clears the lot. Paying a request hands off to the full
- * review flow via `onPayRequest`.
+ * Bottom-sheet notifications list: inbound transfers and payment requests addressed to the user, newest
+ * first. Opening marks everything seen, and paying a request hands off via `onPayRequest`.
  * @param {object} props
  * @param {(notification: object) => void} props.onPayRequest - Opens the pay-request review flow.
  * @param {() => void} props.onClose

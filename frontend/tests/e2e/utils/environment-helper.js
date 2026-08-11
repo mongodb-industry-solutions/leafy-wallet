@@ -9,10 +9,8 @@ function listOf(values) {
 }
 
 /**
- * Resolves app URLs from the registry in `../config/apps.js`.
- *
- * API-compatible with `EnvironmentHelper` in the central ist-endtoend-tests-demo-solutions repo, so a
- * spec written against one runs against the other unchanged.
+ * Resolves app URLs from the registry in `../config/apps.js`. API-compatible with `EnvironmentHelper`
+ * in the central ist-endtoend-tests-demo-solutions repo, so a spec runs against either unchanged.
  */
 export class EnvironmentHelper {
   /**

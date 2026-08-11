@@ -5,10 +5,8 @@ import { LeafLogo } from '@/components/common/LeafLogo'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the People "Name resolution" step: Leafy Pay hides who the
- * counterparty is, so the wallet's contact directory in Atlas maps the obscured reference
- * to a friendly name, backfilled on read. The masked reference resolves into an avatar and
- * name on a loop. Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the People "Name resolution" step: Leafy Pay obscures the counterparty, so
+ * Atlas maps the masked reference into an avatar and name on a loop. Pure CSS, no images or timers.
  */
 export function NameResolutionVisual() {
   return (

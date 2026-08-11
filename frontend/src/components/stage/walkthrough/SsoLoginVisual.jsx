@@ -10,9 +10,8 @@ const CURSOR_TARGET = 0
 const PRESS_ANIMATION = { animation: 'sso-button-press 4s ease-in-out infinite' }
 
 /**
- * Animated mini-render of the login screen for the walkthrough: the same profile cards, divider and
- * SSO button the user is looking at, with a cursor that glides onto the first profile and taps it on
- * a loop. Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render of the login screen: the same profile cards, divider and SSO button, with a
+ * cursor that glides onto the first profile and taps it on a loop. Pure CSS, no images or timers.
  */
 export function SsoLoginVisual() {
   return (

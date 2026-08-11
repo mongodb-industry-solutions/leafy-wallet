@@ -6,7 +6,7 @@ import { AccountsCarouselVisual } from '@/components/stage/walkthrough/AccountsC
 import { BackgroundSyncVisual } from '@/components/stage/walkthrough/BackgroundSyncVisual'
 import { LocalHistoryVisual } from '@/components/stage/walkthrough/LocalHistoryVisual'
 import { PaymentStatusVisual } from '@/components/stage/walkthrough/PaymentStatusVisual'
-import { BlindIndexVisual } from '@/components/stage/walkthrough/BlindIndexVisual'
+import { ContactLookupVisual } from '@/components/stage/walkthrough/ContactLookupVisual'
 import { NameResolutionVisual } from '@/components/stage/walkthrough/NameResolutionVisual'
 import { ContactsOfflineVisual } from '@/components/stage/walkthrough/ContactsOfflineVisual'
 import { AssistantRoutingVisual } from '@/components/stage/walkthrough/AssistantRoutingVisual'
@@ -16,7 +16,8 @@ import { SendQueueVisual } from '@/components/stage/walkthrough/SendQueueVisual'
 import { SendSyncVisual } from '@/components/stage/walkthrough/SendSyncVisual'
 import { RequestComposeVisual } from '@/components/stage/walkthrough/RequestComposeVisual'
 import { RequestDeliverVisual } from '@/components/stage/walkthrough/RequestDeliverVisual'
-import { RequestDownstreamVisual } from '@/components/stage/walkthrough/RequestDownstreamVisual'
+import { RequestReplicaVisual } from '@/components/stage/walkthrough/RequestReplicaVisual'
+import { HybridSearchVisual } from '@/components/stage/walkthrough/HybridSearchVisual'
 
 // Behind-the-scenes walkthrough shown on the stage, keyed to the active wallet screen. Written for a
 // non-engineer presenter. Each step carries an icon, or a `visual` filling the illustration tile.
@@ -85,7 +86,7 @@ export const WALKTHROUGH = {
       {
         icon: CheckCheck,
         title: 'Confirmed on reconnect',
-        body: 'Back online, the payment uploads to Atlas and flips from pending to confirmed. The checkmark is the cloud’s real answer, reflected back to the phone.',
+        body: 'Back online, the payment goes to the payment platform for real, and its answer flips the row from pending to confirmed. Atlas receives the settled copy through Sync.',
       },
     ],
   },
@@ -106,7 +107,7 @@ export const WALKTHROUGH = {
       {
         visual: SendSyncVisual,
         title: 'Synced on reconnect',
-        body: 'Back online, it pushes up to MongoDB Atlas and settles. Phone and cloud end up holding the same result.',
+        body: 'Back online, the payment platform settles it for real, the phone records the answer, and Sync carries it up to MongoDB Atlas. Phone and cloud end up holding the same result.',
       },
     ],
   },
@@ -125,9 +126,9 @@ export const WALKTHROUGH = {
         body: 'Back online, the request goes through the payment platform (PSP) as a real request to pay. It lands in the other person’s wallet and the money only moves once they approve it.',
       },
       {
-        visual: RequestDownstreamVisual,
+        visual: RequestReplicaVisual,
         title: 'Kept close by',
-        body: 'A copy of every request rides down through Atlas onto the phone, so the list is still there to read the next time the signal is not.',
+        body: 'Every request is written on the phone itself, so the list is already there the next time the signal is not. MongoDB Atlas gets its own copy through Sync.',
       },
     ],
   },
@@ -135,9 +136,9 @@ export const WALKTHROUGH = {
     label: 'People',
     steps: [
       {
-        visual: BlindIndexVisual,
+        visual: ContactLookupVisual,
         title: 'Emails are never stored',
-        body: 'You add a contact by email, but the raw email is never saved. It is turned into a keyed digest, so the wallet can still find people without holding their personal data.',
+        body: 'You add a contact by email, but the phone never keeps it. Leafy Pay resolves the address and only a masked hint comes back, so the wallet holds no personal data.',
       },
       {
         visual: NameResolutionVisual,
@@ -147,7 +148,7 @@ export const WALKTHROUGH = {
       {
         visual: ContactsOfflineVisual,
         title: 'Your people, even offline',
-        body: 'The contact directory syncs onto the phone, so names still resolve and you can start a payment with zero signal. Your people are always there.',
+        body: 'The whole contact directory lives on the phone, so names still resolve and you can start a payment with zero signal. Your people are always there.',
       },
     ],
   },
@@ -158,6 +159,11 @@ export const WALKTHROUGH = {
         visual: AssistantRoutingVisual,
         title: 'An assistant that checks, never guesses',
         body: 'Ask in plain words and it routes to the right tool, then answers only from your real data, never a guess.',
+      },
+      {
+        visual: HybridSearchVisual,
+        title: 'Two ways to find a payment',
+        body: 'Offline, the phone finds payments by meaning alone, using its own vector index. Online, MongoDB Atlas runs that same meaning search next to an exact-term search and fuses the two rankings.',
       },
       {
         visual: LocalModelVisual,

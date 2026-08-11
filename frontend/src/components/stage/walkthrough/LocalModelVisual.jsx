@@ -9,10 +9,8 @@ const TOKEN_START_PCT = 20
 const TOKEN_GAP_PCT = 30
 
 /**
- * Animated mini-render for the Chat "stays on the machine" step: the model runs locally, so
- * money questions never leave the demo machine. Tokens bounce inside a boundary that they
- * never cross, with a lock to reinforce it. Pure CSS (keyframes in globals.css), no images
- * or timers.
+ * Animated mini-render for the Chat "stays on the machine" step: the model runs locally, so tokens
+ * bounce inside a boundary they never cross, with a lock to reinforce it. Pure CSS, no timers.
  */
 export function LocalModelVisual() {
   return (

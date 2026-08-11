@@ -11,10 +11,8 @@ const CONTACTS = [
 ]
 
 /**
- * Animated mini-render for the People "Available offline" step: the contact directory
- * syncs to the device, so names still resolve and you can start a payment with zero signal.
- * The list stays put as the connection drops to offline. Pure CSS (keyframes in
- * globals.css), no images or timers.
+ * Animated mini-render for the People "Available offline" step: the contact directory syncs to the
+ * device, so the list stays put and names resolve as the connection drops. Pure CSS, no timers.
  */
 export function ContactsOfflineVisual() {
   return (

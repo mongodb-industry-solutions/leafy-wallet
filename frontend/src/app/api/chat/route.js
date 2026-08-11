@@ -8,11 +8,8 @@ export const maxDuration = 300
 const toLangChain = (m) => (m.role === 'assistant' ? new AIMessage(m.text) : new HumanMessage(m.text))
 
 /**
- * Runs one assistant turn and returns it whole. Streaming tokens would stutter the client typewriter
- * on a slow local model, so the browser reveals a finished reply at a steady rate instead.
- *
- * Body: `{ message: string, history?: {role, text}[], isOnline?: boolean }`. The graph lives here
- * because its tools read the session and call Leafy Pay server-side.
+ * Runs one assistant turn and returns it whole: streaming would stutter the client typewriter on a
+ * slow local model. Body: `{ message: string, history?: {role, text}[], isOnline?: boolean }`.
  */
 export async function POST(request) {
   const session = await getSession()

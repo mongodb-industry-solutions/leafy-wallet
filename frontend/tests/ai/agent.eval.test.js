@@ -36,11 +36,6 @@ describe('Leafy assistant · reading money', () => {
     expect(called(calls, 'get_spending_by_category')).toBe(true)
     expect(charts.length).toBeGreaterThan(0)
   })
-
-  it('uses semantic search for a "what did I spend on X" question', async () => {
-    const { calls } = await runTurn('What did I spend on coffee?')
-    expect(called(calls, 'search_transactions')).toBe(true)
-  })
 })
 
 describe('Leafy assistant · sending & requesting', () => {
@@ -79,10 +74,25 @@ describe('Leafy assistant · sending & requesting', () => {
   })
 })
 
+// Offline the tool set is a strict subset and the reads come off the device, so the checks here are
+// that the shared tools behave identically rather than that every answer matches.
 describe('Leafy assistant · offline parity', () => {
   it('draws a spending chart offline too', async () => {
     const { calls, charts } = await runTurn('How much did I spend this week?', { isOnline: false })
     expect(called(calls, 'get_spending_by_contact')).toBe(true)
     expect(charts.length).toBeGreaterThan(0)
+  })
+
+  it('answers a balance question from the device cache', async () => {
+    const { reply, calls } = await runTurn("What's my balance?", { isOnline: false })
+    expect(called(calls, 'get_balance')).toBe(true)
+    expect(reply).toMatch(/1[,.]?493/)
+  })
+
+  it('still drafts a payment offline, to be queued for replay', async () => {
+    const { drafts } = await runTurn('Send €50 to Luis for the team dinner', { isOnline: false })
+    expect(drafts).toHaveLength(1)
+    expect(drafts[0].amount).toBe(50)
+    expect(drafts[0].contact.name.toLowerCase()).toContain('luis')
   })
 })

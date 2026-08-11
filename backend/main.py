@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 
 from mcp_server.server import mcp
 from routers.wallet_contacts import router as wallet_contacts_router
-from routers.wallet_requests import router as wallet_requests_router
 from routers.wallet_transactions import router as wallet_transactions_router
 
 load_dotenv()
@@ -43,7 +42,6 @@ app.add_middleware(
 )
 
 app.include_router(wallet_contacts_router, prefix="/api/v1")
-app.include_router(wallet_requests_router, prefix="/api/v1")
 app.include_router(wallet_transactions_router, prefix="/api/v1")
 app.mount("/mcp", mcp_app)
 

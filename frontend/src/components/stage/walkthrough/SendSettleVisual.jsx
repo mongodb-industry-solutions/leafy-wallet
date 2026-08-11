@@ -4,10 +4,8 @@ import { ArrowUp, Check, Clock } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Send "written locally, settles for real" step: you tap Send,
- * the payment saves on the device and shows as Pending straight away, then flips to
- * Completed once it actually settles. Pure CSS (keyframes in globals.css), no images or
- * timers.
+ * Animated mini-render for the Send "written locally, settles for real" step: the payment saves on the
+ * device as Pending straight away, then flips to Completed once it settles. Pure CSS, no timers.
  */
 export function SendSettleVisual() {
   return (

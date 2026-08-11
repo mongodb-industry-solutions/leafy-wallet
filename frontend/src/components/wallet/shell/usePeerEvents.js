@@ -4,11 +4,8 @@ import { useEffect, useRef } from 'react'
 import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 
 /**
- * Reports the things the user does *to* someone else to a listener outside the phone, so the stage can
- * mirror them on that person's device. Two triggers, both outbound and both only once they have really
- * reached Leafy Pay: a transfer the user composed reaching `completed`, and a payment request the user
- * raised turning up in their outgoing box. Paying a request someone else sent is not one of them - the
- * money moves, but the other side asked for it and is not the one being surprised.
+ * Reports what the user does *to* someone else to a listener outside the phone, so the stage can mirror
+ * it on their device. Outbound only, and only once Leafy Pay has really accepted it.
  * @param {(event: {id: string, kind: 'send'|'request', peerName: string, amount: number, seed: string, bg: string}) => void} onEvent
  *   Must be stable across renders, since it is an effect dependency.
  */

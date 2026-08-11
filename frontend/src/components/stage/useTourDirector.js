@@ -7,10 +7,8 @@ import { TOUR } from '@/lib/tour'
 const DEFAULT_READ_MS = 1000
 
 /**
- * Sequences the cursor-driven tour: publishes the current action for the cursor to perform, and once
- * the cursor reports it done, holds for the action's `readMs` (so the narration can be read) before
- * advancing. Pause freezes between actions; exhausting the list calls `onFinish`. The cursor itself
- * performs the real DOM interaction - this hook only owns sequencing.
+ * Sequences the cursor-driven tour: publishes the current action, then holds for its `readMs` once the
+ * cursor reports done. The cursor performs the real interaction; this hook only owns sequencing.
  * @param {object} props
  * @param {boolean} props.isActive
  * @param {() => void} props.onFinish

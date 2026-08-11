@@ -24,9 +24,8 @@ function toUser(identity) {
 }
 
 /**
- * Resolves the entry phase from the real Leafy Pay session and exposes the transitions the shell needs.
- * On mount it checks me(). With no session it checks for a local passwordless credential to decide
- * between the FaceID path and the SSO login.
+ * Resolves the entry phase from the real Leafy Pay session and exposes the shell's transitions. With no
+ * session it checks for a local passwordless credential to choose the FaceID path over the SSO login.
  * @param {() => void} [onAuthenticated] - Fired once each time a session is established, by either
  *   entry path. Lets the caller treat "the session resolved" as the event it is, rather than watching
  *   `phase` from an effect.

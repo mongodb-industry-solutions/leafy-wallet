@@ -4,10 +4,8 @@ import { Check, WifiOff } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Request "composed anywhere" step: the request saves to the
- * phone first, so you can write it with no signal at all. A draft fills in behind an offline
- * badge, then a "saved locally" check appears. Pure CSS (keyframes in globals.css), no
- * images or timers.
+ * Animated mini-render for the Request "composed anywhere" step: the request saves to the phone first,
+ * so a draft fills in behind an offline badge and a "saved locally" check lands. Pure CSS, no timers.
  */
 export function RequestComposeVisual() {
   return (

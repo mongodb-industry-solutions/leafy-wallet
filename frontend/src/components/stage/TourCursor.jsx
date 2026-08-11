@@ -29,10 +29,8 @@ function setNativeValue(el, value) {
 }
 
 /**
- * The simulated pointer that drives the tour. Moves to the director's current `command` target and
- * performs the real interaction, narrating in a speech bubble, then reports via `onStepComplete`. A
- * command may `waitFor` an external signal (e.g. settlement) first. Lives at stage scope so it can
- * travel off the phone to the connection toggle; nothing in between is scaled, so rect math holds.
+ * The simulated pointer that drives the tour: moves to the director's `command` target, performs the
+ * real interaction, then reports via `onStepComplete`. At stage scope so it can leave the phone.
  * @param {object} props
  * @param {import('@/lib/tour').TourAction | null} props.command - The action to perform, or null when idle.
  * @param {() => void} props.onStepComplete - Called once the action (and any waitFor) is done.

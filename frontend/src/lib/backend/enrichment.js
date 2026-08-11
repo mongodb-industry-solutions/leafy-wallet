@@ -23,7 +23,8 @@ export async function listTransactionEnrichment(owner) {
 }
 
 /**
- * Semantic search over an owner's transaction notes (Atlas `$vectorSearch`).
+ * Hybrid search over an owner's transaction history: Atlas `$rankFusion` blends semantic and exact-term
+ * matches, so a reference like "INV-2291" is findable even though it has no useful embedding.
  * @param {{q: string, owner: string, limit?: number}} params
  */
 export async function searchTransactionEnrichment({ q, owner, limit = 10 }) {
@@ -47,14 +48,4 @@ export async function spendingByContactEnrichment({ owner, direction = 'sent' })
 export async function listContactEnrichment(owner) {
   const query = new URLSearchParams({ ownerPartyRef: owner }).toString()
   return backendGet(`/api/v1/wallet-contacts?${query}`)
-}
-
-/**
- * The Atlas `walletRequests` replica for a user: requests they raised or are asked to pay. Exists so
- * they can be read on the device with no connection.
- * @param {{requesterPartyRef?: string, payerPartyRef?: string}} filter
- */
-export async function listRequestDocs(filter) {
-  const query = new URLSearchParams(filter).toString()
-  return backendGet(`/api/v1/wallet-requests?${query}`)
 }

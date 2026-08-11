@@ -24,9 +24,8 @@ import { LeafLogo } from '@/components/common/LeafLogo'
 import { WALKTHROUGH } from '@/lib/walkthrough'
 
 /**
- * One side of the flippable info card: the shared panel chrome (border, tour highlight, heading) plus
- * the corner flip button. `isBack` hides its own backface and lets long content scroll, since the back
- * is absolutely positioned over the front, so both faces fill the card's fixed height.
+ * One side of the flippable info card: the shared panel chrome plus the corner flip button. `isBack`
+ * hides its own backface and lets long content scroll, since the back is positioned over the front.
  */
 function CardFace({ isBack, isTourActive, onFlip, title, children }) {
   return (
@@ -63,10 +62,8 @@ function isTourKilled() {
 }
 
 /**
- * Top-level presenter stage: the phone frame beside the "Under the hood" panel. Gates the phone on the
- * real Leafy Pay session, showing the LoginScreen (SSO), the FaceID passwordless path, or the wallet app.
- * Also hosts the self-driving tour: the director sequences actions, the cursor performs them on the real
- * UI (including the off-phone connection toggle), and the walkthrough narration is pinned to each action.
+ * Top-level presenter stage: the phone frame beside the "Under the hood" panel, gated on the real Leafy
+ * Pay session. Also hosts the self-driving tour, whose cursor performs actions on the real UI.
  */
 export function DesktopShell() {
   const { isOnline, handleToggle } = useConnection()

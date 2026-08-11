@@ -7,9 +7,8 @@ import { SyncPath } from '@/components/stage/walkthrough/SyncPath'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Home "Quiet background sync" step: once online, writes on
- * the phone travel up to MongoDB Atlas in the background, landing with a checkmark.
- * Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Home "Quiet background sync" step: once online, writes on the phone
+ * travel up to MongoDB Atlas and land with a checkmark. Pure CSS, no images or timers.
  */
 export function BackgroundSyncVisual() {
   return (
