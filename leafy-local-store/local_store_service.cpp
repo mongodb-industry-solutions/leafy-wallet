@@ -134,7 +134,6 @@ struct LocalContact {
     std::string counterpartyLookupHint;
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
-    // Blind index of the contact's email; empty for contacts saved by phone.
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 2; }

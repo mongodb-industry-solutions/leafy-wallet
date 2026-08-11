@@ -6,22 +6,13 @@ import { SyncPath } from '@/components/stage/walkthrough/SyncPath'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Request "kept close by" step: a packet flows from Atlas to the phone
- * and a row lands in the on-device list, still readable offline. Pure CSS, no images or timers.
+ * Animated mini-render for the Request "kept close by" step: the request is written on the phone and
+ * its copy rides up to Atlas through Sync. Pure CSS, no images or timers.
  */
-export function RequestDownstreamVisual() {
+export function RequestReplicaVisual() {
   return (
     <VisualCard className="flex w-60 items-center justify-between px-5 py-6">
-      {/* Atlas: the cloud source. */}
-      <div className="flex flex-col items-center gap-1">
-        <AtlasTile />
-        <span className="text-[9px] font-medium text-muted-foreground">Atlas</span>
-      </div>
-
-      {/* The request copy flowing down to the device. */}
-      <SyncPath />
-
-      {/* The phone: the request list, kept close by. */}
+      {/* The phone: where the request is written, so the list is readable offline. */}
       <div className="flex flex-col items-center gap-1">
         <span
           className="flex size-11 items-center justify-center rounded-xl bg-muted text-foreground"
@@ -30,6 +21,15 @@ export function RequestDownstreamVisual() {
           <Smartphone className="size-6" />
         </span>
         <span className="text-[9px] font-medium text-muted-foreground">On device</span>
+      </div>
+
+      {/* The copy travelling up through Sync. */}
+      <SyncPath />
+
+      {/* Atlas: the durable replica. */}
+      <div className="flex flex-col items-center gap-1">
+        <AtlasTile />
+        <span className="text-[9px] font-medium text-muted-foreground">Atlas</span>
       </div>
     </VisualCard>
   )
