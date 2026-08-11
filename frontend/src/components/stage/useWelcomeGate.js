@@ -15,9 +15,8 @@ function hasSeenWelcome() {
 }
 
 /**
- * Gates the pre-auth welcome overlay for the booth. Opens once per browser session, until the visitor
- * dismisses it or signs out. Starting the tour is auth-aware (it may need to outlive the SSO redirect),
- * so that lives in DesktopShell; this hook only owns open/seen state.
+ * Gates the pre-auth welcome overlay for the booth: opens once per browser session until dismissed or
+ * signed out. Starting the tour is auth-aware, so that lives in DesktopShell; this owns open/seen.
  * @param {boolean} isEntrySettled - Whether the entry screen has resolved; holds the welcome back so
  *   it never opens underneath the FaceID unlock.
  * @returns {{

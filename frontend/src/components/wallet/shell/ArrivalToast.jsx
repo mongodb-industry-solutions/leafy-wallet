@@ -4,9 +4,8 @@ import { useWalletData } from '@/lib/wallet/WalletDataProvider'
 import { Toast } from '@/components/ui/Toast'
 
 /**
- * Announces money arriving from someone else - a payment request or an inbound transfer - the way a
- * settled payment announces itself, so neither is left sitting behind the bell. Renders nothing until
- * something turns up.
+ * Announces money arriving from someone else - a request or an inbound transfer - the way a settled
+ * payment announces itself, so neither sits unseen behind the bell. Renders nothing until one lands.
  */
 export function ArrivalToast() {
   const { arrival, dismissArrival, settlement } = useWalletData()

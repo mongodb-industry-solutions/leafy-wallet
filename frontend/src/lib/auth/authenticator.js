@@ -1,11 +1,8 @@
 'use client'
 
 /**
- * Browser software authenticator for the passwordless login credential.
- *
- * Generates a real ECDSA P-256 (ES256) key pair with the private key NON-EXTRACTABLE and stores the
- * CryptoKey handle in IndexedDB (never localStorage, never serialized, never downloadable). The private
- * key cannot be exfiltrated even under XSS. Only the public key + minimal metadata leave the browser.
+ * Browser software authenticator for the passwordless login credential. The ECDSA P-256 private key
+ * is non-extractable and held as a CryptoKey in IndexedDB, so only the public key leaves the browser.
  */
 
 const DB_NAME = 'lw-passwordless'

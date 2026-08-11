@@ -31,9 +31,8 @@ export function getMcpTools() {
 }
 
 /**
- * An MCP tool result as a plain array of rows. The adapter surfaces a `list[dict]` tool in three
- * shapes: `structuredContent` ({result: [...]}) when the response is a single block, an array of
- * text blocks when it is multiple rows, or a bare string. Each normalizes to an array of rows.
+ * An MCP tool result as a plain array of rows. The adapter returns `structuredContent`, an array of
+ * text blocks, or a bare string depending on the response, and each normalizes to an array.
  * @param {unknown} result
  * @returns {any[]}
  */

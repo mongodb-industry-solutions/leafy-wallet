@@ -17,9 +17,8 @@ function handleLogin(email) {
 }
 
 /**
- * First-run login screen: hero art, demo-user profile cards, then the real SSO button. A profile card
- * starts the Leafy Pay authorization_code + PKCE flow prefilled; "Continue with SSO" runs the same
- * flow with an empty form, the only path where the password is typed by hand.
+ * First-run login screen: hero art, demo-user profile cards, then the real SSO button. A card prefills
+ * the Leafy Pay authorization_code + PKCE flow; SSO runs the same flow with an empty form.
  */
 export function LoginScreen() {
   return (

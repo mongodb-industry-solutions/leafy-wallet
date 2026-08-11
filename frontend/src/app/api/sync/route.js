@@ -2,10 +2,8 @@ import { getSession } from '@/lib/auth/session'
 import { pauseLocalSync, resumeLocalSync } from '@/lib/local/LocalStoreClient'
 
 /**
- * Pauses/resumes the on-device ObjectBox Sync connection, so "going offline" in the demo severs a
- * real sync link rather than just rerouting reads to the local store.
- *
- * Body: `{ action: 'pause' | 'resume' }`.
+ * Pauses/resumes the on-device ObjectBox Sync connection, so going offline severs a real sync link
+ * rather than just rerouting reads. Body: `{ action: 'pause' | 'resume' }`.
  */
 export async function POST(request) {
   const session = await getSession()

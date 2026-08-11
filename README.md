@@ -30,6 +30,7 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 6. **Chat with the Leafy assistant**
    - Natural-language questions over the user's own data, streamed with a typewriter effect.
    - Spending questions render an inline per-contact breakdown chart.
+   - Asking about unusual activity runs a burst check and renders the flagged payments as a card.
    - Payment drafts appear as confirmation cards; nothing moves without the user's tap.
 
 7. **Toggle the connection**
@@ -37,7 +38,7 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 
 ## Where Does MongoDB Shine?
 
-![System architecture: edge devices (Leafy Wallet, ObjectBox, Ollama) sync through the ObjectBox Sync Server to MongoDB Atlas (database, Vector Search, MCP), while the edge also talks directly to the external Payment Platform (PSP)](docs/architecture-diagram.svg)
+![System architecture: edge devices (Leafy Wallet, ObjectBox, Ollama) sync through the ObjectBox Sync Server to MongoDB Atlas (database, Vector Search, MCP), while the edge also talks directly to the external Payment Platform (PSP)](docs/architecture-diagram1.svg)
 
 The edge (the wallet, its on-device ObjectBox store, and the local Ollama model) can run the whole experience alone. When it's online, it also syncs through the ObjectBox Sync Server into MongoDB Atlas, and talks directly to the Payment Platform for real transfers.
 
@@ -49,11 +50,17 @@ Wallet records written on the device (chats, requests, queued sends) stream up t
 ### 2. **Multi-document ACID transactions**
 Transfers and their enrichment records stay consistent even when several offline writes land at once on reconnect. No double-spends, no drift.
 
-### 3. **Atlas Vector Search, online and on-device**
-Transaction notes are embedded with [Voyage AI](https://www.mongodb.com/products/platform/ai-search-and-retrieval/models) and searchable by meaning: Atlas `$vectorSearch` when online, ObjectBox's HNSW index on the device when offline. The same natural query works in either mode. Embedding runs on the open-weight `voyage-4-nano`, so it needs no API key and works with no network at all.
+### 3. **Hybrid search online, vector search on-device**
+Transaction notes are embedded with [Voyage AI](https://www.mongodb.com/products/platform/ai-search-and-retrieval/models) and searchable by meaning in either mode. Online, Atlas fuses vector and full-text search with [`$rankFusion`](https://www.mongodb.com/docs/manual/reference/operator/aggregation/rankFusion/), so a paraphrase, an exact reference and a misspelling all find the right payment. Offline, ObjectBox's own HNSW index answers by meaning alone - the device has no full-text index, which is the one thing the cloud can do that the edge cannot. Embedding runs on the open-weight `voyage-4-nano`, so it needs no API key and works with no network at all.
 
-### 4. **A LangGraph agent over local AI, through MCP**
-The assistant routes each question to the right tool (balances, contacts, spending summaries, semantic search, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
+### 4. **Long-term history, populated by an Atlas Trigger**
+A [Database Trigger](https://www.mongodb.com/docs/atlas/atlas-ui/triggers/) on `walletTransactions` copies every settled transfer into `walletTransactionsHistory`, so the searchable long tail accumulates in Atlas with no application code writing it. The device keeps what it needs to work offline; Atlas keeps everything, which is what gives online search more to find than the phone holds.
+
+### 5. **Fraud signals from window functions**
+[`$setWindowFields`](https://www.mongodb.com/docs/manual/reference/operator/aggregation/setWindowFields/) counts sends inside a rolling ten-minute window to flag bursts, the classic account-takeover and card-testing shape. Ask the assistant whether anything looks unusual and the flagged payments come back as a card in the chat. Online only, on purpose: this is the analysis the edge cannot do for itself.
+
+### 6. **A LangGraph agent over local AI, through MCP**
+The assistant routes each question to the right tool (balances, contacts, spending summaries, transaction search, fraud checks, payment drafting) and answers from tool results only. Online, the read tools call the backend's MongoDB MCP server; offline, the same tools read the on-device store. Aggregations like spending-by-contact are computed by the database, not by the model.
 
 ## Tech Stack
 
@@ -91,7 +98,7 @@ For the full walkthrough, ports, and environment files, see [LOCAL_DEPLOYMENT.md
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) with Docker Compose
-- [uv](https://docs.astral.sh/uv/getting-started/installation/), to run the vector search index script
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), to run the search index script
 - A MongoDB Atlas cluster (M0 or higher). If you don't have an account, sign up for free at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register).
 - A running [PSP (`sec-fsi-pci-dss`)](https://github.com/mongodb-industry-solutions/sec-fsi-pci-dss) instance (see the section above).
 
@@ -120,18 +127,24 @@ DATABASE_NAME="<your-database-name>"
 
 Make sure to run this on the root directory.
 
-1. Create the Atlas vector search index that backs semantic transaction search (first run only). It reads
+1. Create the Atlas search indexes behind hybrid transaction search (first run only). It reads
    `backend/.env`, so fill that in first:
 ```bash
 cd backend && uv run python scripts/create_vector_index.py
 ```
-2. Build and start every container:
+2. Create the Atlas Database Trigger that copies settled transactions into `walletTransactionsHistory`
+   (first run only). In the Atlas UI, add a Database Trigger on the `walletTransactions` collection
+   watching Insert, Update and Replace with **Full Document enabled**, and paste
+   [`backend/scripts/atlas_trigger_transaction_history.js`](backend/scripts/atlas_trigger_transaction_history.js)
+   as its function. Edit the service name in that file to match your cluster, otherwise every
+   invocation fails and the history collection stays empty.
+3. Build and start every container:
 ```bash
 make build
 ```
-3. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
-4. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
-5. To delete the containers and images run:
+4. Activate the ObjectBox Sync Server trial license in the Admin UI at http://localhost:9980 (first run only).
+5. Open the app at http://localhost:8080 and sign in with SSO as one of the demo users below.
+6. To delete the containers and images run:
 ```bash
 make clean
 ```

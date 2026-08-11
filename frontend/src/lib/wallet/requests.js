@@ -45,9 +45,8 @@ export function toRequestStatus(pspStatus) {
 }
 
 /**
- * Rows for money the user has asked for and not been paid yet, so it sits inline with the payments
- * instead of in its own section. `kind` is what makes the row read as awaiting payment and the
- * detail sheet offer to cancel; nothing has moved, so the amount carries no direction.
+ * Rows for money the user has asked for and not been paid yet, so it sits inline with the payments.
+ * `kind` is what makes the row read as awaiting payment and the detail sheet offer to cancel.
  * @param {object[]} outgoing - Request views from `getRequests`.
  * @returns {object[]} Rows the activity lists render alongside transactions.
  */

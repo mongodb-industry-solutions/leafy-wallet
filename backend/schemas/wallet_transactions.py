@@ -22,52 +22,6 @@ def _none_if_epoch_zero(value):
     return value
 
 
-class WalletTransactionCreate(BaseModel):
-    """Inbound payload for POST /wallet-transactions.
-
-    `amount`/`currency` are flat (not a nested `amount: {value, currency}`
-    sub-document) to match the shape ObjectBox's MongoDB Sync Server bridge
-    writes when a transaction originates offline via leafy-local-store  - 
-    that connector has no way to produce nested fields, so the canonical
-    Atlas schema was flattened to match it rather than special-casing one
-    write path.
-
-    `noteEmbedding` is absent on purpose: it's generated server-side by
-    the embedding provider from `note` (see services/embeddings.py), never supplied by the
-    client. `_id`/`settledAt` are also server-managed, same reasoning as
-    WalletContactCreate.
-
-    `createdAt` is optional rather than server-managed: a payment adopted from
-    Leafy Pay happened before this row was written, and stamping it with the
-    write time would sort it wrongly offline (the device reads this field,
-    while online reads Leafy Pay's own). Omit it for a payment made here and
-    now, which is what the default covers.
-    """
-
-    leafyPayTransferReference: str
-    ownerPartyRef: str
-    counterpartyArrangementReference: str
-    amount: float
-    currency: str
-    note: str | None = Field(default=None, max_length=140)
-    direction: Literal["sent", "received"]
-    leafyPayStatus: Literal["pending", "settled", "failed", "exception"] = "pending"
-    localSyncStatus: Literal["local_pending", "synced"] = "synced"
-    createdAt: datetime | None = None
-
-
-class WalletTransactionUpdate(BaseModel):
-    """Inbound payload for PATCH /wallet-transactions/{id}.
-
-    Covers only what legitimately changes after creation: the status transition and
-    its settlement time. Identifying fields (`ownerPartyRef`, `amount`, `direction`,
-    ...) are immutable and therefore not offered here.
-    """
-
-    leafyPayStatus: Literal["pending", "settled", "failed", "exception"] | None = None
-    settledAt: datetime | None = None
-
-
 class WalletTransactionOut(BaseModel):
     """Outbound shape returned to the client: the full stored document,
     including the server-managed fields that never appear in `Create`/`Update`.

@@ -1,6 +1,7 @@
 'use client'
 
-import { Check, Copy, KeyRound, X } from 'lucide-react'
+import Image from 'next/image'
+import { Check, Copy, KeyRound, Plus, Smartphone, X } from 'lucide-react'
 import { LeafLogo } from '@/components/common/LeafLogo'
 import { DEMO_USERS } from '@/lib/demo-users'
 import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
@@ -14,11 +15,8 @@ import { useCopyToClipboard } from '@/lib/hooks/useCopyToClipboard'
 const [SHARED_PROFILE] = DEMO_USERS
 
 /**
- * Pre-auth welcome overlay for an unattended booth visitor. Visitors already know roughly what the
- * demo is, so it skips the pitch. A minimal two-part hero orients the stage (the phone is the wallet,
- * the card beside it narrates each screen), and the body carries the demo password (one tap to copy)
- * and the two actions. Overlays the whole stage and is never a blocking gate - the backdrop, the X,
- * and "Just let me try it" all dismiss it.
+ * Pre-auth welcome overlay for an unattended booth visitor: a two-part hero orienting the stage, the
+ * demo password to copy, and the two actions. Never a blocking gate - anything dismisses it.
  * @param {object} props
  * @param {() => void} props.onStartTour - Primary action; records the tour intent and closes.
  * @param {() => void} props.onDismiss - Close without starting the tour.
@@ -36,7 +34,7 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
     <div className="absolute inset-0 z-50 flex items-center justify-center p-6">
       <button aria-label="Dismiss" onClick={onDismiss} className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-border bg-card shadow-(--shadow-panel)">
+      <div className="relative flex w-full max-w-3xl overflow-hidden rounded-[2rem] border border-border bg-card bg-gradient-to-b from-primary/20 via-primary/[0.05] to-transparent bg-[length:100%_16rem] bg-no-repeat shadow-(--shadow-panel)">
         <button
           type="button"
           aria-label="Dismiss"
@@ -46,9 +44,12 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
           <X size={18} />
         </button>
 
+        {/* Left column: the dialog as it was. */}
+        <div className="flex w-1/2 shrink-0 flex-col">
+
         {/* Hero: two minimal parts side by side. A clean device (the wallet) and a small card echoing
             the "Built on MongoDB" panel that narrates each screen. Restraint over detail. */}
-        <div className="flex items-center justify-center gap-5 bg-gradient-to-b from-primary/20 via-primary/[0.05] to-transparent px-6 pb-9 pt-11">
+        <div className="flex items-center justify-center gap-5 px-6 pb-9 pt-11">
           <div className="h-44 w-[5.5rem] shrink-0 rounded-[1.5rem] border-2 border-foreground/80 bg-white p-1.5 shadow-lg">
             <div className="flex h-full w-full flex-col overflow-hidden rounded-[1.15rem] bg-white px-2">
               <span className="mx-auto mt-1.5 h-1 w-6 rounded-full bg-foreground/70" />
@@ -127,6 +128,40 @@ export function WelcomeDialog({ onStartTour, onDismiss, isAuthed = false }) {
                 Sign in on the phone first. The tour starts right after.
               </p>
             )}
+          </div>
+        </div>
+        </div>
+
+        <div className="w-px shrink-0 self-stretch bg-border" />
+
+        {/* Right column: the same wallet on a real phone. The QR opens the mobile view, and the note
+            below explains that adding it to the home screen drops the browser chrome. */}
+        <div className="flex w-1/2 flex-col items-center justify-center gap-5 px-8 py-10 text-center">
+          <div className="flex items-center gap-2">
+            <Smartphone size={16} className="text-secondary" />
+            <p className="text-base font-bold text-foreground">Try it on your phone</p>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Scan this code to open the wallet on your own device and see how it looks on a real phone.
+          </p>
+
+          <div className="rounded-2xl border border-border bg-white p-3 shadow-sm">
+            <Image
+              src="/qr-code.png"
+              alt="QR code to open Leafy Wallet on your phone"
+              width={176}
+              height={176}
+              className="h-44 w-44"
+            />
+          </div>
+
+          <div className="flex items-start gap-2.5 rounded-2xl border border-border bg-foreground/[0.03] px-4 py-3 text-left">
+            <p className="text-xs text-muted-foreground">
+              For the full experience, use your browser&apos;s share menu to{' '}
+              <span className="font-semibold text-foreground">Add to Home Screen</span>. It then opens
+              fullscreen, without the browser bars, just like a native wallet app.
+            </p>
           </div>
         </div>
       </div>

@@ -10,6 +10,14 @@ export const CONTRACTS = {
     description: "The user's account balances. Use for 'how much do I have', 'what's my balance'.",
     schema: z.object({}),
   },
+  velocity: {
+    name: 'get_transaction_velocity',
+    description:
+      "Bursts of payments sent in quick succession, which can mean a compromised account. Use for " +
+      "'anything unusual', 'suspicious activity', 'did anyone use my account'. Online only: the " +
+      'device cannot compute this. An empty result means nothing unusual was found.',
+    schema: z.object({}),
+  },
   contacts: {
     name: 'list_contacts',
     description:
@@ -40,10 +48,12 @@ export const CONTRACTS = {
   search: {
     name: 'search_transactions',
     description:
-      "Find transactions by what they were for, matched on meaning rather than exact words. Use " +
-      "for 'what did I spend on food', 'find the rent payment'. For totals, use " +
-      'get_spending_by_contact instead.',
-    schema: z.object({ query: z.string().describe('What to look for, e.g. "coffee" or "rent"') }),
+      'Find transactions by what they were for, matched on meaning, or by an exact term one carries ' +
+      "such as a reference or a merchant name. Use for 'what did I spend on food', 'find the rent " +
+      "payment', 'the payment with reference AB-1234'. For totals, use get_spending_by_contact instead.",
+    schema: z.object({
+      query: z.string().describe('What to look for, e.g. "coffee", "rent", or a reference like "AB-1234"'),
+    }),
   },
   recent: {
     name: 'list_recent_transactions',

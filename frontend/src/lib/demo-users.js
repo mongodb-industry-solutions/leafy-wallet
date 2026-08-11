@@ -1,8 +1,6 @@
 /**
- * The demo identities the whole demo revolves around, shown on the sign-in walkthrough.
- *
- * The single place to edit when pointing the app at your own Leafy Pay: replace these with users that
- * exist there (email login only). The values below match MongoDB's shared demo environment.
+ * The demo identities the sign-in walkthrough shows, and the single place to edit when pointing the
+ * app at your own Leafy Pay: replace them with users that exist there (email login only).
  */
 // `seed`/`bg` pin each user's Peep avatar; `bg` is a hex color with no leading `#`. `phone` is their
 // Leafy Pay registration, so a contact's masked hint can be matched back to the same avatar.

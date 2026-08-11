@@ -4,10 +4,8 @@ import { Check, Clock, CreditCard } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Activity "Every payment knows its status" step: a single
- * row settles from Pending to Completed as the cloud confirms it. The status subtitle,
- * clock/check badge, and amount colour cross-fade on a loop. Pure CSS (keyframes in
- * globals.css), no images or timers.
+ * Animated mini-render for the Activity "Every payment knows its status" step: one row settles from
+ * Pending to Completed as the cloud confirms it, on a loop. Pure CSS, no images or timers.
  */
 export function PaymentStatusVisual() {
   return (

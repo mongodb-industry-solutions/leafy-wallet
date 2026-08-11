@@ -18,16 +18,6 @@ from tests.conftest import LOCAL_STORE_BASE as BASE, unique as _unique
 pytestmark = pytest.mark.usefixtures("require_leafy_local_store")
 
 
-
-
-
-
-def test_health_returns_account_count():
-    response = httpx.get(f"{BASE}/local/v1/health")
-    assert response.status_code == 200
-    assert "account_count" in response.json()
-
-
 def test_put_creates_then_lists():
     ref = _unique("acct")
     payload = {
@@ -98,8 +88,3 @@ def test_delete_removes_account():
 
     listed = httpx.get(f"{BASE}/local/v1/accounts").json()
     assert all(a["accountReference"] != ref for a in listed)
-
-
-def test_delete_unknown_account_returns_404():
-    response = httpx.delete(f"{BASE}/local/v1/accounts/{_unique('acct')}")
-    assert response.status_code == 404

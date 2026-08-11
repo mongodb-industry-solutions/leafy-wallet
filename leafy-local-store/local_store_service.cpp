@@ -98,10 +98,8 @@ struct LocalTransaction {
             out.amount = table->GetField<double>(12, 0);
             readString(14, out.currency);
             readString(16, out.note);
-            {
-                auto* ptr = table->GetPointer<const flatbuffers::Vector<float>*>(18);
-                out.noteEmbedding = ptr ? std::vector<float>(ptr->begin(), ptr->end()) : std::vector<float>();
-            }
+            auto* embedding = table->GetPointer<const flatbuffers::Vector<float>*>(18);
+            out.noteEmbedding = embedding ? std::vector<float>(embedding->begin(), embedding->end()) : std::vector<float>();
             readString(20, out.direction);
             readString(22, out.leafyPayStatus);
             readString(24, out.localSyncStatus);
@@ -136,7 +134,6 @@ struct LocalContact {
     std::string counterpartyLookupHint;
     int64_t createdAt = 0;   // epoch millis
     int64_t updatedAt = 0;   // epoch millis
-    // Blind index of the contact's email; empty for contacts saved by phone.
 
     struct _OBX_MetaInfo {
         static constexpr obx_schema_id entityId() { return 2; }
@@ -516,6 +513,79 @@ struct LocalRequest {
     };
 };
 
+// A send Leafy Pay has not accepted yet. Local-only like LocalAccountBalance - no SYNC_ENABLED, no
+// entry in objectbox-model.json - so an unaccepted payment can never reach Atlas.
+struct LocalPendingSend {
+    int64_t id = 0;
+    std::string ownerPartyRef;
+    std::string counterpartyArrangementReference;
+    double amount = 0;
+    std::string currency;
+    std::string note;        // empty = absent
+    std::string direction;
+    int64_t createdAt = 0;   // epoch millis
+
+    struct _OBX_MetaInfo {
+        static constexpr obx_schema_id entityId() { return 7; }
+
+        static void setObjectId(LocalPendingSend& object, obx_id newId) { object.id = newId; }
+
+        static void toFlatBuffer(flatbuffers::FlatBufferBuilder& fbb, const LocalPendingSend& object) {
+            fbb.Clear();
+            auto offsetOwner = fbb.CreateString(object.ownerPartyRef);
+            auto offsetCounterparty = fbb.CreateString(object.counterpartyArrangementReference);
+            auto offsetCurrency = fbb.CreateString(object.currency);
+            auto offsetNote = fbb.CreateString(object.note);
+            auto offsetDirection = fbb.CreateString(object.direction);
+
+            flatbuffers::uoffset_t fbStart = fbb.StartTable();
+            fbb.AddElement(4, object.id);              // 1: id
+            fbb.AddOffset(6, offsetOwner);              // 2: ownerPartyRef
+            fbb.AddOffset(8, offsetCounterparty);       // 3: counterpartyArrangementReference
+            fbb.AddElement(10, object.amount);          // 4: amount
+            fbb.AddOffset(12, offsetCurrency);          // 5: currency
+            fbb.AddOffset(14, offsetNote);              // 6: note
+            fbb.AddOffset(16, offsetDirection);         // 7: direction
+            fbb.AddElement(18, object.createdAt);       // 8: createdAt
+
+            flatbuffers::Offset<flatbuffers::Table> offset;
+            offset.o = fbb.EndTable(fbStart);
+            fbb.Finish(offset);
+        }
+
+        static void fromFlatBuffer(const void* data, size_t, LocalPendingSend& out) {
+            const auto* table = flatbuffers::GetRoot<flatbuffers::Table>(data);
+            assert(table);
+
+            auto readString = [&](uint16_t offset, std::string& target) {
+                auto* ptr = table->GetPointer<const flatbuffers::String*>(offset);
+                target = ptr ? std::string(ptr->c_str(), ptr->size()) : std::string();
+            };
+
+            out.id = table->GetField<int64_t>(4, 0);
+            readString(6, out.ownerPartyRef);
+            readString(8, out.counterpartyArrangementReference);
+            out.amount = table->GetField<double>(10, 0);
+            readString(12, out.currency);
+            readString(14, out.note);
+            readString(16, out.direction);
+            out.createdAt = table->GetField<int64_t>(18, 0);
+        }
+
+        static LocalPendingSend fromFlatBuffer(const void* data, size_t size) {
+            LocalPendingSend object;
+            fromFlatBuffer(data, size, object);
+            return object;
+        }
+
+        static std::unique_ptr<LocalPendingSend> newFromFlatBuffer(const void* data, size_t size) {
+            auto object = std::make_unique<LocalPendingSend>();
+            fromFlatBuffer(data, size, *object);
+            return object;
+        }
+    };
+};
+
 // Query helpers. The schema itself comes from create_obx_model() below, so only the
 // properties a query actually filters on need one here; ids must match that model.
 struct LocalTransaction_ {
@@ -553,9 +623,8 @@ const int EMBEDDING_DIMENSIONS = 1024;
 OBX_model* create_obx_model() {
     OBX_model* model = obx_model();
 
-    // Entity name doubles as the target MongoDB collection name in the Sync
-    // Server's bridge (confirmed empirically) - this is now pointed at the
-    // real walletTransactions collection the FastAPI backend also uses.
+    // A SYNC_ENABLED entity's name doubles as its target MongoDB collection name in the Sync
+    // Server's bridge (confirmed empirically), hence the match with the backend's collections.
     obx_model_entity(model, "walletTransactions", 1, 7001000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -582,8 +651,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "settledAt", OBXPropertyType_Date, 13, 7001000000000013ULL);
     obx_model_entity_last_property_id(model, 14, 7001000000000014ULL);
 
-    // Entity 2: walletContacts - entity name is the target MongoDB collection
-    // name, same rule as entity 1 above.
     obx_model_entity(model, "walletContacts", 2, 7002000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -599,8 +666,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "updatedAt", OBXPropertyType_Date, 8, 7002000000000008ULL);
     obx_model_entity_last_property_id(model, 10, 7002000000000010ULL);
 
-    // Entity 3: chats - a conversation. Entity name is the target MongoDB
-    // collection name, same rule as entities 1-2 above.
     obx_model_entity(model, "chats", 3, 7003000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -615,8 +680,6 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 8, 7003000000000008ULL);
     obx_model_entity_last_property_id(model, 8, 7003000000000008ULL);
 
-    // Entity 4: chatMessages - a single message within a chats conversation,
-    // linked by chatReference (ObjectBox has no nested/array attributes).
     obx_model_entity(model, "chatMessages", 4, 7004000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -629,11 +692,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "chatReference", OBXPropertyType_String, 7, 7004000000000007ULL);
     obx_model_entity_last_property_id(model, 7, 7004000000000007ULL);
 
-    // Entity 5: LocalAccountBalance - purely local, deliberately no
-    // OBXEntityFlags_SYNC_ENABLED and no corresponding entry in
-    // objectbox-sync-server/objectbox-model.json (see the struct comment
-    // above). The entity name has no MongoDB-collection meaning here since
-    // it's never bridged.
+    // The one entity with no SYNC_ENABLED flag and no entry in
+    // objectbox-sync-server/objectbox-model.json, so its name never reaches MongoDB.
     obx_model_entity(model, "LocalAccountBalance", 5, 7005000000000000ULL);
 
     obx_model_property(model, "id", OBXPropertyType_Long, 1, 7005000000000001ULL);
@@ -649,8 +709,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "lastRefreshedAt", OBXPropertyType_Date, 9, 7005000000000009ULL);
     obx_model_entity_last_property_id(model, 9, 7005000000000009ULL);
 
-    // Entity 6: walletRequests. Id 6 because the local-only entity 5 above still
-    // consumes an id here, even though it never reaches the sync server's model.json.
+    // Id 6, not 5: the local-only entity above still consumes an id here even though it never
+    // reaches the sync server's model.json.
     obx_model_entity(model, "walletRequests", 6, 7006000000000000ULL);
     obx_model_entity_flags(model, OBXEntityFlags_SYNC_ENABLED);
 
@@ -672,7 +732,22 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "payerCounterpartyRef", OBXPropertyType_String, 15, 7006000000000015ULL);
     obx_model_entity_last_property_id(model, 15, 7006000000000015ULL);
 
-    obx_model_last_entity_id(model, 6, 7006000000000000ULL);
+    // Local-only, same as entity 5.
+    obx_model_entity(model, "LocalPendingSend", 7, 7007000000000000ULL);
+
+    obx_model_property(model, "id", OBXPropertyType_Long, 1, 7007000000000001ULL);
+    obx_model_property_flags(model, OBXPropertyFlags_ID);
+
+    obx_model_property(model, "ownerPartyRef", OBXPropertyType_String, 2, 7007000000000002ULL);
+    obx_model_property(model, "counterpartyArrangementReference", OBXPropertyType_String, 3, 7007000000000003ULL);
+    obx_model_property(model, "amount", OBXPropertyType_Double, 4, 7007000000000004ULL);
+    obx_model_property(model, "currency", OBXPropertyType_String, 5, 7007000000000005ULL);
+    obx_model_property(model, "note", OBXPropertyType_String, 6, 7007000000000006ULL);
+    obx_model_property(model, "direction", OBXPropertyType_String, 7, 7007000000000007ULL);
+    obx_model_property(model, "createdAt", OBXPropertyType_Date, 8, 7007000000000008ULL);
+    obx_model_entity_last_property_id(model, 8, 7007000000000008ULL);
+
+    obx_model_last_entity_id(model, 7, 7007000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
 
     return model;
@@ -860,6 +935,19 @@ std::unique_ptr<LocalChat> find_chat_by_reference(const std::string& chatReferen
     return found.empty() ? nullptr : std::make_unique<LocalChat>(found.front());
 }
 
+json pending_send_to_json(const LocalPendingSend& p) {
+    return {
+        {"id", p.id},
+        {"ownerPartyRef", p.ownerPartyRef},
+        {"counterpartyArrangementReference", p.counterpartyArrangementReference},
+        {"amount", p.amount},
+        {"currency", p.currency},
+        {"note", p.note},
+        {"direction", p.direction},
+        {"createdAt", p.createdAt},
+    };
+}
+
 json chat_message_to_json(const LocalChatMessage& m) {
     return {
         {"id", m.id},
@@ -980,26 +1068,6 @@ int main(int argc, char* argv[]) {
         res.set_content(json{{"state", "started"}}.dump(), "application/json");
     });
 
-    svr.Get("/local/v1/sync/status", [](const httplib::Request&, httplib::Response& res) {
-        json response;
-        if (!syncClient) {
-            response["state"] = "unavailable";
-            res.set_content(response.dump(), "application/json");
-            return;
-        }
-        switch (syncClient->state()) {
-            case OBXSyncState_CREATED: response["state"] = "created"; break;
-            case OBXSyncState_STARTED: response["state"] = "started"; break;
-            case OBXSyncState_CONNECTED: response["state"] = "connected"; break;
-            case OBXSyncState_LOGGED_IN: response["state"] = "logged_in"; break;
-            case OBXSyncState_DISCONNECTED: response["state"] = "disconnected"; break;
-            case OBXSyncState_STOPPED: response["state"] = "stopped"; break;
-            case OBXSyncState_DEAD: response["state"] = "dead"; break;
-            default: response["state"] = "unknown"; break;
-        }
-        res.set_content(response.dump(), "application/json");
-    });
-
     svr.Get("/local/v1/transactions", [](const httplib::Request&, httplib::Response& res) {
         auto box = store->box<LocalTransaction>();
         json results = json::array();
@@ -1117,23 +1185,110 @@ int main(int argc, char* argv[]) {
         if (!t.note.empty()) {
             t.noteEmbedding = get_embedding(t.note);
         }
-        // This transaction originates from the offline-capable local store,
-        // hence local_pending rather than the backend's "synced" default.
-        t.leafyPayStatus = "pending";
-        t.localSyncStatus = "local_pending";
+        // Defaults describe an unconfirmed send; settlement overrides them with a real reference.
+        t.leafyPayStatus = body.value("leafyPayStatus", "pending");
+        t.localSyncStatus = body.value("localSyncStatus", "local_pending");
         t.createdAt = now_epoch_millis();
-        t.settledAt = 0;
+        t.settledAt = body.value("settledAt", (int64_t)0);
 
-        auto box = store->box<LocalTransaction>();
-        box.put(t);
+        // One transaction, so a crash cannot leave a settled send beside its own queue row.
+        const int64_t retireId = body.value("retirePendingSendId", (int64_t)0);
+        auto tx = store->txWrite();
+        store->box<LocalTransaction>().put(t);
+        if (retireId > 0) store->box<LocalPendingSend>().remove(retireId);
+        tx.success();
 
         res.status = 201;
         res.set_content(transaction_to_json(t).dump(), "application/json");
     });
 
-    // Deletes propagate through ObjectBox Sync like any other write, so this
-    // also removes the corresponding document from Atlas once connected  - 
-    // primarily here so integration tests can clean up after themselves.
+    // The offline queue, invisible to Atlas until settlement promotes it to walletTransactions.
+    svr.Get("/local/v1/pending-sends", [](const httplib::Request& req, httplib::Response& res) {
+        const std::string owner = req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
+        json results = json::array();
+        for (const auto& p : store->box<LocalPendingSend>().getAll()) {
+            if (!owner.empty() && p->ownerPartyRef != owner) continue;
+            results.push_back(pending_send_to_json(*p));
+        }
+        res.set_content(results.dump(), "application/json");
+    });
+
+    svr.Post("/local/v1/pending-sends", [](const httplib::Request& req, httplib::Response& res) {
+        auto bad_request = [&res](const std::string& msg) {
+            res.status = 400;
+            res.set_content(json{{"error", msg}}.dump(), "application/json");
+        };
+
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            bad_request(std::string("Invalid JSON body: ") + e.what());
+            return;
+        }
+
+        for (const char* field : {"ownerPartyRef", "counterpartyArrangementReference", "amount",
+                                   "currency", "direction"}) {
+            if (!body.contains(field)) {
+                bad_request(std::string("Missing required field: ") + field);
+                return;
+            }
+        }
+
+        LocalPendingSend p;
+        p.ownerPartyRef = body.at("ownerPartyRef").get<std::string>();
+        p.counterpartyArrangementReference = body.at("counterpartyArrangementReference").get<std::string>();
+        p.amount = body.at("amount").get<double>();
+        p.currency = body.at("currency").get<std::string>();
+        p.direction = body.at("direction").get<std::string>();
+        p.note = body.value("note", "");
+        p.createdAt = now_epoch_millis();
+
+        store->box<LocalPendingSend>().put(p);
+
+        res.status = 201;
+        res.set_content(pending_send_to_json(p).dump(), "application/json");
+    });
+
+    // Records what Leafy Pay reports; the row keeps its identity rather than being rewritten.
+    svr.Patch(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(),
+                            "application/json");
+            return;
+        }
+
+        auto box = store->box<LocalTransaction>();
+        auto t = box.get(std::stoll(req.matches[1]));
+        if (!t) {
+            res.status = 404;
+            res.set_content(json{{"error", "Transaction not found"}}.dump(), "application/json");
+            return;
+        }
+
+        if (body.contains("leafyPayTransferReference")) {
+            t->leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
+        }
+        if (body.contains("leafyPayStatus")) {
+            t->leafyPayStatus = body.at("leafyPayStatus").get<std::string>();
+        }
+        if (body.contains("localSyncStatus")) {
+            t->localSyncStatus = body.at("localSyncStatus").get<std::string>();
+        }
+        if (body.contains("settledAt")) {
+            t->settledAt = body.at("settledAt").get<int64_t>();
+        }
+
+        box.put(*t);
+        res.set_content(transaction_to_json(*t).dump(), "application/json");
+    });
+
+    // Deletes propagate through ObjectBox Sync like any other write, so this also removes the
+    // corresponding Atlas document once connected. Primarily here for integration-test cleanup.
     svr.Delete(R"(/local/v1/transactions/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         obx_id id = std::stoll(req.matches[1]);
         auto box = store->box<LocalTransaction>();
@@ -1154,8 +1309,7 @@ int main(int argc, char* argv[]) {
         res.set_content(results.dump(), "application/json");
     });
 
-    // Queues a contact add locally; reconciled with Leafy Pay on reconnect
-    // (mirrors the architecture plan's §6.2 description of this endpoint).
+    // Queues a contact add locally; reconciled with Leafy Pay on reconnect.
     svr.Post("/local/v1/contacts", [](const httplib::Request& req, httplib::Response& res) {
         auto bad_request = [&res](const std::string& msg) {
             res.status = 400;
@@ -1335,22 +1489,6 @@ int main(int argc, char* argv[]) {
         res.status = 204;
     });
 
-    svr.Delete(R"(/local/v1/chats/([^/]+)/messages/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
-        std::string chatReference = req.matches[1];
-        obx_id messageId = std::stoll(req.matches[2]);
-
-        auto messageBox = store->box<LocalChatMessage>();
-        auto existing = messageBox.get(messageId);
-        if (!existing || existing->chatReference != chatReference) {
-            res.status = 404;
-            res.set_content(json{{"error", "Chat message not found"}}.dump(), "application/json");
-            return;
-        }
-
-        messageBox.remove(messageId);
-        res.status = 204;
-    });
-
     svr.Delete(R"(/local/v1/contacts/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
         obx_id id = std::stoll(req.matches[1]);
         auto box = store->box<LocalContact>();
@@ -1417,17 +1555,52 @@ int main(int argc, char* argv[]) {
         if (body.contains("note") && !body.at("note").is_null()) {
             r.note = body.at("note").get<std::string>();
         }
-        // Leafy Pay has not seen it, so no payer is resolved yet. Enters at Leafy Pay's own
-        // opening status; the replay creates the real request and drops this stand-in.
-        r.status = "created";
-        r.localSyncStatus = "local_pending";
-        r.createdAt = now_epoch_millis();
+        // Defaults describe a request composed here that Leafy Pay has not seen. Mirroring Leafy
+        // Pay's own view overrides them, since by then it owns the lifecycle.
+        r.payerPartyRef = body.value("payerPartyRef", "");
+        r.status = body.value("status", "created");
+        r.localSyncStatus = body.value("localSyncStatus", "local_pending");
+        r.leafyPayTransferReference = body.value("leafyPayTransferReference", "");
+        r.createdAt = body.value("createdAt", now_epoch_millis());
+        r.resolvedAt = body.value("resolvedAt", (int64_t)0);
 
-        auto box = store->box<LocalRequest>();
-        box.put(r);
+        store->box<LocalRequest>().put(r);
 
         res.status = 201;
         res.set_content(request_to_json(r).dump(), "application/json");
+    });
+
+    // Leafy Pay owns the lifecycle; this only records it.
+    svr.Patch(R"(/local/v1/requests/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
+        json body;
+        try {
+            body = json::parse(req.body);
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json{{"error", std::string("Invalid JSON body: ") + e.what()}}.dump(),
+                            "application/json");
+            return;
+        }
+
+        auto box = store->box<LocalRequest>();
+        auto r = box.get(std::stoll(req.matches[1]));
+        if (!r) {
+            res.status = 404;
+            res.set_content(json{{"error", "Request not found"}}.dump(), "application/json");
+            return;
+        }
+
+        if (body.contains("status")) r->status = body.at("status").get<std::string>();
+        if (body.contains("localSyncStatus")) r->localSyncStatus = body.at("localSyncStatus").get<std::string>();
+        if (body.contains("payerPartyRef")) r->payerPartyRef = body.at("payerPartyRef").get<std::string>();
+        if (body.contains("requesterPartyRef")) r->requesterPartyRef = body.at("requesterPartyRef").get<std::string>();
+        if (body.contains("leafyPayTransferReference")) {
+            r->leafyPayTransferReference = body.at("leafyPayTransferReference").get<std::string>();
+        }
+        if (body.contains("resolvedAt")) r->resolvedAt = body.at("resolvedAt").get<int64_t>();
+
+        box.put(*r);
+        res.set_content(request_to_json(*r).dump(), "application/json");
     });
 
     // How the replay retires a stand-in once Leafy Pay has the real request. Resolving one

@@ -4,9 +4,8 @@ import { Database } from 'lucide-react'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Home "Balance from the device" step: a database on the
- * phone emits the balance number, which counts in instantly with no network hop.
- * Pure CSS (keyframes in globals.css), no images or timers.
+ * Animated mini-render for the Home "Balance from the device" step: a database on the phone emits the
+ * balance, which counts in instantly with no network hop. Pure CSS, no images or timers.
  */
 export function BalanceFromDeviceVisual() {
   return (

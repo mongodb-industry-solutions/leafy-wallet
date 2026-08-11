@@ -10,10 +10,8 @@ const TOOLS = [
 ]
 
 /**
- * Animated mini-render for the Chat "checks, never guesses" step: a question drops into the
- * LangGraph router, which lights up the one tool that can answer it - balance, spending, or
- * a payment draft - cycling on a loop. Pure CSS (keyframes in globals.css), no images or
- * timers.
+ * Animated mini-render for the Chat "checks, never guesses" step: a question drops into the LangGraph
+ * router, which lights the one tool that can answer it, on a loop. Pure CSS, no images or timers.
  */
 export function AssistantRoutingVisual() {
   return (

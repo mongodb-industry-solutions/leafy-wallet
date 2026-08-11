@@ -7,10 +7,8 @@ import { SyncPath } from '@/components/stage/walkthrough/SyncPath'
 import { VisualCard } from '@/components/stage/walkthrough/VisualCard'
 
 /**
- * Animated mini-render for the Send "synced to Atlas" step: once back online, the payment
- * pushes up to MongoDB Atlas and is recorded there the moment it succeeds. A payment packet
- * flows phone to Atlas and lands with a checkmark. Pure CSS (keyframes in globals.css), no
- * images or timers.
+ * Animated mini-render for the Send "synced to Atlas" step: a payment packet flows from the phone to
+ * MongoDB Atlas and lands with a checkmark once it succeeds. Pure CSS, no images or timers.
  */
 export function SendSyncVisual() {
   return (

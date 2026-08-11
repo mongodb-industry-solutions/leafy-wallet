@@ -36,12 +36,8 @@ function Body({ text, highlight }) {
 }
 
 /**
- * "Under the hood" panel: cycles through the talking points for the given wallet
- * screen, auto-advancing every {@link AUTO_ADVANCE_MS} and resetting whenever the
- * active screen (`flow`) changes. Steps are switched by tapping the dots.
- *
- * When the self-driving tour is running it passes a controlled `controlledStep`, which pins the
- * displayed step and suspends the self-advance timer so the panel stays in lock-step with the tour.
+ * "Under the hood" panel: cycles the talking points for the active wallet screen, auto-advancing every
+ * {@link AUTO_ADVANCE_MS}. A tour-supplied `controlledStep` pins the step and suspends self-advance.
  * @param {object} props
  * @param {string} props.flow - Key into WALKTHROUGH for the active wallet screen.
  * @param {number} [props.controlledStep] - Tour-driven step index; when set, overrides self-advance.

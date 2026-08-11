@@ -4,7 +4,14 @@ from db.utils import with_str_id
 from services.embeddings import get_embedding
 
 COLLECTION = "walletTransactions"
-NOTE_EMBEDDING_INDEX = "noteEmbedding_vector_index"
+
+# Search reads history, which outlives whatever window the device holds.
+HISTORY_COLLECTION = "walletTransactionsHistory"
+HISTORY_EMBEDDING_INDEX = "history_noteEmbedding_vector_index"
+HISTORY_TEXT_INDEX = "history_note_text_index"
+
+SEMANTIC_WEIGHT = 0.5
+LEXICAL_WEIGHT = 0.5
 
 
 def list_transactions(
@@ -14,11 +21,8 @@ def list_transactions(
     leafy_pay_status: str | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    """The user's transactions, newest first.
-
-    Shared by the REST route and the MCP tool. `limit=None` returns everything - the REST caller
-    merges the full set against Leafy Pay's list, so it can't be truncated.
-    """
+    """The user's transactions, newest first. `limit=None` returns everything, which the REST caller
+    needs since it merges the full set against Leafy Pay's list."""
     query = {}
     if owner_party_ref:
         query["ownerPartyRef"] = owner_party_ref
@@ -38,12 +42,8 @@ def list_transactions(
 
 
 def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> list[dict]:
-    """Total amount per counterparty, largest first.
-
-    An aggregate, not a search: "where did my money go" is a `$group`/`$sum`, and answering it by
-    handing rows to a model invites arithmetic errors. `counterpartyArrangementReference` is the
-    grouping key; the caller resolves it to an alias.
-    """
+    """Total per counterparty, largest first. A `$group`/`$sum` rather than a search, because handing
+    rows to a model to add up invites arithmetic errors."""
     pipeline = [
         {"$match": {"ownerPartyRef": owner_party_ref, "direction": direction}},
         {
@@ -68,46 +68,66 @@ def spending_by_contact(db, owner_party_ref: str, direction: str = "sent") -> li
 
 
 class SemanticSearchUnavailable(Exception):
-    """Raised when the embedding provider or Atlas Vector Search cannot serve a search.
-
-    Kept as a plain exception (not `HTTPException`) so this function stays
-    usable from both the REST route (which translates it to a 503) and the
-    MCP tool (which lets it propagate as a tool error).
-    """
+    """Raised when the embedding provider or Atlas cannot serve a search. Plain, not `HTTPException`,
+    so both the REST route and the MCP tool can translate it their own way."""
 
 
-async def search_transactions(db, q: str, owner_party_ref: str | None = None, limit: int = 10) -> list[dict]:
-    """Semantic search over transaction notes via Atlas Vector Search.
-
-    Requires the `noteEmbedding_vector_index` index (see
-    scripts/create_vector_index.py) to already exist on `walletTransactions`.
-    Shared by `routers/wallet_transactions.py`'s `GET /search` route and the
-    `search_transactions` MCP tool - one query, two callers.
-    """
+async def hybrid_search_transactions(
+    db, q: str, owner_party_ref: str | None = None, limit: int = 10
+) -> list[dict]:
+    """Search history by meaning and by wording at once, fused by rank. Online only: the device has
+    no lexical index, so offline search is vector alone."""
     query_vector = await get_embedding(q, input_type="query")
     if query_vector is None:
         raise SemanticSearchUnavailable("Semantic search is temporarily unavailable")
 
-    vector_search_stage = {
-        "index": NOTE_EMBEDDING_INDEX,
+    # Over-fetch per branch so the fusion has enough ranks to interleave.
+    branch_limit = max(limit * 2, 20)
+
+    semantic_stage = {
+        "index": HISTORY_EMBEDDING_INDEX,
         "path": "noteEmbedding",
         "queryVector": query_vector,
-        "numCandidates": max(limit * 10, 100),
-        "limit": limit,
+        "numCandidates": max(branch_limit * 10, 100),
+        "limit": branch_limit,
     }
+    lexical_text = {"query": q, "path": "note", "fuzzy": {"maxEdits": 1}}
+    lexical_compound: dict = {"must": [{"text": lexical_text}]}
+
+    # Inside both branches, not after: post-filtering would drop rows a branch's own top-N excluded.
     if owner_party_ref:
-        vector_search_stage["filter"] = {"ownerPartyRef": owner_party_ref}
+        semantic_stage["filter"] = {"ownerPartyRef": owner_party_ref}
+        lexical_compound["filter"] = [
+            {"equals": {"path": "ownerPartyRef", "value": owner_party_ref}}
+        ]
 
     pipeline = [
-        {"$vectorSearch": vector_search_stage},
-        {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+        {
+            "$rankFusion": {
+                "input": {
+                    "pipelines": {
+                        "semantic": [{"$vectorSearch": semantic_stage}],
+                        "lexical": [
+                            {"$search": {"index": HISTORY_TEXT_INDEX, "compound": lexical_compound}},
+                            {"$limit": branch_limit},
+                        ],
+                    }
+                },
+                "combination": {
+                    "weights": {"semantic": SEMANTIC_WEIGHT, "lexical": LEXICAL_WEIGHT}
+                },
+            }
+        },
+        {"$limit": limit},
+        {"$addFields": {"score": {"$meta": "score"}}},
+        # $rankFusion input pipelines may not project, so this happens after the fusion.
         {"$project": {"noteEmbedding": 0}},
     ]
     try:
-        docs = db.aggregate(COLLECTION, pipeline)
+        docs = db.aggregate(HISTORY_COLLECTION, pipeline)
     except OperationFailure as exc:
         atlas_message = (exc.details or {}).get("errmsg") or str(exc)
         raise SemanticSearchUnavailable(
-            f"Semantic search is temporarily unavailable (Atlas error: {atlas_message})"
+            f"Hybrid search is temporarily unavailable (Atlas error: {atlas_message})"
         )
     return [with_str_id(doc) for doc in docs]

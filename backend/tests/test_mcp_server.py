@@ -10,7 +10,7 @@ call dispatch), not just the underlying service functions directly.
 import asyncio
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
@@ -19,7 +19,8 @@ from pymongo.errors import OperationFailure
 from db.client import get_db
 from mcp_server.server import mcp
 from services.embeddings import get_embedding
-from services.transactions import NOTE_EMBEDDING_INDEX
+from services.fraud import BURST_THRESHOLD
+from services.transactions import HISTORY_COLLECTION, HISTORY_EMBEDDING_INDEX
 from tests.conftest import unique as _unique
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -40,13 +41,13 @@ def _require_vector_index_and_embeddings():
     needed for the search_transactions test, not the contacts ones."""
     db = get_db()
     try:
-        indexes = list(db.get_collection("walletTransactions").list_search_indexes(NOTE_EMBEDDING_INDEX))
+        indexes = list(db.get_collection(HISTORY_COLLECTION).list_search_indexes(HISTORY_EMBEDDING_INDEX))
     except OperationFailure as exc:
         pytest.skip(f"Atlas Vector Search not available on this cluster: {exc}")
 
     if not indexes or not indexes[0].get("queryable"):
         pytest.skip(
-            f"Vector search index '{NOTE_EMBEDDING_INDEX}' not provisioned/queryable; "
+            f"Vector search index '{HISTORY_EMBEDDING_INDEX}' not provisioned/queryable; "
             "run scripts/create_vector_index.py"
         )
 
@@ -73,6 +74,7 @@ def test_lists_every_tool():
         "get_contacts",
         "get_spending_by_contact",
         "list_transactions",
+        "get_transaction_velocity",
     }
 
 
@@ -164,7 +166,7 @@ def test_search_transactions_finds_semantically_similar_note(_require_vector_ind
     owner = _unique("mcp-search-owner")
     ref = _unique("mcp-search-ref")
     db.insert_one(
-        "walletTransactions",
+        HISTORY_COLLECTION,
         {
             "leafyPayTransferReference": ref,
             "ownerPartyRef": owner,
@@ -201,4 +203,50 @@ def test_search_transactions_finds_semantically_similar_note(_require_vector_ind
             time.sleep(2.0)
         assert found, "transaction never appeared in semantic search results"
     finally:
-        db.delete_many("walletTransactions", {"leafyPayTransferReference": ref})
+        db.delete_many(HISTORY_COLLECTION, {"leafyPayTransferReference": ref})
+
+
+def test_transaction_velocity_flags_a_burst_and_ignores_a_trickle():
+    """A burst seconds apart trips the threshold; the same count spread over days does not."""
+    db = get_db()
+    burst_owner = _unique("velocity-burst")
+    calm_owner = _unique("velocity-calm")
+    base = datetime.now(timezone.utc)
+
+    def seed(owner, ref, when):
+        db.insert_one(
+            HISTORY_COLLECTION,
+            {
+                "leafyPayTransferReference": ref,
+                "ownerPartyRef": owner,
+                "counterpartyArrangementReference": "velocity-cp",
+                "amount": 10.0,
+                "currency": "EUR",
+                "direction": "sent",
+                "leafyPayStatus": "settled",
+                "localSyncStatus": "synced",
+                "createdAt": when,
+            },
+        )
+
+    for i in range(BURST_THRESHOLD + 1):
+        seed(burst_owner, _unique("velocity-tx"), base + timedelta(seconds=i * 20))
+    for i in range(BURST_THRESHOLD + 1):
+        seed(calm_owner, _unique("velocity-tx"), base + timedelta(days=i * 3))
+
+    try:
+        async def call(owner):
+            async with create_connected_server_and_client_session(mcp) as session:
+                return await session.call_tool("get_transaction_velocity", {"owner_party_ref": owner})
+
+        flagged = _run(call(burst_owner))
+        assert flagged.isError is False
+        rows = [json.loads(c.text) for c in flagged.content]
+        assert rows, "a burst inside the window should be flagged"
+        assert max(r["sendsInWindow"] for r in rows) >= BURST_THRESHOLD
+
+        quiet = _run(call(calm_owner))
+        assert quiet.isError is False
+        assert [json.loads(c.text) for c in quiet.content] == []
+    finally:
+        db.delete_many(HISTORY_COLLECTION, {"ownerPartyRef": {"$in": [burst_owner, calm_owner]}})

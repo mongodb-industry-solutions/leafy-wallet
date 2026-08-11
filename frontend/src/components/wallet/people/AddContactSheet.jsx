@@ -50,6 +50,10 @@ export function AddContactSheet({ onClose }) {
             </button>
           </div>
 
+          <p className="mb-3 text-xs text-muted-foreground">
+            Only people already registered with Leafy Pay can be added.
+          </p>
+
           <input
             ref={inputRef}
             value={value}

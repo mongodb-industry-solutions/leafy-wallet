@@ -15,10 +15,12 @@ import {
   cleanNote,
   formatCategory,
   formatSpending,
+  formatVelocity,
   money,
   noteGuardMessage,
   pushCategoryChart,
   pushSpendingChart,
+  pushVelocityChart,
   resolveDraft,
 } from './toolkit'
 
@@ -48,9 +50,8 @@ function buildBalanceTool(isOnline) {
 }
 
 /**
- * Spending grouped by category (Dining, Bills, ...). Transport-agnostic: the action reads from Leafy
- * Pay/Atlas online or the device offline and classifies notes with the same embedding model either
- * way, so this one tool serves both. Pushes a chart alongside the reply.
+ * Spending grouped by category (Dining, Bills, ...). Transport-agnostic: the same embedding model
+ * classifies notes either way, so one tool serves both. Pushes a chart alongside the reply.
  */
 function buildSpendingByCategoryTool(isOnline, charts) {
   return tool(async () => {
@@ -111,8 +112,7 @@ function buildOfflineReadTools(charts) {
 
 /**
  * The read tools backed by the backend's MCP server - the online path. Each wrapper injects the
- * session's `owner_party_ref` itself so the model can never pick whose data it reads, then
- * reformats the raw documents into the same text shape the local tools produce.
+ * session's `owner_party_ref` so the model can never pick whose data it reads.
  * @param {Map<string, object>} mcp - MCP tools by name.
  * @param {string} owner - The session's `sub`.
  * @param {object[]} charts
@@ -145,7 +145,15 @@ function buildMcpReadTools(mcp, owner, charts) {
     return rows.map(toMcpRow).join('\n')
   }, CONTRACTS.recent)
 
-  return [listContacts, spendingByContact, searchTx, recentTx]
+  // No offline twin: the window aggregation behind it has no ObjectBox equivalent.
+  const velocity = tool(async () => {
+    const rows = await call('get_transaction_velocity', {})
+    if (rows.length === 0) return 'No unusual payment bursts found.'
+    pushVelocityChart(charts, rows)
+    return formatVelocity(rows)
+  }, CONTRACTS.velocity)
+
+  return [listContacts, spendingByContact, searchTx, recentTx, velocity]
 }
 
 /**

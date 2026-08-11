@@ -103,9 +103,8 @@ function normalizeTransaction(t) {
 }
 
 /**
- * Shape a Leafy Pay request into the flat form the wallet stores and renders. `status` stays raw.
- * `payeePartyRef`/`payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one as
- * an owner key, or the offline read filters on an id that matches nothing.
+ * Shape a Leafy Pay request into the flat form the wallet stores and renders. `payeePartyRef` and
+ * `payerPartyRef` are Leafy Pay party ids, not the session `sub`: never store one as an owner key.
  */
 function normalizeRtpRequest(r) {
   return {

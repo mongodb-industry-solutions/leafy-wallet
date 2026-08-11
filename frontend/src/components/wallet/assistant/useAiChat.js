@@ -52,9 +52,8 @@ async function fetchTurn(body) {
 }
 
 /**
- * Chat state machine for the AI assistant tab: conversations, greeting state, text input,
- * and the streamed reply. Chats and messages persist per user, from Atlas or the device depending
- * on the connection.
+ * Chat state machine for the AI assistant tab: conversations, greeting state, input and the streamed
+ * reply. Chats and messages persist per user, from Atlas or the device depending on the connection.
  * @returns {object} Chat state and actions for AiTab to render.
  */
 export function useAiChat() {
@@ -86,7 +85,7 @@ export function useAiChat() {
   // The saved chats list; the unsaved "draft" chat stays at the top until its first message.
   useEffect(() => {
     let isStale = false
-    getChats(isOnline).then((saved) => {
+    getChats().then((saved) => {
       if (isStale) return
       setChats((prev) => {
         const draft = prev.find((c) => c.id === DRAFT_CHAT_ID)
@@ -114,7 +113,7 @@ export function useAiChat() {
       // A chat only becomes real once it has something in it.
       let reference = activeId === DRAFT_CHAT_ID ? null : activeId
       if (!reference) {
-        const created = await createChat(deriveTitle(text), isOnlineRef.current)
+        const created = await createChat(deriveTitle(text))
         if (created.ok) {
           reference = created.chat.reference
           setChats((prev) => [
@@ -126,7 +125,7 @@ export function useAiChat() {
           setActiveId(reference)
         }
       }
-      if (reference) appendChatMessage(reference, { role: 'user', text }, isOnlineRef.current)
+      if (reference) appendChatMessage(reference, { role: 'user', text })
 
       const replyId = nextId()
       const threadId = () => reference ?? activeId
@@ -164,11 +163,11 @@ export function useAiChat() {
           const card = { type: 'chart', chartTitle: chart.title, chartData: chart.rows }
           appendToThread({ id: nextId(), role: 'assistant', ...card })
           // Persist alongside the reply so the chart is still there when the chat is reopened.
-          if (reference) appendChatCard(reference, card, isOnlineRef.current)
+          if (reference) appendChatCard(reference, card)
         })
         if (reply) {
           appendToThread({ id: replyId, role: 'assistant', type: 'text', text: reply, stream: 'done' })
-          if (reference) appendChatMessage(reference, { role: 'assistant', text: reply }, isOnlineRef.current)
+          if (reference) appendChatMessage(reference, { role: 'assistant', text: reply })
         }
       } catch (error) {
         appendToThread({
@@ -294,14 +293,14 @@ export function useAiChat() {
       resetTransient()
       setActiveId(DRAFT_CHAT_ID)
     }
-    deleteChat(id, isOnlineRef.current)
+    deleteChat(id)
   }
 
   async function handleOpenChat(id) {
     resetTransient()
     setActiveId(id)
     setView('chat')
-    const messages = await getChatMessages(id, isOnlineRef.current)
+    const messages = await getChatMessages(id)
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, messages } : c)))
   }
 
