@@ -37,7 +37,7 @@ Leafy Wallet is composed of several interconnected features that demonstrate the
 
 ## Where Does MongoDB Shine?
 
-![System architecture: edge devices (Leafy Wallet, ObjectBox, Ollama) sync through the ObjectBox Sync Server to MongoDB Atlas (database, Vector Search, MCP), while the edge also talks directly to the external Payment Platform (PSP)](docs/architecture-diagram.svg)
+![System architecture: edge devices (Leafy Wallet, ObjectBox, Ollama) sync through the ObjectBox Sync Server to MongoDB Atlas (database, Vector Search, MCP), while the edge also talks directly to the external Payment Platform (PSP)](docs/architecture-diagram1.svg)
 
 The edge (the wallet, its on-device ObjectBox store, and the local Ollama model) can run the whole experience alone. When it's online, it also syncs through the ObjectBox Sync Server into MongoDB Atlas, and talks directly to the Payment Platform for real transfers.
 
