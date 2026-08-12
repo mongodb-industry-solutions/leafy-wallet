@@ -25,10 +25,11 @@ function ContactRowSkeleton() {
 }
 
 /**
- * The "People" tab: a searchable contact list where tapping starts a send, plus adding one by Leafy Pay
- * email or phone. Removing is Leafy Pay's own screen; the login reconcile prunes what is deleted there.
+ * The "People" tab: a searchable contact list where tapping opens that person's thread, plus adding one
+ * by Leafy Pay email or phone. Removing is Leafy Pay's own screen; the login reconcile prunes what is
+ * deleted there.
  * @param {object} props
- * @param {(contact: object) => void} props.onSelect - Tapping a contact opens the pay/request sheet.
+ * @param {(contact: object) => void} props.onSelect - Tapping a contact opens their payment thread.
  * @param {() => void} props.onAddContact - Opens the add-contact sheet (rendered at the shell level).
  */
 export function PeopleTab({ onSelect, onAddContact }) {
