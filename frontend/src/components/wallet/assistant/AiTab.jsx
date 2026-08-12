@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
-import { Mic, Square } from 'lucide-react'
+import { Mic, Square, Volume2 } from 'lucide-react'
 import { ThinkingOrb } from 'thinking-orbs'
 import { FoldGradient } from '@/components/common/FoldGradient'
 import { ActionCard } from '@/components/wallet/assistant/ActionCard'
@@ -12,6 +12,7 @@ import { ChatHistory } from './ChatHistory'
 import { ChatGreeting } from './ChatGreeting'
 import { useAiChat } from './useAiChat'
 import { useSpeechInput } from './useSpeechInput'
+import { useSpeechOutput } from './useSpeechOutput'
 
 const TYPE_SPEED_MS = 16
 
@@ -61,6 +62,19 @@ export function AiTab({ user }) {
   } = useAiChat()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat) never replays it.
   const [revealedIds, setRevealedIds] = useState(() => new Set())
+  // A reply is read back only when the question was spoken, so typing stays a silent mode.
+  const [isVoiceTurn, setIsVoiceTurn] = useState(false)
+  const spokenIdRef = useRef(null)
+  const { isSupported: canSpeak, isSpeaking, speak, cancel: stopSpeaking } = useSpeechOutput()
+
+  const handleDictated = useCallback(
+    (text) => {
+      setIsVoiceTurn(true)
+      handleSuggestion(text)
+    },
+    [handleSuggestion],
+  )
+
   // A dictated phrase is sent the moment it lands, so speaking is a whole turn without a second tap.
   const {
     isSupported: canDictate,
@@ -69,27 +83,52 @@ export function AiTab({ user }) {
     error: micError,
     toggle: toggleMic,
     stop: stopMic,
-  } = useSpeechInput({ onTranscript: handleSuggestion })
+  } = useSpeechInput({ onTranscript: handleDictated })
 
   const handleInputKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) handleSendText()
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+      setIsVoiceTurn(false)
+      handleSendText()
+    }
   }
 
   function handleRevealed(id) {
     setRevealedIds((prev) => new Set(prev).add(id))
   }
 
-  // Leaving the thread for the history list drops a live mic with it.
+  /** Tapping the mic cuts a reply that is still being read, so the user can interrupt and ask again. */
+  function handleToggleMic() {
+    stopSpeaking()
+    toggleMic()
+  }
+
+  // Leaving the thread for the history list drops a live mic and a reply mid-sentence with it.
   useEffect(() => {
-    if (view === 'history') stopMic()
-  }, [view, stopMic])
+    if (view !== 'history') return
+    stopMic()
+    stopSpeaking()
+  }, [view, stopMic, stopSpeaking])
+
+  // Read back the reply to a spoken question. `stream: 'done'` marks a reply that just arrived, so
+  // re-rendering or reopening a chat never speaks an old one — the same signal the typewriter uses.
+  useEffect(() => {
+    if (!isVoiceTurn || !canSpeak) return
+    const last = msgs[msgs.length - 1]
+    if (last?.role !== 'assistant' || last.type !== 'text' || last.stream !== 'done') return
+    if (spokenIdRef.current === last.id) return
+    spokenIdRef.current = last.id
+    speak(last.text)
+  }, [msgs, isVoiceTurn, canSpeak, speak])
 
   if (view === 'history') {
     return (
       <ChatHistory
         chats={chats}
         activeId={activeId}
-        onOpen={handleOpenChat}
+        onOpen={(id) => {
+          setIsVoiceTurn(false)
+          handleOpenChat(id)
+        }}
         onDelete={handleDeleteChat}
       />
     )
@@ -141,7 +180,13 @@ export function AiTab({ user }) {
       <ChatHeader title={title} onBack={() => setView('history')} />
 
       {showEmpty ? (
-        <ChatGreeting user={user} onSuggestion={handleSuggestion} />
+        <ChatGreeting
+          user={user}
+          onSuggestion={(query) => {
+            setIsVoiceTurn(false)
+            handleSuggestion(query)
+          }}
+        />
       ) : (
         <div className="no-scrollbar relative z-10 flex-1 space-y-3 overflow-y-auto px-4 pt-4 pb-44">
           {msgs.map((m) => {
@@ -217,10 +262,19 @@ export function AiTab({ user }) {
             placeholder={isListening ? 'Listening…' : 'Ask anything…'}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
+          {isSpeaking && (
+            <button
+              onClick={stopSpeaking}
+              aria-label="Stop reading the reply"
+              className="grid size-9 flex-none animate-pulse place-items-center rounded-full bg-muted text-foreground"
+            >
+              <Volume2 size={17} />
+            </button>
+          )}
           {canDictate && !hasText && (
             <button
               data-tour-target="ai-mic"
-              onClick={toggleMic}
+              onClick={handleToggleMic}
               disabled={isThinking}
               aria-label={isListening ? 'Stop listening' : 'Speak'}
               aria-pressed={isListening}
@@ -235,7 +289,10 @@ export function AiTab({ user }) {
           )}
           <button
             data-tour-target="ai-send"
-            onClick={handleSendText}
+            onClick={() => {
+              setIsVoiceTurn(false)
+              handleSendText()
+            }}
             disabled={!hasText}
             aria-label="Send"
             className="grid size-9 flex-none place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-40"
