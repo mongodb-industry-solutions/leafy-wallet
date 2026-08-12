@@ -273,6 +273,7 @@ function toTransactionRow({ reference, counterpartyRef, contact, fallbackName, i
   return {
     id: reference,
     reference,
+    counterpartyRef: counterpartyRef ?? null,
     name: contact?.label || fallbackName || 'Leafy Pay user',
     lookupHint: contact?.lookupHint || '',
     note: note || 'No note',
@@ -759,6 +760,7 @@ function toRequestView({ reference, name, amount, currency, note, status, create
   return {
     id: reference,
     reference,
+    counterpartyRef: contact?.reference ?? null,
     name: name || 'Leafy Pay user',
     amount,
     currency,
