@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Icon from '@leafygreen-ui/icon'
+import { Mic, Square } from 'lucide-react'
 import { ThinkingOrb } from 'thinking-orbs'
 import { FoldGradient } from '@/components/common/FoldGradient'
 import { ActionCard } from '@/components/wallet/assistant/ActionCard'
@@ -10,6 +11,7 @@ import { ChatHeader } from './ChatHeader'
 import { ChatHistory } from './ChatHistory'
 import { ChatGreeting } from './ChatGreeting'
 import { useAiChat } from './useAiChat'
+import { useSpeechInput } from './useSpeechInput'
 
 const TYPE_SPEED_MS = 16
 
@@ -59,6 +61,15 @@ export function AiTab({ user }) {
   } = useAiChat()
   // Ids whose typewriter has finished, so re-rendering (or re-opening a chat) never replays it.
   const [revealedIds, setRevealedIds] = useState(() => new Set())
+  // A dictated phrase is sent the moment it lands, so speaking is a whole turn without a second tap.
+  const {
+    isSupported: canDictate,
+    isListening,
+    interim,
+    error: micError,
+    toggle: toggleMic,
+    stop: stopMic,
+  } = useSpeechInput({ onTranscript: handleSuggestion })
 
   const handleInputKeyDown = (e) => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) handleSendText()
@@ -67,6 +78,11 @@ export function AiTab({ user }) {
   function handleRevealed(id) {
     setRevealedIds((prev) => new Set(prev).add(id))
   }
+
+  // Leaving the thread for the history list drops a live mic with it.
+  useEffect(() => {
+    if (view === 'history') stopMic()
+  }, [view, stopMic])
 
   if (view === 'history') {
     return (
@@ -184,15 +200,39 @@ export function AiTab({ user }) {
       {/* Full-width floating bar with a fade, so messages slide under it and
           clip at the input rather than a hard edge above it. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-muted from-45% to-transparent px-4 pt-10 pb-24">
+        {micError && (
+          <p role="alert" className="pointer-events-auto pb-2 text-center text-xs text-muted-foreground">
+            {micError === 'not-allowed' || micError === 'service-not-allowed'
+              ? 'Microphone access is blocked. Allow it in your browser settings to speak.'
+              : `Voice input failed: ${micError}`}
+          </p>
+        )}
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card py-2 pr-2 pl-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
           <input
             data-tour-target="ai-input"
-            value={textInput}
+            value={isListening ? interim : textInput}
             onChange={(e) => setTextInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Ask anything…"
+            readOnly={isListening}
+            placeholder={isListening ? 'Listening…' : 'Ask anything…'}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
+          {canDictate && !hasText && (
+            <button
+              data-tour-target="ai-mic"
+              onClick={toggleMic}
+              disabled={isThinking}
+              aria-label={isListening ? 'Stop listening' : 'Speak'}
+              aria-pressed={isListening}
+              className={`grid size-9 flex-none place-items-center rounded-full transition-colors disabled:opacity-40 ${
+                isListening
+                  ? 'animate-pulse bg-foreground text-background'
+                  : 'bg-muted text-foreground'
+              }`}
+            >
+              {isListening ? <Square size={15} fill="currentColor" /> : <Mic size={17} />}
+            </button>
+          )}
           <button
             data-tour-target="ai-send"
             onClick={handleSendText}
