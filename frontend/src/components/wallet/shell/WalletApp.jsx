@@ -12,7 +12,7 @@ import { SendFlow } from '@/components/wallet/send/SendFlow'
 import { PayRequestFlow } from '@/components/wallet/send/PayRequestFlow'
 import { ProfileScreen } from '@/components/wallet/profile/ProfileScreen'
 import { AddContactSheet } from '@/components/wallet/people/AddContactSheet'
-import { ContactActionSheet } from '@/components/wallet/people/ContactActionSheet'
+import { ContactThread } from '@/components/wallet/people/ContactThread'
 import { NotificationsPanel } from '@/components/wallet/shell/NotificationsPanel'
 import { SettlementToast } from '@/components/wallet/shell/SettlementToast'
 import { ArrivalToast } from '@/components/wallet/shell/ArrivalToast'
@@ -36,7 +36,7 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true, onPe
   const [sendMode, setSendMode] = useState('send')
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAddContactOpen, setIsAddContactOpen] = useState(false)
-  const [contactMenu, setContactMenu] = useState(null)
+  const [threadContact, setThreadContact] = useState(null)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [payRequestNotification, setPayRequestNotification] = useState(null)
   // Reset each time WalletApp mounts (i.e. each authentication), so the Home
@@ -66,28 +66,38 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true, onPe
     setIsSendOpen(false)
     setSendContact(null)
     setSendMode('send')
-    setTab('home')
-  }, [])
+    // A send started from a contact thread returns to it, so the payment lands as the newest bubble.
+    if (!threadContact) setTab('home')
+  }, [threadContact])
 
   const handleHeroIntroPlayed = useCallback(() => {
     setHasPlayedHeroIntro(true)
   }, [])
 
-  // Contact action sheet (opened from a People row's chevron): send to, or request from, that contact.
-  function handleContactSend() {
-    handleOpenSend('send', contactMenu)
-    setContactMenu(null)
+  // Both actions leave the thread open behind them, so closing the flow returns to the conversation.
+  function handleThreadSend() {
+    handleOpenSend('send', threadContact)
   }
 
-  function handleContactRequest() {
-    handleOpenSend('request', contactMenu)
-    setContactMenu(null)
+  function handleThreadRequest() {
+    handleOpenSend('request', threadContact)
   }
 
   return (
     <WalletDataProvider isOnline={isOnline} ownerKey={user?.sub}>
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-muted">
-        {!isSendOpen && !payRequestNotification && (
+        {/* A contact thread takes the whole screen, nav included, the way a conversation does. */}
+        {!isSendOpen && !payRequestNotification && threadContact && (
+          <ContactThread
+            contact={threadContact}
+            onBack={() => setThreadContact(null)}
+            onSend={handleThreadSend}
+            onRequest={handleThreadRequest}
+            onDetail={setDetail}
+          />
+        )}
+
+        {!isSendOpen && !payRequestNotification && !threadContact && (
           <>
             {/* Home has its own gradient hero (with the profile menu). Activity /
                 People / Chat stand on their own titles, no top bar. */}
@@ -114,7 +124,10 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true, onPe
                 )}
                 {tab === 'activity' && <ActivityTab onDetail={setDetail} />}
                 {tab === 'people' && (
-                  <PeopleTab onSelect={setContactMenu} onAddContact={() => setIsAddContactOpen(true)} />
+                  <PeopleTab
+                    onSelect={setThreadContact}
+                    onAddContact={() => setIsAddContactOpen(true)}
+                  />
                 )}
               </div>
             )}
@@ -140,14 +153,6 @@ export function WalletApp({ user, onSignOut, onFlowChange, isOnline = true, onPe
         )}
         {detail && <TxDetail tx={detail} onClose={() => setDetail(null)} />}
         {isAddContactOpen && <AddContactSheet onClose={() => setIsAddContactOpen(false)} />}
-        {contactMenu && (
-          <ContactActionSheet
-            contact={contactMenu}
-            onSend={handleContactSend}
-            onRequest={handleContactRequest}
-            onClose={() => setContactMenu(null)}
-          />
-        )}
         {isNotificationsOpen && (
           <NotificationsPanel
             onPayRequest={setPayRequestNotification}

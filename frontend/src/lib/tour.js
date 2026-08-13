@@ -33,9 +33,9 @@ export const TOUR = [
   { type: 'scroll', target: 'wallet-scroll', by: 320, say: 'And your full history, right here.', walkthroughStep: 2, readMs: 2600 },
   { type: 'scroll', target: 'wallet-scroll', by: -640, say: "Now let's send some money.", walkthroughStep: 0, readMs: 700 },
 
-  // People: pick the first contact, then choose Send in the drawer that opens.
+  // People: pick the first contact, then choose Send at the foot of their thread.
   { type: 'click', target: 'tab-people', say: "First, I'll pick someone.", walkthroughStep: 0, readMs: 1400 },
-  { type: 'click', target: 'contact-0', say: 'Send them money or request from them?', walkthroughStep: 0, readMs: 1200 },
+  { type: 'click', target: 'contact-0', say: 'Everything between us, as a conversation.', walkthroughStep: 0, readMs: 2200 },
   { type: 'click', target: 'contact-send', say: "I'll send them money.", walkthroughStep: 0, readMs: 900 },
 
   // Compose: tap €10.00 (cents), pick Send, type a note.
@@ -53,7 +53,9 @@ export const TOUR = [
   // offline: the device document appears first, Atlas only once it settles upstream.
   { type: 'click', target: 'card-flip', say: "Let's watch both databases while I do it.", walkthroughStep: 1, readMs: 3000 },
   { type: 'click', target: 'send-submit', say: 'Sending it, even with no connection.', walkthroughStep: 1, readMs: 3400 },
+  // Closing the flow lands back in the thread, so the queued payment is already the newest bubble.
   { type: 'click', target: 'send-done', say: 'Saved on the device, queued to sync.', walkthroughStep: 1, readMs: 2600 },
+  { type: 'click', target: 'thread-back', say: 'It is already there in our conversation.', walkthroughStep: 1, readMs: 1600 },
 
   // Activity: the payment shows pending; then the cursor reconnects and waits for it to actually settle.
   { type: 'click', target: 'tab-activity', say: "Here it is in Activity, still pending.", walkthroughStep: 0, readMs: 4000 },
