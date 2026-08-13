@@ -112,15 +112,21 @@ For the full walkthrough, ports, and environment files, see [LOCAL_DEPLOYMENT.md
 # frontend/.env.local - everything else has a working local default
 CLIENT_ID="<psp-oauth-client-id>"
 CLIENT_SECRET="<psp-oauth-client-secret>"
-PSP_BASE_URL="<psp-api-base-url>"
-PSP_FRONTEND_URL="<psp-hosted-login-url>"
-SESSION_SECRET="<random-string>"
+PSP_BASE_URL=http://host.docker.internal:8081
+PSP_FRONTEND_URL=http://localhost:8083
+APP_BASE_URL=http://localhost:8080
+REDIRECT_URI=http://localhost:8080/api/auth/callback
+LOOKUP_DIGEST_KEY="<key>"
 ```
 
 ```bash
 # backend/.env
 MONGODB_URI="<your-atlas-connection-string>"
-DATABASE_NAME="<your-database-name>"
+DATABASE_NAME="<db-name>"
+APP_NAME=leafy-wallet-backend
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+LOOKUP_DIGEST_KEY="<key>"
 ```
 
 ## Run with Docker

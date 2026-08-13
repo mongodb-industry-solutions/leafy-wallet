@@ -53,7 +53,11 @@ Each router prefix maps to its own Atlas collection: `/api/v1/wallet-contacts` a
 
 ```bash
 MONGODB_URI="<your-atlas-connection-string>"
-DATABASE_NAME="<your-database-name>"
+DATABASE_NAME="<db-name>"
+APP_NAME=leafy-wallet-backend
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+LOOKUP_DIGEST_KEY="<key>"
 ```
 
 ## Running
