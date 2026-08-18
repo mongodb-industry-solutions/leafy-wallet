@@ -76,7 +76,7 @@ describe('Leafy assistant · sending & requesting', () => {
   // What the "Split the bill" chip sends. One card per person in a single turn, and requests rather
   // than sends: the user already paid, so a split asks for the shares back.
   it('splits a bill into one request per person, for the shares that add up', async () => {
-    const { drafts } = await runTurn('Split my €40 dinner evenly between me, Luis and Priya')
+    const { drafts } = await runTurn('Split my €40 dinner bill evenly between me, Luis and Priya')
 
     expect(drafts).toHaveLength(2)
     expect(drafts.map((d) => d.mode)).toEqual(['request', 'request'])
@@ -86,6 +86,9 @@ describe('Leafy assistant · sending & requesting', () => {
     ])
     // Three shares of a €40 bill: the two requested ones leave the user their own third.
     for (const draft of drafts) expect(draft.amount).toBeCloseTo(40 / 3, 1)
+    // What the bill was for rides along in the ask, so the cards carry a note rather than the
+    // assistant stopping to ask for one and leaving the chip with nothing to show.
+    for (const draft of drafts) expect(draft.note).toBeTruthy()
   })
 })
 

@@ -29,7 +29,7 @@ export function suggestionsFor(email, contacts = []) {
   return [
     {
       label: 'Split the bill',
-      query: `Split my €${SPLIT_AMOUNT} dinner evenly between ${splitWith}`,
+      query: `Split my €${SPLIT_AMOUNT} dinner bill evenly between ${splitWith}`,
     },
     { label: 'Spending by category', query: 'What are my spending categories?' },
     { label: `Send money to ${sendTo}`, query: `Send €20 to ${sendTo} for lunch` },
