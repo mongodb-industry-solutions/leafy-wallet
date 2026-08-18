@@ -72,6 +72,21 @@ describe('Leafy assistant · sending & requesting', () => {
     expect(drafts[0].mode).toBe('request')
     expect(drafts[0].contact.name.toLowerCase()).toContain('priya')
   })
+
+  // What the "Split the bill" chip sends. One card per person in a single turn, and requests rather
+  // than sends: the user already paid, so a split asks for the shares back.
+  it('splits a bill into one request per person, for the shares that add up', async () => {
+    const { drafts } = await runTurn('Split my €40 dinner evenly between me, Luis and Priya')
+
+    expect(drafts).toHaveLength(2)
+    expect(drafts.map((d) => d.mode)).toEqual(['request', 'request'])
+    expect(drafts.map((d) => d.contact.name.toLowerCase().split(' ')[0]).sort()).toEqual([
+      'luis',
+      'priya',
+    ])
+    // Three shares of a €40 bill: the two requested ones leave the user their own third.
+    for (const draft of drafts) expect(draft.amount).toBeCloseTo(40 / 3, 1)
+  })
 })
 
 // Offline the tool set is a strict subset and the reads come off the device, so the checks here are
