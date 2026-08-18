@@ -7,9 +7,13 @@ import { getDbSyncSnapshot } from '@/lib/wallet/actions'
 
 const POLL_MS = 3000
 
+// Matches QUEUE_COLLECTION in lib/wallet/actions: the device-only box Sync never carries up.
+const QUEUE_COLLECTION = 'pendingSends'
+
 const STATUS_TONE = {
   settled: 'bg-secondary/15 text-secondary',
   pending: 'bg-amber-500/15 text-amber-600',
+  queued: 'bg-amber-500/15 text-amber-600',
   failed: 'bg-red-500/15 text-red-600',
   exception: 'bg-red-500/15 text-red-600',
 }
@@ -34,6 +38,7 @@ function Field({ label, value }) {
 /**
  * One store's newest transaction document, reduced to the fields that matter for the sync story. A
  * null `doc` renders the "nothing here yet" state Atlas shows while the newest send is still queued.
+ * The document names its own collection, since on the device it can come from the offline queue.
  */
 function DocPanel({ title, subtitle, icon, doc, accent, emptyLabel = 'no document yet' }) {
   const status = doc?.status ?? 'pending'
@@ -43,7 +48,7 @@ function DocPanel({ title, subtitle, icon, doc, accent, emptyLabel = 'no documen
         <span className={`grid size-6 place-items-center rounded-md ${accent}`}>{icon}</span>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold leading-tight text-foreground">{title}</p>
-          <p className="truncate font-mono text-[10px] text-muted-foreground">{subtitle}</p>
+          <p className="truncate font-mono text-[10px] text-muted-foreground">{doc?.collection ?? subtitle}</p>
         </div>
         {doc && (
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_TONE[status] ?? STATUS_TONE.pending}`}>
@@ -95,10 +100,12 @@ export function DbSyncCard() {
     return () => clearInterval(id)
   }, [refresh])
 
+  const isQueued = snapshot.local?.collection === QUEUE_COLLECTION
+
   return (
     <div className="space-y-3">
       <p className="text-[13px] leading-relaxed text-muted-foreground pb-1">
-        Newest walletTransactions document in each store. 
+        Newest transaction document in each store.
       </p>
       <DocPanel
         title="Atlas"
@@ -108,9 +115,13 @@ export function DbSyncCard() {
         doc={snapshot.atlas}
         emptyLabel="waiting for a settled transfer"
       />
-      <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div
+        className={`flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide ${
+          isQueued ? 'text-muted-foreground/40' : 'text-muted-foreground'
+        }`}
+      >
         <Icon glyph="ArrowUp" size={12} />
-        ObjectBox Sync
+        {isQueued ? 'ObjectBox Sync paused' : 'ObjectBox Sync'}
         <Icon glyph="ArrowDown" size={12} />
       </div>
       <DocPanel

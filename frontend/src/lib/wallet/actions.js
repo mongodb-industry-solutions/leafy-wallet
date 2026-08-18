@@ -265,6 +265,11 @@ const LOCAL_REFERENCE_PREFIX = 'local-'
 // `walletTransactions.leafyPayStatus` for a transfer Leafy Pay reports as `completed`.
 const SETTLED_STATUS = 'settled'
 
+// The sync inspector names the device box a document came from: the queue is not the synced one.
+const LOCAL_TX_COLLECTION = 'walletTransactions'
+const QUEUE_COLLECTION = 'pendingSends'
+const QUEUED_STATUS = 'queued'
+
 /**
  * Shape one transaction row for the UI, from either source. `fallbackName` covers a counterparty
  * with no saved contact: paying a request does not require having saved the requester.
@@ -1193,22 +1198,46 @@ function toSyncDoc(doc) {
     embeddingDims: doc.noteEmbeddingDims ?? 0,
     status: doc.leafyPayStatus ?? 'pending',
     syncStatus: doc.localSyncStatus ?? 'synced',
+    collection: LOCAL_TX_COLLECTION,
     createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
+  }
+}
+
+/** A send still in the offline queue, projected like a stored document so both panels line up. */
+function toQueuedSyncDoc(send) {
+  if (!send) return null
+  return {
+    id: String(send.id ?? ''),
+    reference: null,
+    amount: send.amount ?? 0,
+    currency: send.currency ?? 'EUR',
+    note: send.note || null,
+    embeddingDims: 0,
+    status: QUEUED_STATUS,
+    syncStatus: QUEUED_STATUS,
+    collection: QUEUE_COLLECTION,
+    createdAt: send.createdAt ? new Date(send.createdAt).toISOString() : null,
   }
 }
 
 /**
  * Newest stored transaction on each side for the sync inspector: Atlas above, ObjectBox below. Read
  * from both whatever the simulated connection, so the card shows them diverge offline then converge.
+ * The device side includes the offline queue, or a send made offline stays invisible until replay.
  * @returns {Promise<{atlas: object|null, local: object|null}>}
  */
 export async function getDbSyncSnapshot() {
   const owner = await ownerRef()
-  const [atlasRows, localRows] = await Promise.all([
+  const [atlasRows, localRows, queuedRows] = await Promise.all([
     owner ? listTransactionEnrichment(owner).catch(() => []) : [],
     listLocalTransactions().catch(() => []),
+    listPendingSends(owner ?? undefined).catch(() => []),
   ])
-  // Atlas already sorts newest first; the local store returns insertion order, so sort it here.
-  const local = [...localRows].filter((t) => !owner || t.ownerPartyRef === owner).sort(byNewestFirst)
-  return { atlas: toSyncDoc(atlasRows[0]), local: toSyncDoc(local[0]) }
+  // Atlas already sorts newest first; the device returns insertion order, and its two boxes have to
+  // be ranked against each other, so sort the projected documents here.
+  const local = [
+    ...localRows.filter((t) => !owner || t.ownerPartyRef === owner).map(toSyncDoc),
+    ...queuedRows.map(toQueuedSyncDoc),
+  ].sort(byNewestFirst)
+  return { atlas: toSyncDoc(atlasRows[0]), local: local[0] ?? null }
 }
