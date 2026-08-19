@@ -6,7 +6,9 @@ on:
       - "frontend/**"
       - ".github/workflows/frontend-tests.yml"
 
-# No package-lock.json is committed, so every job installs with `npm install` rather than `npm ci`.
+# package-lock.json is committed, so jobs install with `npm ci`: reproducible, and it matches what
+# the Dockerfile and local dev already resolve against. Resolving from scratch instead crashes the
+# npm 10 that ships with Node 22 ("Cannot read properties of null (reading 'edgesOut')").
 env:
   NODE_VERSION: "22"
 
@@ -26,7 +28,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -53,7 +55,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
