@@ -1,7 +1,7 @@
 'use server'
 
 import { randomUUID } from 'crypto'
-import { getSession } from '@/lib/auth/session'
+import { getDeviceRef, getSession } from '@/lib/auth/session'
 import {
   acceptRtpRequest,
   cancelRtpRequest,
@@ -297,7 +297,8 @@ function toTransactionRow({ reference, counterpartyRef, contact, fallbackName, i
 /** Transactions held on the device: synced down from Atlas, plus any send queued while offline. */
 /** Sends still waiting on Leafy Pay. Folded into both read paths, or a just-made payment is invisible. */
 async function pendingSendRows(owner, contactByRef) {
-  const queued = await listPendingSends(owner ?? undefined).catch(() => [])
+  // This browser's queue only: another attendee on the same demo user must not see it.
+  const queued = await listPendingSends(owner ?? undefined, await getDeviceRef()).catch(() => [])
   return queued.map((p) =>
     toTransactionRow({
       reference: `${LOCAL_REFERENCE_PREFIX}${p.id}`,
@@ -483,7 +484,12 @@ export async function sendMoney({
 
   if (!isOnline) {
     try {
-      const queued = await createPendingSend({ ...send, currency: 'EUR', direction: 'sent' })
+      const queued = await createPendingSend({
+        ...send,
+        deviceRef: await getDeviceRef(),
+        currency: 'EUR',
+        direction: 'sent',
+      })
       return { ok: true, reference: `${LOCAL_REFERENCE_PREFIX}${queued.id}`, status: LOCAL_PENDING }
     } catch {
       return { ok: false, error: 'Could not queue the payment on this device.' }
@@ -544,7 +550,8 @@ export async function markTransferSettled(reference, status) {
  */
 export async function replayPendingSends() {
   const owner = await ownerRef()
-  const queued = await listPendingSends(owner ?? undefined).catch(() => [])
+  // Scoped to this browser: reconnecting must not settle a payment another attendee composed offline.
+  const queued = await listPendingSends(owner ?? undefined, await getDeviceRef()).catch(() => [])
 
   let replayed = 0
   let failed = 0
@@ -1222,22 +1229,28 @@ function toQueuedSyncDoc(send) {
 
 /**
  * Newest stored transaction on each side for the sync inspector: Atlas above, ObjectBox below. Read
- * from both whatever the simulated connection, so the card shows them diverge offline then converge.
+ * from the device alone while offline, so the card shows the two diverge then converge on replay.
  * The device side includes the offline queue, or a send made offline stays invisible until replay.
+ * @param {boolean} [isOnline] - Offline the Atlas half is not read; the caller holds its last document.
  * @returns {Promise<{atlas: object|null, local: object|null}>}
  */
-export async function getDbSyncSnapshot() {
+export async function getDbSyncSnapshot(isOnline = true) {
   const owner = await ownerRef()
   const [atlasRows, localRows, queuedRows] = await Promise.all([
-    owner ? listTransactionEnrichment(owner).catch(() => []) : [],
+    // A device with no connection cannot read Atlas at all. Skipping the read also keeps a concurrent
+    // session on the same demo user from landing a settled transfer in this browser's card.
+    isOnline && owner ? listTransactionEnrichment(owner).catch(() => []) : [],
     listLocalTransactions().catch(() => []),
-    listPendingSends(owner ?? undefined).catch(() => []),
+    listPendingSends(owner ?? undefined, await getDeviceRef()).catch(() => []),
   ])
   // Atlas already sorts newest first; the device returns insertion order, and its two boxes have to
   // be ranked against each other, so sort the projected documents here.
-  const local = [
-    ...localRows.filter((t) => !owner || t.ownerPartyRef === owner).map(toSyncDoc),
-    ...queuedRows.map(toQueuedSyncDoc),
-  ].sort(byNewestFirst)
-  return { atlas: toSyncDoc(atlasRows[0]), local: local[0] ?? null }
+  const stored = localRows.filter((t) => !owner || t.ownerPartyRef === owner).map(toSyncDoc)
+  const queued = queuedRows.map(toQueuedSyncDoc)
+  // Offline the queue is what this session just wrote, so it leads outright: ranking it by date would
+  // let a transfer another session synced down outrank the send the presenter is pointing at.
+  const local = isOnline
+    ? [...stored, ...queued].sort(byNewestFirst)
+    : [...queued.sort(byNewestFirst), ...stored.sort(byNewestFirst)]
+  return { atlas: isOnline ? toSyncDoc(atlasRows[0]) : null, local: local[0] ?? null }
 }
