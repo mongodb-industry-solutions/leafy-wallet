@@ -5,6 +5,7 @@ import { ENV } from './env'
 
 const COOKIE_NAME = 'lw_session'
 const LOGIN_COOKIE = 'lw_login'
+const DEVICE_COOKIE = 'lw_device'
 const ALG = 'aes-256-gcm'
 
 /** Derive a fixed 32-byte key from the configured session secret. */
@@ -36,6 +37,24 @@ function decrypt(blob) {
 const secureCookie = () => ENV.appBaseUrl().startsWith('https')
 const sessionCookieOpts = () => ({ httpOnly: true, secure: secureCookie(), sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
 const loginCookieOpts = () => ({ httpOnly: true, secure: secureCookie(), sameSite: 'lax', path: '/', maxAge: 600 })
+const deviceCookieOpts = () => ({ httpOnly: true, secure: secureCookie(), sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365 })
+
+/**
+ * Stable id for this browser, minted on first use and outliving the session. Two demo attendees
+ * signed in as the same test user share an `ownerPartyRef`, so this is what keeps one of them
+ * reconnecting from replaying the other's queued offline sends.
+ *
+ * Mutating contexts only (server actions / route handlers) - a render pass cannot set cookies.
+ * @returns {Promise<string>}
+ */
+export async function getDeviceRef() {
+  const jar = await cookies()
+  const existing = jar.get(DEVICE_COOKIE)?.value
+  if (existing) return existing
+  const minted = randomBytes(16).toString('base64url')
+  jar.set(DEVICE_COOKIE, minted, deviceCookieOpts())
+  return minted
+}
 
 /**
  * The decrypted session, or null. Shape: { accessToken, refreshToken, idToken, grantedScopes,

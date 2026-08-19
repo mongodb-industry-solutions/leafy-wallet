@@ -75,24 +75,27 @@ function DocPanel({ title, subtitle, icon, doc, accent, emptyLabel = 'no documen
 /**
  * Back face of the info card: the newest document in Atlas and on the device, polled so the divergence
  * shows live. Offline the device row appears first; Atlas catches up once the send is replayed.
+ *
+ * @param {{isOnline?: boolean}} props - Offline the Atlas panel freezes on the last document seen
+ *   before the drop, so a concurrent session's transfer can't move it mid-demo.
  */
-export function DbSyncCard() {
+export function DbSyncCard({ isOnline = true }) {
   const [snapshot, setSnapshot] = useState({ atlas: null, local: null })
 
   const refresh = useCallback(() => {
-    getDbSyncSnapshot()
+    getDbSyncSnapshot(isOnline)
       .then((next) => {
         // ObjectBox Sync reconciles a locally-created object's ID against the server on reconnect
         // by deleting the old id and re-inserting under a new one; the two aren't atomic from a
         // reader's perspective, so a poll landing in that gap sees the object gone and "newest"
         // falls back to the previous (already-settled) transaction. Never step backwards in time.
         setSnapshot((prev) => ({
-          atlas: isOlder(next.atlas, prev.atlas) ? prev.atlas : next.atlas,
+          atlas: !isOnline || isOlder(next.atlas, prev.atlas) ? prev.atlas : next.atlas,
           local: isOlder(next.local, prev.local) ? prev.local : next.local,
         }))
       })
       .catch(() => {})
-  }, [])
+  }, [isOnline])
 
   useEffect(() => {
     refresh()

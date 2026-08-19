@@ -80,16 +80,24 @@ export async function createLocalTransaction(tx) {
   return call('POST', '/transactions/send', tx)
 }
 
-/** Sends Leafy Pay hasn't accepted yet. Local-only, so these never reach Atlas. */
-export async function listPendingSends(ownerPartyRef) {
-  const query = ownerPartyRef ? `?${new URLSearchParams({ ownerPartyRef })}` : ''
-  return call('GET', `/pending-sends${query}`)
+/**
+ * Sends Leafy Pay hasn't accepted yet. Local-only, so these never reach Atlas. Pass `deviceRef` to
+ * get only this browser's queue: two attendees on the same demo user share an `ownerPartyRef`.
+ * @param {string} [ownerPartyRef]
+ * @param {string} [deviceRef]
+ */
+export async function listPendingSends(ownerPartyRef, deviceRef) {
+  const params = new URLSearchParams({
+    ...(ownerPartyRef ? { ownerPartyRef } : {}),
+    ...(deviceRef ? { deviceRef } : {}),
+  }).toString()
+  return call('GET', `/pending-sends${params ? `?${params}` : ''}`)
 }
 
 /**
  * Queue a send with no `leafyPayTransferReference` - there isn't one until Leafy Pay accepts it,
  * which is why this row is kept out of the synced collection.
- * @param {object} send - `{ ownerPartyRef, counterpartyArrangementReference, amount, currency, direction, note }`.
+ * @param {object} send - `{ ownerPartyRef, deviceRef, counterpartyArrangementReference, amount, currency, direction, note }`.
  */
 export async function createPendingSend(send) {
   return call('POST', '/pending-sends', send)
