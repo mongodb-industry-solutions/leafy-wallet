@@ -173,7 +173,7 @@ export function DesktopShell() {
                 onFlip={() => setIsFlipped((f) => !f)}
                 title="Atlas ⇄ ObjectBox"
               >
-                <DbSyncCard />
+                <DbSyncCard isOnline={isOnline} />
               </CardFace>
             </motion.div>
           </div>

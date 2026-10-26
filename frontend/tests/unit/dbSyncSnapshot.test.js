@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Every collaborator is mocked; the assertions are about which document each panel ends up showing.
-vi.mock('@/lib/auth/session', () => ({ getSession: vi.fn(async () => ({ sub: 'owner-1' })) }))
+vi.mock('@/lib/auth/session', () => ({
+  getSession: vi.fn(async () => ({ sub: 'owner-1' })),
+  getDeviceRef: vi.fn(async () => 'device-1'),
+}))
 vi.mock('@/lib/psp/PspClient', () => ({
   sendToBeneficiary: vi.fn(),
   acceptRtpRequest: vi.fn(),
@@ -125,7 +128,7 @@ describe('getDbSyncSnapshot', () => {
 
     await getDbSyncSnapshot()
 
-    expect(local.listPendingSends).toHaveBeenCalledWith('owner-1')
+    expect(local.listPendingSends).toHaveBeenCalledWith('owner-1', 'device-1')
   })
 
   it('survives an unreachable local store', async () => {

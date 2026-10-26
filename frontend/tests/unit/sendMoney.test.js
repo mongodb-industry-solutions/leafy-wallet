@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Every collaborator is mocked; the assertions are about ordering and arguments, not stored data.
-vi.mock('@/lib/auth/session', () => ({ getSession: vi.fn(async () => ({ sub: 'owner-1' })) }))
+vi.mock('@/lib/auth/session', () => ({
+  getSession: vi.fn(async () => ({ sub: 'owner-1' })),
+  getDeviceRef: vi.fn(async () => 'device-1'),
+}))
 vi.mock('@/lib/psp/PspClient', () => ({
   sendToBeneficiary: vi.fn(),
   acceptRtpRequest: vi.fn(),
@@ -65,6 +68,12 @@ describe('sendMoney offline', () => {
     expect(psp.sendToBeneficiary).not.toHaveBeenCalled()
     expect(local.createPendingSend).toHaveBeenCalledOnce()
     expect(result).toMatchObject({ ok: true, status: 'local_pending' })
+  })
+
+  // Stamps which browser composed it, so only that browser replays it on reconnect.
+  it('stamps the queue row with this device', async () => {
+    await sendMoney({ ...SEND, isOnline: false })
+    expect(local.createPendingSend.mock.calls[0][0]).toMatchObject({ deviceRef: 'device-1' })
   })
 
   it('queues without a Leafy Pay reference, which is what keeps it out of Atlas', async () => {
@@ -190,5 +199,13 @@ describe('replayPendingSends', () => {
     const result = await replayPendingSends()
     expect(psp.sendToBeneficiary).not.toHaveBeenCalled()
     expect(result).toMatchObject({ replayed: 0, failed: 0 })
+  })
+
+  // Two demo attendees signed in as the same test user share an ownerPartyRef, so filtering the
+  // queue by owner alone let one of them reconnect and settle the other's offline payment.
+  it("only asks for this device's queue, not every queue for the owner", async () => {
+    local.listPendingSends.mockResolvedValue([])
+    await replayPendingSends()
+    expect(local.listPendingSends).toHaveBeenCalledWith('owner-1', 'device-1')
   })
 })

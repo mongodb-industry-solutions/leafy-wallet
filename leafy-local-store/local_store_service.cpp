@@ -518,6 +518,7 @@ struct LocalRequest {
 struct LocalPendingSend {
     int64_t id = 0;
     std::string ownerPartyRef;
+    std::string deviceRef;   // which browser queued it; see getDeviceRef() in lib/auth/session.js
     std::string counterpartyArrangementReference;
     double amount = 0;
     std::string currency;
@@ -537,6 +538,7 @@ struct LocalPendingSend {
             auto offsetCurrency = fbb.CreateString(object.currency);
             auto offsetNote = fbb.CreateString(object.note);
             auto offsetDirection = fbb.CreateString(object.direction);
+            auto offsetDeviceRef = fbb.CreateString(object.deviceRef);
 
             flatbuffers::uoffset_t fbStart = fbb.StartTable();
             fbb.AddElement(4, object.id);              // 1: id
@@ -547,6 +549,7 @@ struct LocalPendingSend {
             fbb.AddOffset(14, offsetNote);              // 6: note
             fbb.AddOffset(16, offsetDirection);         // 7: direction
             fbb.AddElement(18, object.createdAt);       // 8: createdAt
+            fbb.AddOffset(20, offsetDeviceRef);         // 9: deviceRef
 
             flatbuffers::Offset<flatbuffers::Table> offset;
             offset.o = fbb.EndTable(fbStart);
@@ -570,6 +573,7 @@ struct LocalPendingSend {
             readString(14, out.note);
             readString(16, out.direction);
             out.createdAt = table->GetField<int64_t>(18, 0);
+            readString(20, out.deviceRef);
         }
 
         static LocalPendingSend fromFlatBuffer(const void* data, size_t size) {
@@ -745,7 +749,8 @@ OBX_model* create_obx_model() {
     obx_model_property(model, "note", OBXPropertyType_String, 6, 7007000000000006ULL);
     obx_model_property(model, "direction", OBXPropertyType_String, 7, 7007000000000007ULL);
     obx_model_property(model, "createdAt", OBXPropertyType_Date, 8, 7007000000000008ULL);
-    obx_model_entity_last_property_id(model, 8, 7007000000000008ULL);
+    obx_model_property(model, "deviceRef", OBXPropertyType_String, 9, 7007000000000009ULL);
+    obx_model_entity_last_property_id(model, 9, 7007000000000009ULL);
 
     obx_model_last_entity_id(model, 7, 7007000000000000ULL);
     obx_model_last_index_id(model, 1, 7001000000000100ULL);
@@ -939,6 +944,7 @@ json pending_send_to_json(const LocalPendingSend& p) {
     return {
         {"id", p.id},
         {"ownerPartyRef", p.ownerPartyRef},
+        {"deviceRef", p.deviceRef},
         {"counterpartyArrangementReference", p.counterpartyArrangementReference},
         {"amount", p.amount},
         {"currency", p.currency},
@@ -1205,9 +1211,13 @@ int main(int argc, char* argv[]) {
     // The offline queue, invisible to Atlas until settlement promotes it to walletTransactions.
     svr.Get("/local/v1/pending-sends", [](const httplib::Request& req, httplib::Response& res) {
         const std::string owner = req.has_param("ownerPartyRef") ? req.get_param_value("ownerPartyRef") : "";
+        // Without deviceRef this returns every browser's queue for the owner, which is only safe for
+        // the inspector. The replay path always passes it - see replayPendingSends().
+        const std::string device = req.has_param("deviceRef") ? req.get_param_value("deviceRef") : "";
         json results = json::array();
         for (const auto& p : store->box<LocalPendingSend>().getAll()) {
             if (!owner.empty() && p->ownerPartyRef != owner) continue;
+            if (!device.empty() && p->deviceRef != device) continue;
             results.push_back(pending_send_to_json(*p));
         }
         res.set_content(results.dump(), "application/json");
@@ -1242,6 +1252,7 @@ int main(int argc, char* argv[]) {
         p.currency = body.at("currency").get<std::string>();
         p.direction = body.at("direction").get<std::string>();
         p.note = body.value("note", "");
+        p.deviceRef = body.value("deviceRef", "");
         p.createdAt = now_epoch_millis();
 
         store->box<LocalPendingSend>().put(p);
